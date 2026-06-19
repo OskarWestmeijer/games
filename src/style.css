@@ -1,0 +1,42 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: #9aac8a;
+}
+
+#game {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  image-rendering: auto;
+}
+
+#hint {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: #fdfaf2;
+  background: rgba(40, 50, 40, 0.32);
+  padding: 7px 14px;
+  border-radius: 20px;
+  pointer-events: none;
+  backdrop-filter: blur(3px);
+  animation: fade 1.2s ease 7s forwards;
+}
+
+@keyframes fade {
+  to {
+    opacity: 0;
+  }
+}

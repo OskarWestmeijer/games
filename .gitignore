@@ -1,0 +1,13 @@
+node_modules
+dist
+*.local
+.DS_Store
+inspiration
+
+# Self-review screenshot output (the shot.mjs tool itself is tracked).
+tools/shots
+
+# Audio binaries are large — keep them out of git, but track the manifests/README.
+public/audio/**/*.mp3
+public/audio/**/*.ogg
+public/audio/**/*.m4a
