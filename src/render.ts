@@ -3,6 +3,7 @@
 // continuous flowing landscape (NOT a visible diamond grid), and gentle, slow motion.
 
 import { TILE_W, TILE_H, worldToScreen, hashf } from './iso';
+import jussiUrl from '../assets/jussi.png';
 import type {
   Aitta,
   Barn,
@@ -13,10 +14,13 @@ import type {
   GameState,
   House,
   Jetty,
+  Outbuilding,
   Player,
   Reed,
   Rock,
   Scarecrow,
+  Spring,
+  Stream,
   Tile,
   Tree,
   Villager,
@@ -84,6 +88,7 @@ export function render(ctx: Ctx, state: GameState, vw: number, vh: number): void
 
   drawSky(ctx, vw, vh);
   drawTiles(ctx, state.world, ox, oy, vw, vh, state.time);
+  drawWaterways(ctx, state.world, ox, oy, vw, vh, state.time);
   drawEntities(ctx, state, ox, oy, vw, vh);
   drawAtmosphere(ctx, vw, vh, state.time);
 }
@@ -432,6 +437,51 @@ function drawWaterTile(ctx: Ctx, sx: number, sy: number, t: Tile, time: number, 
   }
 }
 
+// ---- puro + lähde: decorative forest stream/spring overlay (not water tiles) --
+function drawWaterways(
+  ctx: Ctx,
+  world: World,
+  ox: number,
+  oy: number,
+  vw: number,
+  vh: number,
+  time: number
+): void {
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const s of world.streams) {
+    if (s.points.length < 2) continue;
+    ctx.beginPath();
+    for (let i = 0; i < s.points.length; i++) {
+      const p = s.points[i];
+      const sx = (p.wx - p.wy) * HALF_W + ox;
+      const sy = (p.wx + p.wy) * HALF_H + oy;
+      if (i === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    }
+    ctx.strokeStyle = 'rgba(60,52,40,0.3)';
+    ctx.lineWidth = 7;
+    ctx.stroke();
+    ctx.strokeStyle = mix(WATER_LO, WATER_HI, 0.5 + Math.sin(time * 0.6) * 0.08);
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'miter';
+
+  for (const sp of world.springs) {
+    const sx = (sp.wx - sp.wy) * HALF_W + ox;
+    const sy = (sp.wx + sp.wy) * HALF_H + oy;
+    if (sx < -160 || sx > vw + 160 || sy < -60 || sy > vh + 220) continue;
+    const rx = sp.r * HALF_W;
+    const ry = sp.r * HALF_H;
+    ctx.fillStyle = 'rgba(60,52,40,0.28)';
+    fillEllipse(ctx, sx + 2, sy + 2, rx + 2, ry + 2);
+    ctx.fillStyle = mix(WATER_LO, WATER_HI, 0.5 + Math.sin(time * 0.8) * 0.06);
+    fillEllipse(ctx, sx, sy, rx, ry);
+  }
+}
+
 // ---- entities ------------------------------------------------------------
 function drawEntities(ctx: Ctx, state: GameState, ox: number, oy: number, vw: number, vh: number): void {
   const list: Entity[] = state.world.entities.slice();
@@ -457,6 +507,9 @@ function drawEntities(ctx: Ctx, state: GameState, ox: number, oy: number, vw: nu
         break;
       case 'aitta':
         drawAitta(ctx, sx, sy, e);
+        break;
+      case 'outbuilding':
+        drawOutbuilding(ctx, sx, sy, e);
         break;
       case 'well':
         drawWell(ctx, sx, sy, e);
@@ -821,224 +874,55 @@ function drawDeer(ctx: Ctx, sx: number, sy: number, d: Deer): void {
   ctx.restore();
 }
 
-// The playable villager — a medieval Finnish wanderer in a belted wool tunic and
-// shoulder cloak, felt hat, leather boots, walking staff. Drawn back-to-front with
-// two-tone shading and a leg/arm swing. faceY<0 = walking away (back view).
-const SKIN = '#d8a982';
-const SKIN_SH = '#bf8e6a';
-const HAIR = '#43331f';
-const TUNIC = '#94604a';
-const TUNIC_SH = '#774535';
-const TUNIC_HI = '#a87159';
-const CLOAK = '#586146';
-const CLOAK_SH = '#454d37';
-const LEG = '#4a4137';
-const LEG_SH = '#3a322a';
-const BOOT = '#33251a';
-const BELT = '#382819';
-const HAT = '#463524';
-const HAT_SH = '#33261a';
-const STAFF = '#6f5436';
+// The playable villager — drawn from a hand-drawn sprite sheet (assets/jussi.png):
+// 4 walk-cycle frames (columns) x 4 facing directions (rows: down, up, left, right),
+// 360x560 px per frame. The boots land on the same in-frame pixel row in every pose,
+// so that row is the anchor mapped onto the entity's ground point (sx, sy).
+const SKIN = '#d8a982'; // shared with the family villagers below
 
-function leg(ctx: Ctx, cx: number, footDx: number, col: string): void {
-  polyInk(
-    ctx,
-    [
-      { x: cx - 2.2, y: -14 },
-      { x: cx + 2.2, y: -14 },
-      { x: cx + 1.6 + footDx, y: -4 },
-      { x: cx - 1.8 + footDx, y: -4 }
-    ],
-    col
-  );
-  // boot
-  ctx.fillStyle = BOOT;
-  ctx.beginPath();
-  ctx.moveTo(cx - 2 + footDx, -4.5);
-  ctx.lineTo(cx + 2 + footDx, -4.5);
-  ctx.lineTo(cx + 3.6 + footDx, -0.6);
-  ctx.quadraticCurveTo(cx + 3.6 + footDx, 0.7, cx + 2.2 + footDx, 0.7);
-  ctx.lineTo(cx - 2.2 + footDx, 0.7);
-  ctx.closePath();
-  ctx.fill();
-  inkPath(ctx);
-}
-
-function arm(ctx: Ctx, shX: number, handDx: number, col: string): void {
-  polyInk(
-    ctx,
-    [
-      { x: shX - 2, y: -24 },
-      { x: shX + 2, y: -24 },
-      { x: shX + 1.8 + handDx, y: -15 },
-      { x: shX - 1.8 + handDx, y: -15 }
-    ],
-    col
-  );
-  ellInk(ctx, shX + handDx, -14.5, 1.7, 1.7, SKIN);
-}
+const playerSheet = new Image();
+playerSheet.src = jussiUrl;
+const PLAYER_FRAME_W = 360;
+const PLAYER_FRAME_H = 560;
+const PLAYER_FOOT_Y = 516; // in-frame px row where the boots meet the ground
+const PLAYER_ROW_DOWN = 0;
+const PLAYER_ROW_UP = 1;
+const PLAYER_ROW_LEFT = 2;
+const PLAYER_ROW_RIGHT = 3;
+const PLAYER_WALK_FPS = 8;
+const PLAYER_DRAW_H = 63; // on-screen height (pre-zoom render units) of the full frame
 
 function drawPlayer(ctx: Ctx, sx: number, sy: number, p: Player): void {
-  const S = 1.3;
-  shadow(ctx, sx, sy, 8 * S, 3.4 * S);
-  const flip = p.faceX < 0 ? -1 : 1;
-  const back = p.faceY < 0; // walking away from camera
-  const t = p.moving ? p.anim * 8.5 : 0;
-  const sw = p.moving ? Math.sin(t) : 0; // limb swing
-  const bob = p.moving ? Math.abs(Math.sin(t)) * 1.3 : 0;
+  if (!playerSheet.complete || playerSheet.naturalWidth === 0) return; // still loading
 
-  ctx.save();
-  ctx.translate(sx, sy - bob);
-  ctx.scale(flip * S, S);
+  const row =
+    Math.abs(p.faceY) >= Math.abs(p.faceX)
+      ? p.faceY < 0
+        ? PLAYER_ROW_UP
+        : PLAYER_ROW_DOWN
+      : p.faceX < 0
+        ? PLAYER_ROW_LEFT
+        : PLAYER_ROW_RIGHT;
+  const col = p.moving ? Math.floor(p.anim * PLAYER_WALK_FPS) % 4 : 0;
+  const bob = p.moving ? Math.abs(Math.sin(p.anim * 8.5)) * 1.3 : 0;
 
-  // far (back) leg + arm — drawn first, in shade
-  leg(ctx, -2.4, -sw * 2.2, LEG_SH);
-  if (!back) arm(ctx, -4.6, -sw * 2.6, TUNIC_SH);
+  const dh = PLAYER_DRAW_H;
+  const dw = (dh * PLAYER_FRAME_W) / PLAYER_FRAME_H;
+  const dx = sx - dw / 2;
+  const dy = sy - bob - dh * (PLAYER_FOOT_Y / PLAYER_FRAME_H);
 
-  // cloak hanging from the shoulders (full at the back, a mantle from the front)
-  if (back) {
-    polyInk(
-      ctx,
-      [
-        { x: -6.5, y: -24 },
-        { x: 6.5, y: -24 },
-        { x: 5.5, y: -10 },
-        { x: -5.5, y: -10 }
-      ],
-      CLOAK
-    );
-    ctx.strokeStyle = CLOAK_SH;
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(0, -23);
-    ctx.lineTo(0, -10.5);
-    ctx.stroke();
-  } else {
-    polyInk(
-      ctx,
-      [
-        { x: -6, y: -24 },
-        { x: 6, y: -24 },
-        { x: 7, y: -17 },
-        { x: -7, y: -17 }
-      ],
-      CLOAK_SH
-    );
-  }
-
-  // near leg (front)
-  leg(ctx, 2.4, sw * 2.2, LEG);
-
-  // belted wool tunic (flared skirt), with a shaded side and lit edge
-  polyInk(
-    ctx,
-    [
-      { x: -5.5, y: -23 },
-      { x: 5.5, y: -23 },
-      { x: 7, y: -12 },
-      { x: -7, y: -12 }
-    ],
-    back ? CLOAK : TUNIC
+  // No separate shadow() call — the sprite already bakes one in under the feet.
+  ctx.drawImage(
+    playerSheet,
+    col * PLAYER_FRAME_W,
+    row * PLAYER_FRAME_H,
+    PLAYER_FRAME_W,
+    PLAYER_FRAME_H,
+    dx,
+    dy,
+    dw,
+    dh
   );
-  if (!back) {
-    poly(
-      ctx,
-      [
-        { x: 1, y: -23 },
-        { x: 5.5, y: -23 },
-        { x: 7, y: -12 },
-        { x: 1, y: -12 }
-      ],
-      TUNIC_SH
-    );
-    // lit front fold
-    ctx.fillStyle = TUNIC_HI;
-    poly(
-      ctx,
-      [
-        { x: -4.5, y: -22 },
-        { x: -2.5, y: -22 },
-        { x: -3.5, y: -12.5 },
-        { x: -5.5, y: -12.5 }
-      ],
-      TUNIC_HI
-    );
-    // belt + buckle
-    ctx.fillStyle = BELT;
-    ctx.fillRect(-6.2, -16.5, 12.4, 1.8);
-    ctx.fillStyle = '#b7995b';
-    ctx.fillRect(-0.9, -16.7, 1.8, 2.2);
-    // cream collar
-    ctx.fillStyle = '#cdc3a6';
-    poly(
-      ctx,
-      [
-        { x: -2.4, y: -23.5 },
-        { x: 2.4, y: -23.5 },
-        { x: 1.4, y: -21.5 },
-        { x: -1.4, y: -21.5 }
-      ],
-      '#cdc3a6'
-    );
-  }
-
-  // near (front) arm
-  if (!back) arm(ctx, 4.6, sw * 2.6, TUNIC);
-  else arm(ctx, 4.6, sw * 2.6, CLOAK_SH);
-
-  // neck + head
-  ctx.fillStyle = SKIN_SH;
-  ctx.fillRect(-1.6, -26.5, 3.2, 3);
-  ellInk(ctx, 0, -29.5, 4.4, 4.6, back ? HAIR : SKIN);
-  if (!back) {
-    // hair fringe + face hint
-    ctx.fillStyle = HAIR;
-    ctx.beginPath();
-    ctx.ellipse(0, -31.4, 4.4, 3, 0, Math.PI, 0);
-    ctx.fill();
-    fillEllipse(ctx, -4, -29.5, 1.4, 2.6); // sideburn
-    ctx.fillStyle = '#5b4632';
-    fillEllipse(ctx, -1.4, -29.3, 0.7, 0.9); // eyes
-    fillEllipse(ctx, 1.6, -29.3, 0.7, 0.9);
-    ctx.fillStyle = SKIN_SH;
-    fillEllipse(ctx, 0.3, -28.2, 0.9, 0.7); // nose
-    // short beard
-    ctx.fillStyle = HAIR;
-    fillEllipse(ctx, 0, -26.6, 3, 1.6);
-  } else {
-    ctx.fillStyle = HAIR;
-    fillEllipse(ctx, 0, -28.6, 4.4, 3.6); // hair from behind
-  }
-
-  // soft felt hat — crown + brim + band, inked
-  ctx.fillStyle = HAT;
-  ctx.beginPath();
-  ctx.moveTo(-4.2, -33.4);
-  ctx.quadraticCurveTo(-3.6, -38, 0, -38.2);
-  ctx.quadraticCurveTo(3.6, -38, 4.2, -33.4);
-  ctx.closePath();
-  ctx.fill();
-  inkPath(ctx);
-  ctx.fillStyle = HAT_SH;
-  fillEllipse(ctx, 0.4, -32.4, 8.2, 2.8); // brim (shaded underside)
-  ellInk(ctx, 0, -33, 7.8, 2.4, HAT); // brim top, inked
-  ctx.fillStyle = HAT_SH;
-  ctx.fillRect(-4, -34, 8, 1); // band
-
-  // walking staff in the front hand
-  if (!back) {
-    const hx = 4.6 + sw * 2.6;
-    ctx.strokeStyle = STAFF;
-    ctx.lineWidth = 1.4;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(hx + 1.4, -14.5);
-    ctx.lineTo(hx + 2.6, 1);
-    ctx.stroke();
-    ctx.lineCap = 'butt';
-  }
-
-  ctx.restore();
 }
 
 // ---- family villagers ----------------------------------------------------
@@ -1168,7 +1052,7 @@ function drawGranny(ctx: Ctx, sx: number, sy: number, v: Villager, time: number)
 function drawSon(ctx: Ctx, sx: number, sy: number, v: Villager, time: number): void {
   shadow(ctx, sx, sy, 5, 2.4);
   const S = 0.82;
-  const bob = Math.sin(time * 1.4 + v.seed * 6) * 1; // float bobbing
+  const chop = Math.abs(Math.sin(time * 1.1 + v.seed * 6)) * 1.6; // slow, subtle axe raise/lower
   ctx.save();
   ctx.translate(sx, sy);
   ctx.scale((v.facing < 0 ? -1 : 1) * S, S);
@@ -1183,16 +1067,19 @@ function drawSon(ctx: Ctx, sx: number, sy: number, v: Villager, time: number): v
   polyInk(ctx, [{ x: -4, y: -8 }, { x: 4, y: -8 }, { x: 3, y: -19 }, { x: -3, y: -19 }], '#7c6a44');
   poly(ctx, [{ x: 0.5, y: -8 }, { x: 4, y: -8 }, { x: 3, y: -19 }, { x: 0.5, y: -19 }], '#6a5938');
 
-  // arm holding the rod
+  // arms raised, gripping the axe handle
   ctx.strokeStyle = '#7c6a44';
   ctx.lineWidth = 2;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(2, -18);
-  ctx.lineTo(5, -13);
+  ctx.moveTo(1, -18);
+  ctx.lineTo(4.5, -22 - chop);
+  ctx.moveTo(2.5, -18);
+  ctx.lineTo(6, -21 - chop);
   ctx.stroke();
   ctx.fillStyle = SKIN;
-  fillEllipse(ctx, 5, -12.6, 1.2, 1.2);
+  fillEllipse(ctx, 4.7, -22 - chop, 1.1, 1.1);
+  fillEllipse(ctx, 6.2, -21 - chop, 1.1, 1.1);
   ctx.lineCap = 'butt';
 
   // head + cap
@@ -1207,25 +1094,32 @@ function drawSon(ctx: Ctx, sx: number, sy: number, v: Villager, time: number): v
   ctx.fill();
   ctx.fillRect(-3.5, -23.9, 3.6, 0.8);
 
-  // rod, line, and a red-and-white float on the water
-  ctx.strokeStyle = '#6e5436';
-  ctx.lineWidth = 1;
+  // axe — handle from the gripping hands down to the head, paused mid-swing
+  ctx.strokeStyle = '#5a4326';
+  ctx.lineWidth = 1.1;
   ctx.beginPath();
-  ctx.moveTo(5, -13);
-  ctx.lineTo(15, -20);
+  ctx.moveTo(5.4, -21.5 - chop);
+  ctx.lineTo(11, -7);
   ctx.stroke();
-  const bx = 18.5;
-  const by = -1 + bob;
-  ctx.strokeStyle = 'rgba(240,240,235,0.7)';
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(15, -20);
-  ctx.lineTo(bx, by);
-  ctx.stroke();
-  ctx.fillStyle = '#c0503e';
-  fillEllipse(ctx, bx, by, 1.6, 1.6);
-  ctx.fillStyle = '#e9e4d8';
-  fillEllipse(ctx, bx, by + 0.7, 1.6, 0.8);
+  ctx.save();
+  ctx.translate(11, -7);
+  ctx.rotate(0.55);
+  ctx.fillStyle = '#6a6a6a';
+  ctx.fillRect(-0.6, -2.6, 3.6, 2.6);
+  ctx.fillStyle = '#8c8c8c';
+  ctx.fillRect(-0.6, -2.6, 3.6, 0.7);
+  ctx.restore();
+
+  // chopping block, with a split log waiting beside it
+  ctx.fillStyle = '#5e4a32';
+  fillEllipse(ctx, 12.5, -1.5, 3, 1.8);
+  ctx.fillStyle = '#caa874';
+  fillEllipse(ctx, 12.5, -2.6, 2.6, 1);
+  ctx.fillStyle = '#7c6342';
+  fillEllipse(ctx, 7.3, -1, 2.4, 1.2);
+  ctx.fillStyle = '#cdab78';
+  fillEllipse(ctx, 6.4, -1.4, 1, 0.7);
+  fillEllipse(ctx, 8.1, -1.4, 1, 0.7);
   ctx.restore();
 }
 
@@ -1358,6 +1252,77 @@ function drawAitta(ctx: Ctx, sx: number, sy: number, a: Aitta): void {
   poly(ctx, [Be, Le, apex], '#765c37');
   poly(ctx, [Re, Fe, apex], '#6a5230');
   poly(ctx, [Le, Fe, apex], '#8a6c42');
+  ctx.strokeStyle = 'rgba(40,30,20,0.5)';
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(apex.x, apex.y);
+  ctx.lineTo(Fe.x, Fe.y);
+  ctx.stroke();
+}
+
+// ---- outbuilding (savusauna / riihi / lato / käymälä) --------------------
+// One shared simple log-building shape for the smaller farm outbuildings — same
+// corner-projection/gabled-roof pattern as drawBarn, with the doorway sized to the
+// building so a tiny käymälä doesn't get a barn-sized opening.
+function drawOutbuilding(ctx: Ctx, sx: number, sy: number, b: Outbuilding): void {
+  const hw = b.w / 2;
+  const hd = b.d / 2;
+  const wallH = (b.btype === 'kaymala' ? 11 : 17) + b.seed * 3;
+  const roofH = b.btype === 'kaymala' ? 7 : 12;
+  const eave = 0.35;
+  const cor = (dx: number, dy: number, hh = 0): Pt => ({
+    x: sx + (dx - dy) * HALF_W,
+    y: sy + (dx + dy) * HALF_H - hh
+  });
+  const B = cor(-hw, -hd);
+  const R = cor(hw, -hd);
+  const F = cor(hw, hd);
+  const L = cor(-hw, hd);
+  const Lt = cor(-hw, hd, wallH);
+  const Ft = cor(hw, hd, wallH);
+  const Rt = cor(hw, -hd, wallH);
+
+  poly(
+    ctx,
+    [
+      { x: B.x + 4, y: B.y + 3 },
+      { x: R.x + 5, y: R.y + 3 },
+      { x: F.x + 4, y: F.y + 5 },
+      { x: L.x - 2, y: L.y + 4 }
+    ],
+    'rgba(34,42,34,0.2)'
+  );
+  poly(ctx, [L, F, Ft, Lt], '#766b56');
+  poly(ctx, [F, R, Rt, Ft], '#5b5040');
+  drawLogLines(ctx, L, F, Lt);
+  drawLogLines(ctx, F, R, Ft);
+
+  // doorway — a dark opening on the lit wall, wider for the lato (open hay barn)
+  const along = { x: F.x - L.x, y: F.y - L.y };
+  const up = { x: Lt.x - L.x, y: Lt.y - L.y };
+  const fp = (a: number, bb: number): Pt => ({
+    x: L.x + along.x * a + up.x * bb,
+    y: L.y + along.y * a + up.y * bb
+  });
+  const doorW = b.btype === 'kaymala' ? 0.22 : b.btype === 'lato' ? 0.5 : 0.3;
+  const doorH = b.btype === 'kaymala' ? 0.55 : 0.68;
+  poly(
+    ctx,
+    [fp(0.5 - doorW / 2, 0.03), fp(0.5 + doorW / 2, 0.03), fp(0.5 + doorW / 2, doorH), fp(0.5 - doorW / 2, doorH)],
+    '#2b1f16'
+  );
+
+  // gabled roof — savusauna's a touch darker/sootier
+  const Be = cor(-hw - eave, -hd - eave, wallH);
+  const Re = cor(hw + eave, -hd - eave, wallH);
+  const Fe = cor(hw + eave, hd + eave, wallH);
+  const Le = cor(-hw - eave, hd + eave, wallH);
+  const apex: Pt = { x: sx, y: sy - wallH - roofH };
+  const sooty = b.btype === 'savusauna';
+  poly(ctx, [Be, Re, apex], sooty ? '#5a4a32' : '#6a5230');
+  poly(ctx, [Be, Le, apex], sooty ? '#64512e' : '#765c37');
+  poly(ctx, [Re, Fe, apex], sooty ? '#5a4a32' : '#6a5230');
+  poly(ctx, [Le, Fe, apex], sooty ? '#7a6440' : '#8a6c42');
   ctx.strokeStyle = 'rgba(40,30,20,0.5)';
   ctx.lineWidth = 1.3;
   ctx.beginPath();

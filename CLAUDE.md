@@ -7,11 +7,18 @@ the game evolves.
 
 ## Vision
 
-A **cosy browser game** about **17th century rural Finland**. A small, quiet homestead by
-the water. The feeling we're chasing is *slow life*: wandering, listening, watching the
-light move on the lake. No pressure, no fail states.
+A **narrative historical game** about **17th-century rural Finland** — closer in spirit
+to **Pentiment** than to a sandbox farming sim. The player experiences **one year** in
+the life of a small farming household in Häme through a small number of carefully
+crafted chapters and scenes that teach and document everyday rural life, seasonal work,
+traditions, and material culture.
 
-### Setting — pieni hämäläinen maatila, n. 1650–1700
+The feeling we're chasing is *slow life*: wandering, listening, watching the light move
+on the lake. No pressure, no fail states, no busywork. The focus is **experiencing** how
+people lived, worked, and understood the world around them — not managing or optimizing
+a farm.
+
+## Setting — pieni hämäläinen maatila, n. 1650–1700
 
 A **small, self-sufficient family farm (maatila) in Häme, around 1650–1700**, on or a
 short walk from the shore of a **low lake**. You play **the farmer** — an ageing man in a
@@ -20,7 +27,7 @@ the grandmother (*mummo*, knitting), the son (fishing). The buildings sit on a *
 hummock (kumpare)** so spring floods and damp don't reach them. The yard (*pihapiiri*) is
 **modest, irregular and practical** — no later-century planning. Austere, close to nature,
 self-reliant; **nothing here suggests the big farms or manors of later centuries.** Quiet
-presence over busy-ness; still no quests / combat / inventory.
+presence over busy-ness.
 
 **Build it from these (use the Finnish words in code/comments):**
 
@@ -107,20 +114,176 @@ dusky, melancholic palette to grade toward).
 > luonnonläheinen ja käytännöllinen, eikä mikään viittaa myöhempien vuosisatojen suuriin
 > maatiloihin tai kartanoihin.
 
-### Central themes
+### Finnish landscape vocabulary (build the world from these)
+The real Finnish wilderness we're evoking — use the Finnish words in code/comments:
+- **suo** — bog / mire: open, soft, golden-green wetland, tufts of grass, still pools,
+  crossed by **pitkospuut** (wooden plank boardwalks). A signature Finnish landscape.
+- **metsä** — dense forest, the dominant biome. Tall trunks, little gaps.
+- Trees: **koivu** (birch — white papery trunk, light airy crown), **mänty** (Scots
+  pine — tall bare reddish trunk, foliage only near the top), **kuusi** (Norway spruce
+  — dark, narrow, drooping conical silhouette). All three should be visually distinct.
+- **kalliot ja kivet** — bedrock outcrops / boulders and smaller stones, often
+  glacier-rounded and grey.
+- **sammal** — moss: soft green carpets on the forest floor, on rocks, on old roofs.
+- Wildlife: **lehmä** (cow), **peura/hirvi** (deer), and ambient creatures later.
+
+## Game idea & design principles
+
+This is **narrative and educational, not simulation-focused** — not a sandbox farming
+game about resource management or optimization, but a way of *spending a year* inside a
+historical world that feels authentic, human, and deeply connected to the land.
+
+- Historically grounded and culturally authentic.
+- A **small number of highly detailed locations** rather than a sprawling map (see
+  Levels below).
+- **Seasonal visual change** — the same locations look different chapter to chapter.
+- Strong emphasis on **atmosphere and everyday life** over mechanics.
+- The player experiences **representative days**, not every day of the year. Chapter
+  tasks are linear and chapter-specific (see Hard constraints for what this does and
+  doesn't mean for UI).
+
+### Themes
 - **Water** — lakes, rivers, reflection, reeds, fishing.
 - **Slow life** — unhurried, contemplative, no timers.
 - **Nature & forest** — Finnish woods (pine, spruce, birch), meadows, wildflowers, fog.
 - **Finnish nature & design** is the aesthetic focus.
 
-### Tone / references
-- **Songs of Glimmerwick** — cosy, warm, hand-painted village life.
-- **Pentiment** — strong art direction, storybook feeling, medieval European setting.
-- The reference screenshots the user shared: **hand-painted / watercolour look**,
-  soft layered foliage, sunbeams, muted natural palette, **isometric** camera, a tiny
-  character in a large gentle landscape.
+## Characters
 
-### 📌 Reference imagery — ALWAYS consult `inspiration/`
+- **The farmer, Jussi** (playable character) — an ageing man in a wool tunic and felt
+  hat, head of the household. The player's viewpoint on the year.
+- **The wife** — runs the household and dairy; milks the cow.
+- **The grandmother (*mummo*)** — the household's elder, knitting; a source of folk
+  knowledge and tradition.
+- **The son** — does the heavier outdoor labour (woodcutting, and fishing once the lake
+  area exists).
+
+The household is small and self-sufficient — no servants, no extended cast. The wider
+community (neighbours, other villagers) appears only where a chapter calls for it, most
+notably **Juhannus** (Chapter 2), which is explicitly about community life.
+
+## Chapters
+
+The long-term narrative shape for the whole game: it follows **one agricultural year**
+through a small number of carefully selected days. Each chapter represents a key moment
+in the yearly cycle and introduces important aspects of rural life, work, and culture.
+
+**1. Spring Sowing — Spring.** A new year begins. The farm awakens after winter: fields
+are prepared and seed grain is sown. Introduces the household, the buildings, the
+landscape, and the central importance of agriculture.
+
+**2. Juhannus — Midsummer.** Community and nature. The growing season is underway; focus
+shifts to midsummer traditions, folk beliefs, fishing, gathering, and life beyond the
+fields.
+
+**3. Harvest — Late summer / early autumn.** The year's outcome. Crops are harvested and
+brought in from the fields — the single most important period of the farming year.
+
+**4. Riihi and Kekri — Autumn.** Preservation and celebration. Grain is dried in the
+riihi and stored for winter. Ends with Kekri: traditions, feasting, and reflection on the
+completed harvest.
+
+**5. Winter — Winter.** Survival and preparation. Forestry work, livestock care,
+household crafts, and storytelling fill the cold season. Ends as preparations for the
+next spring begin again.
+
+Chapters are the long-term structuring device for the narrative; they are **not yet
+wired up in code**. Right now we're still heads-down on building the farm/Pihapiiri
+location itself (see Levels below), not chapters or days.
+
+## Levels
+
+We build the game as a small number of **separate, hand-laid-out locations** — closer to
+levels than to one continuous open world — rather than one big procedurally generated
+map. Each area is built to match a design mockup in `design/<area>/`. Areas can later be
+linked (a path leading off one map into the next), but each is designed and built on its
+own.
+
+The long-term set of locations, matching the chapters above:
+
+1. **Pihapiiri (main farmyard)** — the primary hub, revisited throughout the year and
+   changed visually by season. Tupa, aitta, navetta, kaivo, sauna, kasvimaa.
+2. **Fields** — small irregular pellot, hay niityt, the forest edge, lato in the
+   distance. Used during sowing, haymaking, and harvest.
+3. **Riihi** — the grain-drying building, away from the farmyard: isolated, functional,
+   near fields and forest edge. Used for grain processing and harvest-related events.
+4. **Forest (metsä)** — the wilderness surrounding the farm: firewood, forestry,
+   hunting, gathering, folklore and cultural encounters; includes suo (bog/mire) pockets
+   in the low ground.
+5. **Lake shore (järvi)** — the household's water access: fishing, travel, seasonal
+   scenes, reflection and cultural moments.
+6. *(Optional)* **Tupa interior** — inside the main house: meals, family conversation,
+   winter evenings, storytelling, holiday celebrations.
+
+### Active build: the side-on farm scene (Pihapiiri)
+
+The current, actually-running implementation is a single static **Pihapiiri** scene, not
+the isometric engine described below. `assets/farm-scene.svg` (1920×1080) is a
+hand-illustrated, side-on view of the tupa, aitta and navetta together with the forest
+backdrop and yard; `src/farmScene.ts` draws it scale-to-fit (letterboxed if the viewport
+isn't 16:9) and walks **Jussi** (`assets/jussi.png`, a 4×4 sprite sheet) left/right
+across a fixed ground line (`GROUND_Y`/`WALK_MIN_X`/`WALK_MAX_X` in that file) in front
+of it, via A/D or the arrow keys. `main.ts` boots this scene directly. Jussi doesn't move
+beyond left/right yet — no vertical movement, no scene transitions. This is the first
+concrete instance of the "Perspective — resolved" direction in Visual style above; the
+other locations in the Levels list (Fields, Riihi, Forest, Lake shore, Tupa interior)
+don't have scenes built yet.
+
+### Earlier build (dormant): the isometric farm (umpipiha)
+
+This is the older, **currently unused** isometric implementation — kept in the repo (not
+deleted) because it's a lot of working code and the decision to remove vs. keep it for
+parts hasn't been made (see Visual style). `main.ts` no longer calls into it.
+
+**The farm — Pihapiiri plus its fields and riihi — was built as one isometric POC.** The
+current map already spans what the list above treats as three separate locations
+(Pihapiiri + Fields + Riihi) within one continuous, walkable area; that's fine for now
+since it's one POC map — revisit only if/when they need to become separate scenes.
+
+It is a faithful, literal build of the finalized mockup
+`design/farm-layout/v4-umpipiha-topdown.png` (source: `design/farm-layout/generate.mjs`,
+kept as the spec — "v4" is final and built, do not regenerate a v5 without being asked).
+It is a **POC**: structure and layout fidelity (building placement/sizes, fields, fences,
+the forest backdrop) matter much more than visual polish right now — reuse existing
+simple vector-placeholder draw functions wherever possible rather than investing in new
+art.
+
+**Deferred to later, separate areas:** the **lake** (järvi), and **forest** as an
+explorable destination beyond its current role as backdrop, are not currently in the
+game. They'll come back as their own area(s) once the farm is solid. The `jetty`/`Reed`
+types are kept in the code for that future lake area even though unused right now —
+intentional, not dead code to clean up.
+
+The farm area (`src/world.ts`'s `generateWorld()`) currently has:
+- **Tupa** (main house), a combined **aitta** (storehouse), **navetta** (cowshed),
+  **savusauna** (set a little apart), **riihi** (at the rye field's edge, north side of
+  the path that forks to it, reachable on foot — no longer lost in the forest),
+  **lato** (out at the edge of a field), **käymälä** (tucked to the west side, outside
+  the fence and off the main gate's sightline, reached by its own short side-path), and
+  **kaivo** (well) — all placed per the v4 mockup's metres-as-tiles layout.
+- A muddy **pihapiiri** (yard) enclosed by a **puuaita** (fence) with a **portti** (gate)
+  gap plus a narrower side-gate (for the käymälä spur), matching the mockup's fence
+  segments.
+- A tilled **kasvimaa** (nauris/kaali/sipuli/herneet/yrtit) with a **scarecrow**
+  (variksenpelätin) standing watch.
+- **Pellot** (ruis/ohra/kaura/nauris fields) and a **niitty** (summer pasture, with a
+  deliberate forest gap from the navetta rather than abutting it) as clearings cut into
+  the forest, per the mockup's field polygons. Paths are routed through the open
+  corridor between fields, not through their crop rows.
+- No **puro**/**lähde** on this map — they were cutting through the rye field, so v4
+  drops them; `World.streams`/`springs` are returned empty here (the `Stream`/`Spring`
+  types stay in code, like `jetty`/`Reed`, for wherever they're needed next).
+- **Dense forest** — **koivu / mänty / kuusi** — as the default backdrop, with the
+  above as clearings cut into it; **kalliot ja kivet** scattered through it.
+- The **family**: the **wife** milking the cow (pastured in the niitty), the **mummo**
+  (grandmother) knitting, the **son** chopping wood (no lake here for him to fish from —
+  that returns with the lake area).
+- The **playable farmer** (WASD / arrow keys, camera follows, close zoom).
+
+We iterate from here — keep consulting `inspiration/`, and keep `design/farm-layout/`'s
+mockup and `src/world.ts` in sync as the farm area evolves.
+
+## Reference imagery — ALWAYS consult `inspiration/`
 There is an **`inspiration/` folder** in the repo root, grouped into subfolders.
 **Look at these images before doing any visual work** and keep matching their mood.
 
@@ -147,20 +310,24 @@ There is an **`inspiration/` folder** in the repo root, grouped into subfolders.
 - `glimmerwick-*.jpg` — layered foliage & cosy density, but **less saturated / less
   blobby than this** is what we want. Use for composition, not for the candy colours.
 
-### Hard constraints (what this game is NOT)
-- ❌ No combat
-- ❌ No inventory
-- ❌ No quest log / objectives UI
-- ✅ It's a **walking sim** first. Mood and presence over mechanics.
+## Visual style
 
-### Art direction
-- **Isometric** (2:1 diamond tiles), **NOT realistic 3D**.
+Style references: **Songs of Glimmerwick** (cosy, warm, hand-painted village life),
+**Pentiment** (strong art direction, storybook feeling, medieval European setting), and
+the reference screenshots the user originally shared (hand-painted/watercolour look,
+soft layered foliage, sunbeams, muted natural palette, isometric camera, a tiny
+character in a large gentle landscape).
+
+- **Side-on static scenes, NOT isometric, NOT realistic 3D** — see "Perspective —
+  resolved" below. (The dormant isometric engine used 2:1 diamond tiles; that's no
+  longer the active approach.)
 - 2D **sprites are fine** (currently hand-drawn with canvas vector shapes as placeholders).
 - **Slightly more *real*, less cartoon** — grade toward **Pentiment** and
   `kallio-lake-dusk.jpg`: muted, desaturated, earthy, a touch dusky/melancholic. Pull
   saturation *down*. No candy greens, no Glimmerwick neon.
 - **Camera sits CLOSE.** The character should be a clear presence, the landscape large
-  around it. If in doubt, zoom in (`ZOOM` in `main.ts`).
+  around it. If in doubt, make the figure bigger relative to the frame (`FIGURE_H` in
+  `farmScene.ts`).
 - **Calm, not busy.** *Suvanto = still water.* Motion must be **subtle**: barely-there
   sway, slow water, sparse slow dust. If anything reads as "jittery" or "everything is
   moving", **reduce the amplitude**. Stillness is the feeling.
@@ -173,20 +340,43 @@ There is an **`inspiration/` folder** in the repo root, grouped into subfolders.
 - Atmosphere: gentle god-ray shafts, *sparse* drifting pollen, vignette, chimney smoke,
   *slow* water shimmer.
 
-### Finnish landscape vocabulary (build the world from these)
-The real Finnish wilderness we're evoking — use the Finnish words in code/comments:
-- **suo** — bog / mire: open, soft, golden-green wetland, tufts of grass, still pools,
-  crossed by **pitkospuut** (wooden plank boardwalks). A signature Finnish landscape.
-- **metsä** — dense forest, the dominant biome. Tall trunks, little gaps.
-- Trees: **koivu** (birch — white papery trunk, light airy crown), **mänty** (Scots
-  pine — tall bare reddish trunk, foliage only near the top), **kuusi** (Norway spruce
-  — dark, narrow, drooping conical silhouette). All three should be visually distinct.
-- **kalliot ja kivet** — bedrock outcrops / boulders and smaller stones, often
-  glacier-rounded and grey.
-- **sammal** — moss: soft green carpets on the forest floor, on rocks, on old roofs.
-- Wildlife: **lehmä** (cow), **peura/hirvi** (deer), and ambient creatures later.
+### Perspective — resolved: side-on static scenes
+The earlier isometric vs. side-on tension noted above is **resolved in favour of
+side-on, static illustrated scenes** — confirmed by building the first one. The active
+implementation (`src/farmScene.ts`) draws a fixed hand-illustrated background
+(`assets/farm-scene.svg`: tupa, aitta, navetta, forest backdrop, all in one frame) with
+Jussi (`assets/jussi.png`) walking left/right across a fixed ground line in front of it
+— a Pentiment-style "stage" rather than a freely-walkable world. The old **isometric**
+(2:1 diamond tile) engine (`iso.ts`/`world.ts`/`update.ts`/`render.ts`, the v4 umpipiha
+mockup) is still in the repo and still correct as a description of *that* code, but it
+is currently **dormant/unused** — `main.ts` boots the new scene instead. Don't delete
+those files without being asked; whether to remove them or keep them for parts (tree
+draw fns, ink helpers, etc.) is an open decision, not yet made.
 
-### Audio — two layers (real recorded files, **not** synth), and **optional**
+## Hard constraints (what this game is not)
+- Not a sandbox farming simulator — no resource management, crafting, or optimization
+  loops.
+- No combat.
+- No traditional inventory.
+- No quest-log / objectives-checklist UI. Chapter tasks are linear and narrative-led —
+  guidance comes through environment, dialogue, and scene design (à la Pentiment), not a
+  HUD.
+- No fail states, no time pressure. It's about presence over mechanics.
+
+## Educational goals
+The game should help players understand:
+- How a small Finnish farm functioned in the 17th century.
+- The seasonal rhythm of agricultural life.
+- Traditional Finnish buildings and landscapes.
+- The importance of forests, fields, livestock, and water.
+- Cultural traditions such as Juhannus and Kekri.
+- The lived experience of ordinary people, rather than kings, wars, or major historical
+  events.
+
+The intended feeling is not "running a farm," but spending a year living within a
+historical world that feels authentic, human, and deeply connected to the land.
+
+## Audio — two layers (real recorded files, **not** synth), and **optional**
 Served from `public/audio/`; the audio files are **git-ignored** (only the README is
 tracked). `src/audio.ts` is the player; starts on first user gesture.
 - **Track lists are discovered automatically from the folder contents** — no
@@ -207,35 +397,12 @@ tracked). `src/audio.ts` is the player; starts on first user gesture.
   Consult the user before changing the audio approach.
 - Later: footstep sfx, a kantele line, weather-reactive ambience.
 
-## Current scope
-
-Single outdoor scene by the water:
-- **Two rustic log houses** (weathered grey logs, sagging sod/thatch roof, exposed roof
-  poles, glowing window, chimney smoke) — old and lived-in, à la `keskiaika-puutalo.jpg`.
-- A **lake** with sandy shore, reeds, foam rim, lily pads, slow shimmer.
-- A **suo** (bog) patch with moss tufts and still pools.
-- A worn **dirt path** that winds past the homestead and leads off the map.
-- **Dense forest** — **koivu / mänty / kuusi** (birch / pine / spruce), packed thick,
-  thickest at the edges so the homestead sits in a small clearing.
-- **kalliot ja kivet** — lichen-grey **bedrock outcrops** (mossy, heather-topped) and
-  scattered stones; **sammal** moss on the floor.
-- A **cowshed** (navetta) with a fenced **paddock**, and the **family** at their daily
-  work: the **wife** milking the cow, the **mummo** (grandmother) knitting, the **son**
-  fishing from a **jetty** (laituri).
-- A tilled **vegetable patch** (kasvimaa) planted in rows of turnip/cabbage, with a
-  **scarecrow** (variksenpelätin) standing watch — see `inspiration/medieval/maatila.jpg`.
-- A wandering **cow** and a shyer **deer**.
-- The **playable farmer** (walk with WASD / arrow keys, camera follows, close zoom).
-- Wildflowers; ambient light, sparse particles, and the procedural **Nordic score**.
-
-We iterate from here — keep consulting `inspiration/`.
-
 ## Tech stack
 
 - **Vite** + **TypeScript**, plain **HTML5 Canvas 2D**. No game framework.
   - Chosen for: full control of the painterly look, light footprint, easy to iterate,
     no lock-in. If we later need tilemaps/physics/audio routing we can revisit
-    (Phaser / PixiJS), but canvas is plenty for a walking sim.
+    (Phaser / PixiJS), but canvas is plenty for this.
 - Runs in Chrome via `npm run dev`.
 
 ### Run it
@@ -273,33 +440,47 @@ every push to `main` (official `actions/upload-pages-artifact` + `deploy-pages`)
 ```
 index.html            canvas + hint, loads /src/main.ts
 src/
-  main.ts             bootstrap: canvas sizing (DPR) + ZOOM, game loop, audio start, wiring
+  main.ts             bootstrap: canvas sizing (DPR), game loop, audio start, wiring
+  farmScene.ts         ACTIVE: the side-on Pihapiiri scene + Jussi (see Levels above)
+  input.ts            keyboard state + screen-space axis()
+  audio.ts            two-layer soundscape player, start()/toggleMute() (see Audio above)
+  style.css
+
+  — dormant, not called from main.ts right now (see Levels: "Earlier build") —
   iso.ts              tile constants, world<->screen math, hash noise
   types.ts            Tile / Entity / World / GameState shapes
-  input.ts            keyboard state + screen-space axis()
-  world.ts            generateWorld(), isWalkable(), tileAt() — biomes, path, props
+  world.ts            generateWorld() — the isometric farm area's fixed layout,
+                      isWalkable(), tileAt()
   update.ts           player movement + collision, cow & deer AI, camera follow
-  render.ts           ALL drawing (tiles, entities, atmosphere)
-  audio.ts            procedural flute ambience (Web Audio), start()/toggleMute()
-  style.css
+  render.ts           ALL drawing for the isometric scene (tiles, entities, atmosphere)
 ```
 
-### Key conventions / facts
+### Key conventions / facts — isometric engine (dormant, see Levels)
+The conventions below describe `iso.ts`/`world.ts`/`update.ts`/`render.ts`. None of this
+applies to the active `farmScene.ts`, which has its own constants
+(`GROUND_Y`/`WALK_MIN_X`/`WALK_MAX_X`/`FIGURE_H` etc.) documented inline in that file.
 - **Coordinates:** world coords are in *tile units* and may be fractional. Tile `(i,j)`
   is centred at world `(i,j)`. `worldToScreen`: `x=(wx-wy)*TILE_W/2`, `y=(wx+wy)*TILE_H/2`.
-- `TILE_W = 64`, `TILE_H = 32` (2:1 iso). A global **`ZOOM`** in `main.ts` scales the
-  whole render so the camera sits close (see Glimmerwick).
+- `TILE_W = 64`, `TILE_H = 32` (2:1 iso). This engine's render pipeline scaled by a
+  global `ZOOM` constant so the camera sat close (see Glimmerwick) — that constant lived
+  in `main.ts` and was removed when `main.ts` stopped calling into this engine.
 - **Depth sort:** entities drawn back-to-front by `wx + wy` (painter's algorithm).
 - **Movement** is normalised in *screen space* so speed feels even in all directions,
   then converted to world delta. Collision is axis-separated (slide along walls).
-- **Walkable** = not water and not inside any house footprint (`world.houses`). bog,
-  sand and path are all walkable. The map edge is a wall.
-- **Tiles:** `grass | water | sand | bog | path | field`. `field` = tilled kasvimaa
-  (furrowed soil + crop rows), walkable. **Tree variants:** `0` koivu (birch),
-  `1` mänty (pine), `2` kuusi (spruce).
+- **Walkable** = not water and not inside any solid footprint (`world.solids`, e.g.
+  buildings). bog, sand and path are all walkable. The map edge is a wall.
+- **Tiles:** `grass | water | sand | bog | path | field`. `field` = any tilled/cultivated
+  ground — the kasvimaa **and** the pellot (grain fields) reuse this one type (furrowed
+  soil + crop-row look), walkable. `water`/`bog`/`sand` aren't used by the current
+  farm-only area (no lake/suo yet) but stay in the type for when that area returns.
+  **Tree variants:** `0` koivu (birch), `1` mänty (pine), `2` kuusi (spruce).
 - **Homestead entities:** `house` (tupa), `barn` (navetta), `aitta` (raised storehouse),
-  `well` (kaivo), `fence`, `scarecrow` (variksenpelätin), `jetty`, `villager`
-  (`wife` | `granny` | `son`), plus `cow`/`deer`.
+  `outbuilding` (savusauna/riihi/lato/käymälä, via a `btype` discriminator — one shared
+  simple draw fn, see `drawOutbuilding`), `well` (kaivo), `fence`, `scarecrow`
+  (variksenpelätin), `jetty` (currently unused, kept for the future lake area),
+  `villager` (`wife` | `granny` | `son`), plus `cow`/`deer`. `World.streams`/`springs`
+  (puro/lähde polylines, drawn as a decorative overlay, not tiles) are currently empty —
+  unused in this area's v4 layout, kept for whichever area needs them next.
 - **Inked figures:** the sprite figures (player, villagers, cow, deer, scarecrow) carry a
   soft hand-drawn pen outline (`polyInk`/`ellInk`/`inkPath`, colour `INK_FIG`) for a
   Pentiment/Glimmerwick look. Buildings & trees are intentionally NOT outlined (yet).

@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2004" height="726" font-family="Georgia, serif">
+<rect width="2004" height="726" fill="#f5f0e6"/>
+<text x="60" y="34" font-size="22" fill="#3a2f25" font-weight="bold">Umpipiha — farm layout, v3 (topdown schematic)</text>
+<text x="60" y="56" font-size="13" fill="#6b5d4a">Not final — numbers key to the legend on the right. Iterate from here.</text>
+<rect x="60" y="90" width="1584" height="576" fill="#9fb08a"/>
+<polyline points="450,174 540,150 690,186 840,156 960,186" fill="none" stroke="#5a8a9a" stroke-width="2"/>
+<circle cx="450" cy="174" r="7.199999999999999" fill="#bcd9e0" stroke="#3a2f25" stroke-width="1.5"/>
+<text x="450" y="160.8" font-size="10" fill="#3a6b78" text-anchor="middle">lähde</text>
+<text x="660" y="162" font-size="10" fill="#3a6b78" text-anchor="middle">puro</text>
+<polygon points="1032,618 1200,630 1188,450 1080,450 1020,546" fill="#dce8c8" stroke="#7c8f63" stroke-width="1.5"/>
+<text x="1104" y="538.8" font-size="11" fill="#5a6b46" text-anchor="middle">Pelto — ruis (rye)</text>
+<polygon points="1248,630 1440,618 1404,450 1284,450" fill="#dce8c8" stroke="#7c8f63" stroke-width="1.5"/>
+<text x="1344" y="537" font-size="11" fill="#5a6b46" text-anchor="middle">Pelto — ohra (barley)</text>
+<polygon points="1188,450 1200,534 1272,534 1284,450" fill="#dce8c8" stroke="#7c8f63" stroke-width="1.5"/>
+<text x="1236" y="552" font-size="11" fill="#5a6b46" text-anchor="middle">Pelto — kaura (oats)</text>
+<polygon points="1218,342 1284,342 1284,198 1224,198" fill="#dce8c8" stroke="#7c8f63" stroke-width="1.5"/>
+<text x="1252.5" y="270" font-size="11" fill="#5a6b46" text-anchor="middle">Nauris</text>
+<polygon points="1284,450 1464,450 1464,198 1284,198" fill="#e3edd2" stroke="#9aab83" stroke-width="1.5"/>
+<text x="1374" y="234" font-size="11" fill="#5a6b46" text-anchor="middle">Niitty — kesälaidun (navetalta)</text>
+<polyline points="1218,450 1236,498 1242,558 1224,618 1236,666" fill="none" stroke="#efe6d3" stroke-width="6" stroke-linecap="round"/>
+<polyline points="1218,450 1236,498 1242,558 1224,618 1236,666" fill="none" stroke="#8a6a44" stroke-width="2" stroke-dasharray="2 5"/>
+<polyline points="1200,306 1212,258 1206,210" fill="none" stroke="#efe6d3" stroke-width="6" stroke-linecap="round"/>
+<polyline points="1200,306 1212,258 1206,210" fill="none" stroke="#8a6a44" stroke-width="2" stroke-dasharray="2 5"/>
+<line x1="1140" y1="450" x2="1200" y2="450" stroke="#5a4632" stroke-width="2" stroke-dasharray="4 3"/>
+<line x1="1236" y1="450" x2="1284" y2="450" stroke="#5a4632" stroke-width="2" stroke-dasharray="4 3"/>
+<line x1="1140" y1="450" x2="1140" y2="426" stroke="#5a4632" stroke-width="2" stroke-dasharray="4 3"/>
+<line x1="1140" y1="396" x2="1140" y2="342" stroke="#5a4632" stroke-width="2" stroke-dasharray="4 3"/>
+<line x1="1140" y1="342" x2="1164" y2="342" stroke="#5a4632" stroke-width="2" stroke-dasharray="4 3"/>
+<line x1="1218" y1="342" x2="1284" y2="342" stroke="#5a4632" stroke-width="2" stroke-dasharray="4 3"/>
+<line x1="1284" y1="366" x2="1284" y2="342" stroke="#5a4632" stroke-width="2" stroke-dasharray="4 3"/>
+<text x="1218" y="466" font-size="10" fill="#5a4632" text-anchor="middle">portti</text>
+<rect x="1152" y="246" width="60" height="48" fill="#ddeec0" stroke="#5a4632" stroke-width="1.5" stroke-dasharray="3 2"/>
+<line x1="1164" y1="250" x2="1164" y2="290" stroke="#7c8f63" stroke-width="1"/>
+<line x1="1176" y1="250" x2="1176" y2="290" stroke="#7c8f63" stroke-width="1"/>
+<line x1="1188" y1="250" x2="1188" y2="290" stroke="#7c8f63" stroke-width="1"/>
+<line x1="1200" y1="250" x2="1200" y2="290" stroke="#7c8f63" stroke-width="1"/>
+<text x="1156" y="260" font-size="11" fill="#3a2f25" font-weight="bold">9</text>
+<rect x="1164" y="306" width="54" height="36" fill="#e8dcc0" stroke="#3a2f25" stroke-width="2"/>
+<text x="1191" y="329" font-size="14" fill="#3a2f25" font-weight="bold" text-anchor="middle">1</text>
+<rect x="1086" y="396" width="54" height="30" fill="#e8dcc0" stroke="#3a2f25" stroke-width="2"/>
+<text x="1113" y="416" font-size="14" fill="#3a2f25" font-weight="bold" text-anchor="middle">2</text>
+<rect x="1284" y="366" width="36" height="84" fill="#e8dcc0" stroke="#3a2f25" stroke-width="2"/>
+<text x="1302" y="413" font-size="14" fill="#3a2f25" font-weight="bold" text-anchor="middle">3</text>
+<rect x="1332" y="306" width="30" height="24" fill="#e8dcc0" stroke="#3a2f25" stroke-width="2"/>
+<text x="1347" y="323" font-size="14" fill="#3a2f25" font-weight="bold" text-anchor="middle">4</text>
+<rect x="300" y="210" width="66" height="36" fill="#e8dcc0" stroke="#3a2f25" stroke-width="2"/>
+<text x="333" y="233" font-size="14" fill="#3a2f25" font-weight="bold" text-anchor="middle">5</text>
+<rect x="1356" y="510" width="54" height="30" fill="#e8dcc0" stroke="#3a2f25" stroke-width="2"/>
+<text x="1383" y="530" font-size="14" fill="#3a2f25" font-weight="bold" text-anchor="middle">6</text>
+<rect x="1056" y="318" width="12" height="12" fill="#e8dcc0" stroke="#3a2f25" stroke-width="2"/>
+<text x="1062" y="329" font-size="14" fill="#3a2f25" font-weight="bold" text-anchor="middle">7</text>
+<circle cx="1200" cy="366" r="4.800000000000001" fill="#cfe3ea" stroke="#3a2f25" stroke-width="2"/>
+<text x="1200" y="370" font-size="10" fill="#3a2f25" text-anchor="middle">8</text>
+<text x="60" y="80" font-size="11" fill="#6b5d4a" font-style="italic">↑ background / further away</text>
+<text x="60" y="686" font-size="11" fill="#6b5d4a" font-style="italic">↓ foreground — camera / player approaches from here</text>
+<line x1="60" y1="691" x2="180" y2="691" stroke="#3a2f25" stroke-width="2"/>
+<line x1="60" y1="686" x2="60" y2="696" stroke="#3a2f25" stroke-width="2"/>
+<line x1="180" y1="686" x2="180" y2="696" stroke="#3a2f25" stroke-width="2"/>
+<text x="120" y="709" font-size="11" fill="#3a2f25" text-anchor="middle">20 m</text>
+<text x="1664" y="100" font-size="14" fill="#3a2f25" font-weight="bold">Legend</text>
+<rect x="1664" y="113" width="16" height="12" fill="#e8dcc0" stroke="#3a2f25" stroke-width="1" />
+<text x="1688" y="124" font-size="11.5" fill="#3a2f25">1. Tupa — main house — 9×6 m</text>
+<rect x="1664" y="131" width="16" height="12" fill="#e8dcc0" stroke="#3a2f25" stroke-width="1" />
+<text x="1688" y="142" font-size="11.5" fill="#3a2f25">2. Aitta — storehouse (combined) — 9×5 m</text>
+<rect x="1664" y="149" width="16" height="12" fill="#e8dcc0" stroke="#3a2f25" stroke-width="1" />
+<text x="1688" y="160" font-size="11.5" fill="#3a2f25">3. Navetta — cowshed — 6×14 m</text>
+<rect x="1664" y="167" width="16" height="12" fill="#e8dcc0" stroke="#3a2f25" stroke-width="1" />
+<text x="1688" y="178" font-size="11.5" fill="#3a2f25">4. Savusauna — smoke sauna — 5×4 m</text>
+<rect x="1664" y="185" width="16" height="12" fill="#e8dcc0" stroke="#3a2f25" stroke-width="1" />
+<text x="1688" y="196" font-size="11.5" fill="#3a2f25">5. Riihi — threshing barn (far from piiri — fire risk) — 11×6 m</text>
+<rect x="1664" y="203" width="16" height="12" fill="#e8dcc0" stroke="#3a2f25" stroke-width="1" />
+<text x="1688" y="214" font-size="11.5" fill="#3a2f25">6. Lato — hay barn — 9×5 m</text>
+<rect x="1664" y="221" width="16" height="12" fill="#e8dcc0" stroke="#3a2f25" stroke-width="1" />
+<text x="1688" y="232" font-size="11.5" fill="#3a2f25">7. Käymälä — outhouse — 2×2 m</text>
+<rect x="1664" y="239" width="16" height="12" fill="#cfe3ea" stroke="#3a2f25" stroke-width="1" />
+<text x="1688" y="250" font-size="11.5" fill="#3a2f25">8. Kaivo — well</text>
+<rect x="1664" y="257" width="16" height="12" fill="#ddeec0" stroke="#3a2f25" stroke-width="1" stroke-dasharray="3 2"/>
+<text x="1688" y="268" font-size="11.5" fill="#3a2f25">9. Kasvimaa — vegetable garden — 10×8 m</text>
+<text x="1664" y="298" font-size="12" fill="#3a2f25" font-weight="bold">Terrain</text>
+<rect x="1664" y="307" width="16" height="12" fill="#dce8c8" stroke="#7c8f63" stroke-width="1" />
+<text x="1688" y="318" font-size="11.5" fill="#3a2f25">Pellot — fields (rye/barley/oats/turnip)</text>
+<rect x="1664" y="325" width="16" height="12" fill="#e3edd2" stroke="#9aab83" stroke-width="1" />
+<text x="1688" y="336" font-size="11.5" fill="#3a2f25">Niitty — meadow / summer pasture</text>
+<rect x="1664" y="343" width="16" height="12" fill="#9fb08a" stroke="#9fb08a" stroke-width="1" />
+<text x="1688" y="354" font-size="11.5" fill="#3a2f25">Metsä — forest (koivu/mänty/kuusi)</text>
+<line x1="1664" y1="367" x2="1680" y2="367" stroke="#5a4632" stroke-width="2" stroke-dasharray="4 3"/>
+<text x="1688" y="372" font-size="11.5" fill="#3a2f25">Puuaita — fence (dashed)</text>
+<line x1="1664" y1="385" x2="1680" y2="385" stroke="#8a6a44" stroke-width="2" stroke-dasharray="2 5"/>
+<text x="1688" y="390" font-size="11.5" fill="#3a2f25">Polku — path (dashed, light casing)</text>
+<line x1="1664" y1="403" x2="1680" y2="403" stroke="#5a8a9a" stroke-width="2" />
+<text x="1688" y="408" font-size="11.5" fill="#3a2f25">Puro — forest stream (solid)</text>
+<rect x="1664" y="415" width="16" height="12" fill="#bcd9e0" stroke="#3a2f25" stroke-width="1" />
+<text x="1688" y="426" font-size="11.5" fill="#3a2f25">Lähde — spring</text>
+</svg>

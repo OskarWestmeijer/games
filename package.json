@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "A cosy isometric walking sim set in medieval rural Finland.",
+  "description": "A narrative game set on a 17th-century Finnish farm.",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

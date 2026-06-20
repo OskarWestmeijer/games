@@ -61,6 +61,18 @@ export interface Well {
   seed: number;
 }
 
+/** A small log outbuilding sharing one simple draw fn: savusauna, riihi, lato, käymälä. */
+export type OutbuildingType = 'savusauna' | 'riihi' | 'lato' | 'kaymala';
+export interface Outbuilding {
+  kind: 'outbuilding';
+  btype: OutbuildingType;
+  wx: number;
+  wy: number;
+  w: number;
+  d: number;
+  seed: number;
+}
+
 /** One fence post, optionally with a rail running to the +x and/or +y neighbour. */
 export interface Fence {
   kind: 'fence';
@@ -153,6 +165,7 @@ export type Entity =
   | House
   | Barn
   | Aitta
+  | Outbuilding
   | Well
   | Fence
   | Scarecrow
@@ -172,6 +185,18 @@ export interface Solid {
   d: number;
 }
 
+/** puro — a forest stream, drawn as a decorative line overlay (not water tiles). */
+export interface Stream {
+  points: { wx: number; wy: number }[];
+}
+
+/** lähde — a small forest spring, drawn as a decorative pool overlay. */
+export interface Spring {
+  wx: number;
+  wy: number;
+  r: number;
+}
+
 export interface World {
   width: number;
   height: number;
@@ -179,6 +204,8 @@ export interface World {
   entities: Entity[]; // props (everything except the player)
   player: Player;
   solids: Solid[]; // footprints that block movement (houses, barn)
+  streams: Stream[];
+  springs: Spring[];
 }
 
 export interface Camera {

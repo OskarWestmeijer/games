@@ -1,10 +1,26 @@
-// Procedurally builds the little outdoor scene: a lake, a sandy shore, a suo (bog)
-// with a plank boardwalk, a worn dirt path that leads off the map, two rustic log
-// houses, dense koivu/mänty/kuusi forest, mossy boulders, a cow and a deer.
-// Deterministic-ish but lightly random.
+// Builds the farm (umpipiha) area — the only area in the game right now. A literal,
+// structure-faithful build of design/farm-layout/v4-umpipiha-topdown.png; the design
+// mockup's data (design/farm-layout/generate.mjs) is mirrored below as the source of
+// truth. Other areas (lake, suo) are separate, deferred areas — see CLAUDE.md.
 
 import { hashf } from './iso';
-import type { Aitta, Barn, Cow, Deer, Entity, House, Player, Solid, Tile, Villager, Well, World } from './types';
+import type {
+  Aitta,
+  Barn,
+  Cow,
+  Deer,
+  Entity,
+  House,
+  Outbuilding,
+  Player,
+  Solid,
+  Spring,
+  Stream,
+  Tile,
+  Villager,
+  Well,
+  World
+} from './types';
 
 export function tileAt(world: World, tx: number, ty: number): Tile | undefined {
   if (tx < 0 || ty < 0 || tx >= world.width || ty >= world.height) return undefined;
@@ -26,7 +42,7 @@ export function isWalkable(world: World, wx: number, wy: number): boolean {
   return true;
 }
 
-/** Squared distance from point (px,py) to segment (ax,ay)-(bx,by). */
+/** Distance from point (px,py) to segment (ax,ay)-(bx,by). */
 function distToSeg(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
   const vx = bx - ax;
   const vy = by - ay;
@@ -40,211 +56,166 @@ function distToSeg(px: number, py: number, ax: number, ay: number, bx: number, b
   return Math.hypot(dx, dy);
 }
 
-/** Smooth value noise (bilinear smoothstep) — for gently undulating, non-jittery edges. */
-function snoise(x: number, y: number): number {
-  const xi = Math.floor(x);
-  const yi = Math.floor(y);
-  const xf = x - xi;
-  const yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf);
-  const v = yf * yf * (3 - 2 * yf);
-  const a = hashf(xi, yi);
-  const b = hashf(xi + 1, yi);
-  const c = hashf(xi, yi + 1);
-  const d = hashf(xi + 1, yi + 1);
-  return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+function distToPolyline(x: number, y: number, pts: [number, number][]): number {
+  let d = Infinity;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const s = distToSeg(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]);
+    if (s < d) d = s;
+  }
+  return d;
 }
 
-export function generateWorld(width: number, height: number): World {
+/** Ray-casting point-in-polygon test (works for any simple polygon). */
+function pointInPoly(x: number, y: number, pts: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// ---- design -> game coordinate mapping --------------------------------------
+// design/farm-layout/generate.mjs lays the farm out in world-space METRES with y
+// inverted (py = MARGIN.top + (WORLD.h - y) * SCALE) so the gate reads near the bottom
+// of the isometric camera (foreground, close to the player) and the pihapiiri recedes
+// upward (background) behind it. We use the same 1 tile = 1 metre scale and re-apply
+// that exact inversion to port the mockup's (x, y) into this game's (wx, wy) tile-unit
+// world, padded by a forest MARGIN on every side so nothing sits flush against the
+// map's hard edge (the map boundary blocks movement).
+const DESIGN_W = 190;
+const DESIGN_H = 110;
+const MARGIN = 10;
+const WIDTH = DESIGN_W + MARGIN * 2;
+const HEIGHT = DESIGN_H + MARGIN * 2;
+const X = (x: number): number => x + MARGIN;
+const Y = (y: number): number => DESIGN_H - y + MARGIN;
+const XY = (pts: [number, number][]): [number, number][] => pts.map(([x, y]) => [X(x), Y(y)]);
+
+interface BuildingDef {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+const center = (b: BuildingDef): { wx: number; wy: number } => ({ wx: X(b.x + b.w / 2), wy: Y(b.y + b.h / 2) });
+
+const TUPA: BuildingDef = { x: 90, y: 90, w: 8, h: 6 };
+const AITTA: BuildingDef = { x: 76, y: 86, w: 6, h: 5 };
+const NAVETTA: BuildingDef = { x: 100, y: 74, w: 5, h: 10 };
+const SAVUSAUNA: BuildingDef = { x: 106, y: 90, w: 4, h: 4 };
+const RIIHI: BuildingDef = { x: 24, y: 70, w: 11, h: 6 };
+const LATO: BuildingDef = { x: 128, y: 55, w: 9, h: 5 };
+// tucked to the side of the yard, off the main gate's sightline, reached by its
+// own short spur off a separate gap in the west fence (see FENCE_SEGMENTS/PATHS).
+const KAYMALA: BuildingDef = { x: 68, y: 80, w: 2, h: 2 };
+
+const KAIVO = { wx: X(98), wy: Y(84) };
+
+// kasvimaa: design x84-94, y78-86 (y flipped so y0 < y1 in game space).
+const KASVIMAA = { x0: X(84), x1: X(94), y0: Y(86), y1: Y(78) };
+
+// pihapiiri (yard) interior: design x74-105, y74-96.
+const YARD = { x0: X(74), x1: X(105), y0: Y(96), y1: Y(74) };
+
+const FENCE_SEGMENTS: [number, number, number, number][] = (
+  [
+    [74, 96, 90, 96],
+    [98, 96, 105, 96], // north wall, tupa fills the gap
+    [74, 82, 74, 96],
+    [74, 74, 74, 78], // west wall, käymälä-path gap at 78-82
+    [105, 84, 105, 96], // east wall, navetta fills 74-84
+    [74, 74, 86, 74],
+    [93, 74, 100, 74] // south wall, gate gap, navetta fills 100-105
+  ] as [number, number, number, number][]
+).map(([ax, ay, bx, by]) => [X(ax), Y(ay), X(bx), Y(by)]);
+
+const FIELDS: [number, number][][] = (
+  [
+    [[68, 63], [70, 30], [42, 18], [28, 36], [35, 63]], // ruis (rye)
+    [[125, 56], [172, 46], [165, 14], [128, 18], [122, 38]], // ohra (barley)
+    [[98, 62], [120, 58], [116, 36], [100, 38]], // kaura (oats)
+    [[76, 63], [95, 61], [92, 43], [78, 45]] // nauris (turnip)
+  ] as [number, number][][]
+).map(XY);
+
+// pasture east of the yard, reachable from the navetta's outer door (with a deliberate
+// forest gap between them, not flush against the cowshed wall).
+const NIITTY: [number, number][] = XY([[113, 65], [150, 65], [150, 100], [113, 100]]);
+
+// gate → fields, with a fork to the riihi, and a short spur to the käymälä. Routed
+// through the open corridor between the fields (not through their crop rows); riihi
+// sits north of (above) its spur so it reads clearly in the isometric camera.
+const PATHS: [number, number][][] = (
+  [
+    [[89.5, 74], [80, 70], [73, 66], [73, 48]],
+    [[73, 66], [50, 66], [30, 66], [29.5, 70]],
+    [[74, 80], [69, 80]]
+  ] as [number, number][][]
+).map(XY);
+
+function distToPath(x: number, y: number): number {
+  let d = Infinity;
+  for (const line of PATHS) d = Math.min(d, distToPolyline(x, y, line));
+  return d;
+}
+
+export function generateWorld(): World {
+  const width = WIDTH;
+  const height = HEIGHT;
   const tiles: Tile[] = new Array(width * height);
-
-  // Lake sits to the upper-right of the map; the homestead is lower-left.
-  const lakeCx = width * 0.64;
-  const lakeCy = height * 0.4;
-  const lrx = width * 0.24;
-  const lry = height * 0.17;
-  const isWater = (x: number, y: number): boolean => {
-    const nx = (x - lakeCx) / lrx;
-    const ny = (y - lakeCy) / lry;
-    // smooth, low-frequency wobble -> gently lobed coastline, not a per-tile jagged edge
-    const wobble = (snoise(x * 0.17 + 1, y * 0.17 + 2) - 0.5) * 0.8;
-    return nx * nx + ny * ny + wobble < 1;
-  };
-
-  // Suo (bog) sits in the lower-right, below the lake.
-  const bogCx = width * 0.6;
-  const bogCy = height * 0.78;
-  const brx = width * 0.22;
-  const bry = height * 0.16;
-  const isBog = (x: number, y: number): boolean => {
-    const nx = (x - bogCx) / brx;
-    const ny = (y - bogCy) / bry;
-    const wobble = (snoise(x * 0.16 + 9, y * 0.16 + 3) - 0.5) * 0.85;
-    return nx * nx + ny * ny + wobble < 1;
-  };
-
-  // A worn path: from just south of the homestead, curving down across the bog and
-  // off the bottom-right edge. Marked tile-by-tile against this polyline.
-  const path: [number, number][] = [
-    [width * 0.34, height * 0.58],
-    [width * 0.44, height * 0.66],
-    [width * 0.55, height * 0.73],
-    [width * 0.62, height * 0.84],
-    [width * 0.6, height * 0.99]
-  ];
-  const distToPath = (x: number, y: number): number => {
-    let d = Infinity;
-    for (let i = 0; i < path.length - 1; i++) {
-      const s = distToSeg(x, y, path[i][0], path[i][1], path[i + 1][0], path[i + 1][1]);
-      if (s < d) d = s;
-    }
-    return d;
-  };
-
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      let type: Tile['type'] = 'grass';
-      if (isWater(x, y)) type = 'water';
-      else if (isBog(x, y)) type = 'bog';
-      tiles[y * width + x] = { type, v: hashf(x + 0.3, y + 0.7), shore: false };
+      tiles[y * width + x] = { type: 'grass', v: hashf(x + 0.3, y + 0.7), shore: false };
     }
   }
 
-  const get = (x: number, y: number): Tile | undefined =>
-    x < 0 || y < 0 || x >= width || y >= height ? undefined : tiles[y * width + x];
-
-  // Despeckle the lake: fill single-tile holes and drop lone water tiles so the water
-  // reads as one smooth body (no stray sand specks or pinholes from the noisy mask).
-  for (let pass = 0; pass < 2; pass++) {
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const t = tiles[y * width + x];
-        const nb = [get(x + 1, y), get(x - 1, y), get(x, y + 1), get(x, y - 1)];
-        const landN = nb.filter((n) => n && n.type !== 'water').length;
-        const waterN = nb.filter((n) => n?.type === 'water').length;
-        if (t.type !== 'water' && landN === 0) t.type = 'water'; // hole hemmed by water/edge
-        else if (t.type === 'water' && waterN === 0) t.type = 'grass'; // lone water tile
-      }
+  // Cultivated ground — kasvimaa and the pellot all reuse the 'field' tile type.
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const inKasvimaa = x >= KASVIMAA.x0 && x <= KASVIMAA.x1 && y >= KASVIMAA.y0 && y <= KASVIMAA.y1;
+      if (inKasvimaa || FIELDS.some((f) => pointInPoly(x, y, f))) tiles[y * width + x].type = 'field';
     }
   }
 
-  // Shore pass: sandy beach on land touching water, shore flags on water.
-  const touchesWater = (x: number, y: number): boolean =>
-    [get(x + 1, y), get(x - 1, y), get(x, y + 1), get(x, y - 1)].some((n) => n?.type === 'water');
+  // Muddy pihapiiri (yard) ground.
+  for (let y = Math.ceil(YARD.y0); y <= Math.floor(YARD.y1); y++) {
+    for (let x = Math.ceil(YARD.x0); x <= Math.floor(YARD.x1); x++) {
+      const t = tiles[y * width + x];
+      if (t.type === 'grass') t.type = 'path';
+    }
+  }
 
-  const touchesLand = (x: number, y: number): boolean =>
-    [get(x + 1, y), get(x - 1, y), get(x, y + 1), get(x, y - 1)].some((n) => n != null && n.type !== 'water');
-
+  // Worn dirt paths.
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const t = tiles[y * width + x];
-      // a water tile is "shore" only when it actually touches land — i.e. the lake rim,
-      // not every interior tile (that was painting a foam chevron across the whole lake).
-      if (t.type === 'water') t.shore = touchesLand(x, y);
-      else if (t.type === 'grass' && touchesWater(x, y)) t.type = 'sand';
-    }
-  }
-
-  // Path pass: dirt on land, pitkospuut planks where it crosses the bog.
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const t = tiles[y * width + x];
-      const d = distToPath(x, y);
       const wobble = (hashf(x * 1.7, y * 1.3) - 0.5) * 0.5;
-      if (d + wobble < 1.0) {
-        if (t.type === 'bog') t.plank = true;
-        else if (t.type === 'grass' || t.type === 'sand') t.type = 'path';
-      }
+      if (t.type === 'grass' && distToPath(x, y) + wobble < 1.0) t.type = 'path';
     }
   }
 
   const entities: Entity[] = [];
-  const dist = (x: number, y: number, ox: number, oy: number): number => Math.hypot(x - ox, y - oy);
 
-  const player: Player = {
-    kind: 'player',
-    wx: width * 0.42,
-    wy: height * 0.54,
-    faceX: -1,
-    faceY: -1,
-    moving: false,
-    anim: 0
-  };
+  // ---- buildings ------------------------------------------------------------
+  const tupa: House = { kind: 'house', ...center(TUPA), w: TUPA.w, d: TUPA.h, seed: hashf(3.2, 8.1) };
+  const aitta: Aitta = { kind: 'aitta', ...center(AITTA), w: AITTA.w, d: AITTA.h, seed: hashf(5.1, 7.7) };
+  const navetta: Barn = { kind: 'barn', ...center(NAVETTA), w: NAVETTA.w, d: NAVETTA.h, seed: hashf(4.4, 9.2) };
+  entities.push(tupa, aitta, navetta);
 
-  // Two rustic houses, well clear of the water on the west side.
-  const houses: House[] = [
-    {
-      kind: 'house',
-      wx: Math.round(width * 0.23),
-      wy: Math.round(height * 0.5),
-      w: 2.8,
-      d: 2.3,
-      seed: hashf(3.2, 8.1)
-    },
-    {
-      kind: 'house',
-      wx: Math.round(width * 0.31),
-      wy: Math.round(height * 0.42),
-      w: 2.2,
-      d: 1.9,
-      seed: hashf(7.7, 2.4)
-    }
+  const outbuildings: Outbuilding[] = [
+    { kind: 'outbuilding', btype: 'savusauna', ...center(SAVUSAUNA), w: SAVUSAUNA.w, d: SAVUSAUNA.h, seed: hashf(1.4, 6.6) },
+    { kind: 'outbuilding', btype: 'riihi', ...center(RIIHI), w: RIIHI.w, d: RIIHI.h, seed: hashf(8.2, 2.9) },
+    { kind: 'outbuilding', btype: 'lato', ...center(LATO), w: LATO.w, d: LATO.h, seed: hashf(6.6, 4.4) },
+    { kind: 'outbuilding', btype: 'kaymala', ...center(KAYMALA), w: KAYMALA.w, d: KAYMALA.h, seed: hashf(9.9, 1.1) }
   ];
-  for (const h of houses) entities.push(h);
+  entities.push(...outbuildings);
 
-  // kasvimaa — a tilled vegetable patch east of the main house, planted in rows
-  // (nauris/kaali — turnip/cabbage). See inspiration/medieval/maatila.jpg.
-  const field = {
-    x0: houses[0].wx + 2,
-    x1: houses[0].wx + 6,
-    y0: houses[0].wy - 2,
-    y1: houses[0].wy + 1
-  };
-  for (let y = field.y0; y <= field.y1; y++) {
-    for (let x = field.x0; x <= field.x1; x++) {
-      const t = tileAt({ width, height, tiles } as World, x, y);
-      if (t && (t.type === 'grass' || t.type === 'sand' || t.type === 'path')) t.type = 'field';
-    }
-  }
-  const fieldCx = (field.x0 + field.x1) / 2;
-
-  // navetta (cowshed) just south of the houses.
-  const barn: Barn = {
-    kind: 'barn',
-    wx: Math.round(width * 0.23),
-    wy: Math.round(height * 0.6),
-    w: 2.0,
-    d: 1.6,
-    seed: hashf(4.4, 9.2)
-  };
-  entities.push(barn);
-
-  // aitta — a small raised storehouse, in the open yard south-west of the tupa.
-  const aitta: Aitta = {
-    kind: 'aitta',
-    wx: houses[0].wx - 2,
-    wy: houses[0].wy + 4,
-    w: 1.6,
-    d: 1.3,
-    seed: hashf(5.1, 7.7)
-  };
-  entities.push(aitta);
-
-  // kaivo — the well, in the front yard close to the tupa for daily water.
-  const well: Well = {
-    kind: 'well',
-    wx: houses[0].wx + 1,
-    wy: houses[0].wy + 3,
-    seed: hashf(2.7, 4.9)
-  };
+  const well: Well = { kind: 'well', wx: KAIVO.wx, wy: KAIVO.wy, seed: hashf(2.7, 4.9) };
   entities.push(well);
 
-  // Fenced paddock around the cow, with a gate on the side facing the houses.
-  const px0 = barn.wx + 2;
-  const px1 = barn.wx + 6;
-  const py0 = barn.wy - 1;
-  const py1 = barn.wy + 3;
-  const gateX = Math.round((px0 + px1) / 2);
+  // ---- pihapiiri fence, with the portti (gate) left as a gap in the segments
   const posts = new Map<string, { wx: number; wy: number; railX: boolean; railY: boolean }>();
   const post = (wx: number, wy: number) => {
     const k = `${wx},${wy}`;
@@ -255,21 +226,38 @@ export function generateWorld(width: number, height: number): World {
     }
     return p;
   };
-  for (let x = px0; x <= px1; x++) {
-    if (x < px1) post(x, py0).railX = x !== gateX; // top edge, gate gap
-    if (x < px1) post(x, py1).railX = true; // bottom edge
-    post(x, py0);
-    post(x, py1);
-  }
-  for (let y = py0; y <= py1; y++) {
-    if (y < py1) post(px0, y).railY = true; // left
-    if (y < py1) post(px1, y).railY = true; // right
-    post(px0, y);
-    post(px1, y);
+  for (const [ax, ay, bx, by] of FENCE_SEGMENTS) {
+    if (ay === by) {
+      const x0 = Math.min(ax, bx);
+      const x1 = Math.max(ax, bx);
+      for (let x = x0; x <= x1; x++) {
+        const p = post(x, ay);
+        if (x < x1) p.railX = true;
+      }
+    } else {
+      const y0 = Math.min(ay, by);
+      const y1 = Math.max(ay, by);
+      for (let y = y0; y <= y1; y++) {
+        const p = post(ax, y);
+        if (y < y1) p.railY = true;
+      }
+    }
   }
   for (const p of posts.values()) entities.push({ kind: 'fence', ...p });
 
-  const cowHome = { x: (px0 + px1) / 2, y: (py0 + py1) / 2 };
+  // ---- variksenpelätin, at the kasvimaa's near (foreground) corner ---------
+  entities.push({
+    kind: 'scarecrow',
+    wx: KASVIMAA.x0 + 0.4,
+    wy: KASVIMAA.y1 - 0.4,
+    facing: 1,
+    seed: hashf(9.1, 6.6)
+  });
+
+  // ---- niitty (pasture): the cow's home, wife at the navetta's outer door --
+  // there's a deliberate ~8m forest gap between the navetta and the niitty, so the
+  // cow's home sits a little past that gap, comfortably inside the pasture.
+  const cowHome = { x: navetta.wx + navetta.w / 2 + 13, y: navetta.wy };
   const cow: Cow = {
     kind: 'cow',
     wx: cowHome.x,
@@ -284,152 +272,130 @@ export function generateWorld(width: number, height: number): World {
   };
   entities.push(cow);
 
-  // The family at their stations.
+  // ---- the family at their stations -----------------------------------------
   const wife: Villager = {
     kind: 'villager',
     role: 'wife',
-    wx: cowHome.x - 1.4,
-    wy: cowHome.y + 0.6,
+    wx: navetta.wx + navetta.w / 2 + 1.2,
+    wy: navetta.wy,
     facing: 1, // faces the cow
     seed: hashf(2.1, 5.5)
   };
   const granny: Villager = {
     kind: 'villager',
     role: 'granny',
-    wx: houses[0].wx + 1.8,
-    wy: houses[0].wy + 2.2,
+    wx: tupa.wx - tupa.w / 2 - 1.4,
+    wy: tupa.wy + 1.6,
     facing: -1,
     seed: hashf(6.3, 3.1)
   };
-  entities.push(wife, granny);
-
-  // variksenpelätin — a scarecrow watching over the kasvimaa, at its near corner.
-  entities.push({
-    kind: 'scarecrow',
-    wx: field.x0 + 0.3,
-    wy: field.y1 + 0.4,
+  // No lake here for the son to fish from (that returns with the lake area) —
+  // he chops wood by the aitta instead. See drawSon in render.ts.
+  const son: Villager = {
+    kind: 'villager',
+    role: 'son',
+    wx: aitta.wx + aitta.w / 2 + 1.4,
+    wy: aitta.wy - 1,
     facing: 1,
-    seed: hashf(9.1, 6.6)
-  });
+    seed: hashf(8.8, 4.2)
+  };
+  entities.push(wife, granny, son);
 
-  // A jetty into the lake for the son to fish from. Find the nearest shore to a
-  // target point on the homestead side of the lake.
-  const tgx = Math.round(width * 0.42);
-  const tgy = Math.round(height * 0.46);
-  let fish: { x: number; y: number; dx: number; dy: number } | null = null;
-  let bestD = Infinity;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const tt = tiles[y * width + x];
-      if (tt.type !== 'grass' && tt.type !== 'sand') continue;
-      for (const [dx, dy] of [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1]
-      ]) {
-        const n = get(x + dx, y + dy);
-        if (n?.type === 'water') {
-          const d = dist(x, y, tgx, tgy);
-          if (d < bestD) {
-            bestD = d;
-            fish = { x, y, dx, dy };
-          }
-        }
-      }
-    }
-  }
-  if (fish) {
-    entities.push({ kind: 'jetty', wx: fish.x, wy: fish.y, dx: fish.dx, dy: fish.dy });
-    entities.push({
-      kind: 'villager',
-      role: 'son',
-      wx: fish.x + fish.dx * 1.3,
-      wy: fish.y + fish.dy * 1.3,
-      facing: fish.dx - fish.dy >= 0 ? 1 : -1,
-      seed: hashf(8.8, 4.2)
-    });
-  }
-
-  // A shy deer lives out at the forest edge near the bog.
+  // ---- a shy deer in the forest, just east of the niitty's edge -------------
+  const deerHome = { x: navetta.wx + navetta.w / 2 + 55, y: navetta.wy - 3 };
   const deer: Deer = {
     kind: 'deer',
-    wx: width * 0.5,
-    wy: height * 0.66,
+    wx: deerHome.x,
+    wy: deerHome.y,
     facing: -1,
-    homeX: width * 0.5,
-    homeY: height * 0.66,
-    tx: width * 0.5,
-    ty: height * 0.66,
+    homeX: deerHome.x,
+    homeY: deerHome.y,
+    tx: deerHome.x,
+    ty: deerHome.y,
     wait: 2,
     moving: false,
     seed: hashf(5.5, 1.1)
   };
   entities.push(deer);
 
-  // Footprints that block movement, and clearance circles that keep the homestead
-  // open (no trees/rocks growing through buildings, paddock, jetty, people).
+  // ---- the player, just inside the gate -------------------------------------
+  const player: Player = {
+    kind: 'player',
+    wx: X(89.5),
+    wy: Y(77),
+    faceX: -1,
+    faceY: -1,
+    moving: false,
+    anim: 0
+  };
+
+  // ---- footprints that block movement ---------------------------------------
   const solids: Solid[] = [
-    ...houses.map((h) => ({ wx: h.wx, wy: h.wy, w: h.w, d: h.d })),
-    { wx: barn.wx, wy: barn.wy, w: barn.w, d: barn.d },
+    { wx: tupa.wx, wy: tupa.wy, w: tupa.w, d: tupa.d },
     { wx: aitta.wx, wy: aitta.wy, w: aitta.w, d: aitta.d },
+    { wx: navetta.wx, wy: navetta.wy, w: navetta.w, d: navetta.d },
+    ...outbuildings.map((b) => ({ wx: b.wx, wy: b.wy, w: b.w, d: b.d })),
     { wx: well.wx, wy: well.wy, w: 1.1, d: 1.1 }
   ];
-  const clear: { x: number; y: number; r: number }[] = [
-    { x: player.wx, y: player.wy, r: 5 },
-    { x: houses[0].wx, y: houses[0].wy, r: 3.4 },
-    { x: houses[1].wx, y: houses[1].wy, r: 3 },
-    { x: barn.wx, y: barn.wy, r: 3 },
-    { x: aitta.wx, y: aitta.wy, r: 2.4 },
-    { x: well.wx, y: well.wy, r: 2 },
-    { x: cowHome.x, y: cowHome.y, r: 4.5 },
-    { x: granny.wx, y: granny.wy, r: 1.6 },
-    { x: fieldCx, y: (field.y0 + field.y1) / 2, r: 4.5 }
-  ];
-  if (fish) clear.push({ x: fish.x, y: fish.y, r: 3 });
-  const inClear = (x: number, y: number): boolean => clear.some((c) => dist(x, y, c.x, c.y) < c.r);
 
-  // Forest: dense, denser still toward the edges so the homestead sits in a clearing.
-  // koivu (birch) lighter in the clearing, kuusi/mänty (spruce/pine) thick at the edges.
+  // ---- tree/rock clearance: yard, niitty, buildings, paths, deer's clearing -
+  const dist = (x: number, y: number, ox: number, oy: number): number => Math.hypot(x - ox, y - oy);
+  const niittyXs = NIITTY.map((p) => p[0]);
+  const niittyYs = NIITTY.map((p) => p[1]);
+  const niittyBounds = {
+    x0: Math.min(...niittyXs),
+    x1: Math.max(...niittyXs),
+    y0: Math.min(...niittyYs),
+    y1: Math.max(...niittyYs)
+  };
+  const clearCircles: { x: number; y: number; r: number }[] = [
+    { x: player.wx, y: player.wy, r: 4 },
+    { x: tupa.wx, y: tupa.wy, r: Math.max(tupa.w, tupa.d) / 2 + 2.5 },
+    { x: aitta.wx, y: aitta.wy, r: Math.max(aitta.w, aitta.d) / 2 + 2 },
+    { x: navetta.wx, y: navetta.wy, r: Math.max(navetta.w, navetta.d) / 2 + 2 },
+    ...outbuildings.map((b) => ({ x: b.wx, y: b.wy, r: Math.max(b.w, b.d) / 2 + 2 })),
+    { x: well.wx, y: well.wy, r: 2 },
+    { x: cowHome.x, y: cowHome.y, r: 7 },
+    { x: deerHome.x, y: deerHome.y, r: 6 }
+  ];
+  const inClear = (x: number, y: number): boolean => {
+    if (x >= YARD.x0 - 1 && x <= YARD.x1 + 1 && y >= YARD.y0 - 1 && y <= YARD.y1 + 1) return true;
+    if (x >= niittyBounds.x0 && x <= niittyBounds.x1 && y >= niittyBounds.y0 && y <= niittyBounds.y1) return true;
+    if (clearCircles.some((c) => dist(x, y, c.x, c.y) < c.r)) return true;
+    return false;
+  };
+
+  // ---- metsä: dense forest backdrop, koivu/mänty/kuusi mixed in -------------
+  const DENSITY = 0.32;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const t = tiles[y * width + x];
-      const onBog = t.type === 'bog';
-      if (t.type !== 'grass' && !onBog) continue; // not on water/sand/path
-      if (t.plank) continue;
+      if (t.type !== 'grass') continue;
       if (inClear(x, y)) continue;
-      if (distToPath(x, y) < 2) continue; // keep the path open
-
-      const edge = Math.min(x, y, width - 1 - x, height - 1 - y);
-      let density = onBog ? 0.05 : 0.5;
-      if (edge < 13) density += (13 - edge) * 0.06;
+      if (distToPath(x, y) < 2) continue;
 
       const clump = hashf(Math.floor(x / 3), Math.floor(y / 3));
       const n = hashf(x * 1.3 + 5, y * 1.7 + 9);
-      if (n < density * (0.45 + clump)) {
-        // Pick species. Edges & bog skew to conifers; the open clearing gets more birch.
+      if (n < DENSITY * (0.45 + clump)) {
         const r = hashf(x * 2.1 + 8, y * 1.9 + 2);
-        let variant: 0 | 1 | 2;
-        if (onBog) variant = r > 0.5 ? 2 : 1; // bog: scrubby spruce/pine
-        else if (edge < 7) variant = r < 0.55 ? 2 : r < 0.82 ? 1 : 0; // dense edge
-        else variant = r < 0.42 ? 0 : r < 0.72 ? 2 : 1; // mixed clearing
+        const variant: 0 | 1 | 2 = r < 0.38 ? 0 : r < 0.72 ? 2 : 1; // mostly kuusi/mänty, some koivu
         entities.push({
           kind: 'tree',
           wx: x + (hashf(x, y) - 0.5) * 0.6,
           wy: y + (hashf(y, x) - 0.5) * 0.6,
           variant,
           seed: hashf(x * 3.1, y * 2.7),
-          scale: (onBog ? 0.95 : 1.35) + hashf(x + 11, y + 4) * (onBog ? 0.4 : 0.85)
+          scale: 1.35 + hashf(x + 11, y + 4) * 0.85
         });
       }
     }
   }
 
-  // kalliot ja kivet — a few big mossy boulders plus scattered small stones.
+  // ---- kalliot ja kivet — scattered bedrock outcrops and stones -------------
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const t = tiles[y * width + x];
-      if ((t.type !== 'grass' && t.type !== 'bog') || t.plank) continue;
+      if (t.type !== 'grass') continue;
       if (inClear(x, y)) continue;
       if (distToPath(x, y) < 1.5) continue;
       const r = hashf(x * 5.5, y * 4.2);
@@ -447,23 +413,10 @@ export function generateWorld(width: number, height: number): World {
     }
   }
 
-  // Reeds along the sandy shore and around the bog edges.
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const t = tiles[y * width + x];
-      const reedy =
-        (t.type === 'sand' && hashf(x * 2.3 + 1, y * 2.9 + 4) > 0.55) ||
-        (t.type === 'bog' && !t.plank && hashf(x * 2.1 + 6, y * 2.4 + 1) > 0.7);
-      if (reedy) {
-        entities.push({
-          kind: 'reed',
-          wx: x + (hashf(x, y) - 0.5) * 0.4,
-          wy: y + (hashf(y, x) - 0.5) * 0.4,
-          seed: hashf(x + 7, y + 2)
-        });
-      }
-    }
-  }
+  // ---- streams/springs: none in this area right now (the puro/lähde were cutting
+  // through the rye field; kept as types for whichever area needs them next) -----
+  const streams: Stream[] = [];
+  const springs: Spring[] = [];
 
-  return { width, height, tiles, entities, player, solids };
+  return { width, height, tiles, entities, player, solids, streams, springs };
 }
