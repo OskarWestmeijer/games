@@ -1,6 +1,6 @@
 import './style.css';
 import { createInput } from './input';
-import { createFarmScene } from './farmScene';
+import { createSceneManager } from './scenes';
 import { startAudio, toggleMute } from './audio';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -17,7 +17,7 @@ function resize(): void {
 window.addEventListener('resize', resize);
 resize();
 
-const scene = createFarmScene();
+const scene = createSceneManager();
 const input = createInput();
 
 // Audio starts on the first user gesture (browser autoplay policy); M toggles it.

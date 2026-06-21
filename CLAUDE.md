@@ -202,33 +202,88 @@ own.
 The long-term set of locations, matching the chapters above:
 
 1. **Pihapiiri (main farmyard)** — the primary hub, revisited throughout the year and
-   changed visually by season. Tupa, aitta, navetta, kaivo, sauna, kasvimaa.
-2. **Fields** — small irregular pellot, hay niityt, the forest edge, lato in the
-   distance. Used during sowing, haymaking, and harvest.
+   changed visually by season. Tupa, aitta, navetta, kaivo, sauna, kasvimaa. **Built**;
+   see Active build below.
+2. **Fields (pelto)** — a tilled field, forest all round. Used during sowing,
+   haymaking, and harvest. **Built**, combined with Riihi below into one scene ("Pelto ja
+   riihi") and linked onto Pihapiiri's east edge; see Active build below.
 3. **Riihi** — the grain-drying building, away from the farmyard: isolated, functional,
    near fields and forest edge. Used for grain processing and harvest-related events.
+   Its building is **built** and visible in the Pelto ja riihi scene (see above), but it's
+   just backdrop for now — no grain-processing gameplay of its own yet.
 4. **Forest (metsä)** — the wilderness surrounding the farm: firewood, forestry,
    hunting, gathering, folklore and cultural encounters; includes suo (bog/mire) pockets
-   in the low ground.
+   in the low ground. First piece **built**: a **metsälaidun** (forest pasture) clearing,
+   linked onto Pihapiiri through a doorway between aitta and tupa; see Active build below.
 5. **Lake shore (järvi)** — the household's water access: fishing, travel, seasonal
    scenes, reflection and cultural moments.
 6. *(Optional)* **Tupa interior** — inside the main house: meals, family conversation,
    winter evenings, storytelling, holiday celebrations.
 
-### Active build: the side-on farm scene (Pihapiiri)
+### Active build: side-on scenes (Pihapiiri, Pelto ja riihi, Metsälaidun)
 
-The current, actually-running implementation is a single static **Pihapiiri** scene, not
-the isometric engine described below. `assets/farm-scene.svg` (1920×1080) is a
-hand-illustrated, side-on view of the tupa, aitta and navetta together with the forest
-backdrop and yard; `src/farmScene.ts` draws it scale-to-fit (letterboxed if the viewport
-isn't 16:9) and walks **Jussi** (`assets/jussi-sprite-sheet.png`, a 4×4 sprite sheet;
-vector source `assets/jussi-sprite-sheet.svg`) left/right
-across a fixed ground line (`GROUND_Y`/`WALK_MIN_X`/`WALK_MAX_X` in that file) in front
-of it, via A/D or the arrow keys. `main.ts` boots this scene directly. Jussi doesn't move
-beyond left/right yet — no vertical movement, no scene transitions. This is the first
-concrete instance of the "Perspective — resolved" direction in Visual style above; the
-other locations in the Levels list (Fields, Riihi, Forest, Lake shore, Tupa interior)
-don't have scenes built yet.
+The current, actually-running implementation is `src/scenes.ts`, not the isometric
+engine described below. Three static scenes exist so far, each a single hand-illustrated
+1920×1080 SVG drawn scale-to-fit (letterboxed if the viewport isn't 16:9):
+- **Pihapiiri** (`assets/farm-scene.svg`) — tupa, aitta and navetta with the forest
+  backdrop and yard.
+- **Pelto ja riihi** (`assets/field-scene.svg`) — a tilled field with the riihi in the
+  background, forest all round. (Not a lato — riihi is the grain-drying building; see
+  the Levels list above.)
+- **Metsälaidun** (`assets/metsalaidun-scene.svg`) — a forest pasture clearing: birch,
+  pine and shrubs around a grassy glade with a worn path, reached through a doorway in
+  Pihapiiri rather than off a scene edge (see Portals below).
+
+**Jussi** (`assets/jussi-sprite-sheet.png`, a 4×4 sprite sheet; vector source
+`assets/jussi-sprite-sheet.svg`) walks left/right via A/D or the arrow keys, across a
+fixed ground line per scene (`groundY`/`walkMinX`/`walkMaxX` in each scene's entry in
+`SCENES`). He faces the camera (front row of the sheet) whenever he's standing still,
+and the side-on walk rows otherwise. `main.ts` boots `createSceneManager()` directly.
+
+**Scene transitions (edges):** walking past a scene's walkable edge steps to the next
+scene if that edge has an `exit` defined (`SCENES.pihapiiri.exitRight`/
+`SCENES.pelto.exitLeft` — the scene's object key is still `pelto` even though its
+display `label` is now "Pelto ja riihi"), arriving just inside the matching edge of the
+destination; an edge with no `exit` is still a hard wall (clamp), same as before. Right
+now Pihapiiri ↔ Pelto ja riihi is wired up this way (exiting Pihapiiri east leads there;
+exiting west leads back) — Pelto ja riihi's far (east) edge and Pihapiiri's west edge are
+still dead ends. Each scene edge that has an exit shows a small glowing marker (a soft
+glow + chevron) positioned a bit further out than the walk boundary itself, toward the
+scene's edge — `MARKER_OUTSET` in `scenes.ts`. It brightens on mouse hover with a
+tooltip naming the destination.
+
+**Portals (doorways):** some connections aren't at a scene's edge at all — e.g. the gap
+between aitta and tupa leading out to Metsälaidun. These are `portals` in `SCENES`: a
+scene-space `x` inside the walkable range, a destination, and an exact arrival `x` there.
+Unlike edge exits, a portal **only** triggers by clicking its marker (same chevron-marker
+look, but pointing up/down instead of left/right) — walking through its `x` with the keys
+does nothing, so crossing it on the way to somewhere else in the scene can't trigger it
+by accident. Pihapiiri's doorway points up ("Metsälaidun ↑"); Metsälaidun's path back
+down points down ("Pihapiiri ↓") — they land each other exactly back at the doorway/path
+position they left from.
+
+**The whole ground is clickable**: clicking anywhere sets `autoWalkTargetX` (clamped to
+the scene's walk bounds) and Jussi walks there, same per-frame movement logic as holding
+a key, stopping on arrival; clicking an exit marker is the same mechanism with its target
+placed past the walk boundary, so he keeps going through the edge and triggers the scene
+transition instead of stopping; clicking a portal marker sets a `pendingPortal` alongside
+the target, consumed on arrival to step into the destination instead of stopping. Any
+manual key press cancels the auto-walk (and any pending portal) and hands control back.
+A location **subtitle** (the scene's `label`) fades in/out at the bottom of the frame
+whenever a scene is entered (including the very first one on load), so the player always
+knows where they are.
+
+**Buildings are hoverable too**, just informational (not clickable): each scene lists
+`buildings` in `SCENES` as an eyeballed hit-region ellipse (`cx`/`cy`/`rx`/`ry`) over its
+silhouette, with a small ring-and-dot badge drawn right on the building at that hotspot's
+centre (`BUILDING_MARKER_RADIUS`) that brightens on hover; its name label floats clear
+above the roofline (`BUILDING_LABEL_GAP`) — Tupa/Aitta/Navetta in Pihapiiri, Riihi in
+Pelto ja riihi. Same `hovering` flag drives the pointer cursor as the exit/portal markers.
+
+This is the first concrete instance of the "Perspective — resolved" direction in Visual
+style above; Lake shore and Tupa interior from the Levels list don't have scenes built
+yet, and Riihi/Forest only have the one building/clearing each shown above, no scene or
+gameplay of their own yet.
 
 ### Earlier build (dormant): the isometric farm (umpipiha)
 
@@ -328,7 +383,7 @@ character in a large gentle landscape).
   saturation *down*. No candy greens, no Glimmerwick neon.
 - **Camera sits CLOSE.** The character should be a clear presence, the landscape large
   around it. If in doubt, make the figure bigger relative to the frame (`FIGURE_H` in
-  `farmScene.ts`).
+  `scenes.ts`).
 - **Calm, not busy.** *Suvanto = still water.* Motion must be **subtle**: barely-there
   sway, slow water, sparse slow dust. If anything reads as "jittery" or "everything is
   moving", **reduce the amplitude**. Stillness is the feeling.
@@ -344,10 +399,13 @@ character in a large gentle landscape).
 ### Perspective — resolved: side-on static scenes
 The earlier isometric vs. side-on tension noted above is **resolved in favour of
 side-on, static illustrated scenes** — confirmed by building the first one. The active
-implementation (`src/farmScene.ts`) draws a fixed hand-illustrated background
-(`assets/farm-scene.svg`: tupa, aitta, navetta, forest backdrop, all in one frame) with
-Jussi (`assets/jussi-sprite-sheet.png`) walking left/right across a fixed ground line in front of it
-— a Pentiment-style "stage" rather than a freely-walkable world. The old **isometric**
+implementation (`src/scenes.ts`) draws a fixed hand-illustrated background per scene
+(currently `assets/farm-scene.svg`, `assets/field-scene.svg` and
+`assets/metsalaidun-scene.svg` — tupa/aitta/navetta, field/riihi, and a forest-pasture
+clearing, forest backdrop, all in one frame each) with Jussi
+(`assets/jussi-sprite-sheet.png`) walking left/right across a fixed ground line in front
+of it, stepping between scenes at their edges or through portal doorways — a
+Pentiment-style "stage" rather than a freely-walkable world. The old **isometric**
 (2:1 diamond tile) engine (`iso.ts`/`world.ts`/`update.ts`/`render.ts`, the v4 umpipiha
 mockup) is still in the repo and still correct as a description of *that* code, but it
 is currently **dormant/unused** — `main.ts` boots the new scene instead. Don't delete
@@ -442,7 +500,8 @@ every push to `main` (official `actions/upload-pages-artifact` + `deploy-pages`)
 index.html            canvas + hint, loads /src/main.ts
 src/
   main.ts             bootstrap: canvas sizing (DPR), game loop, audio start, wiring
-  farmScene.ts         ACTIVE: the side-on Pihapiiri scene + Jussi (see Levels above)
+  scenes.ts            ACTIVE: side-on scenes (Pihapiiri, Pelto ja riihi, Metsälaidun) +
+                      Jussi (see Levels above)
   input.ts            keyboard state + screen-space axis()
   audio.ts            two-layer soundscape player, start()/toggleMute() (see Audio above)
   style.css
@@ -458,8 +517,8 @@ src/
 
 ### Key conventions / facts — isometric engine (dormant, see Levels)
 The conventions below describe `iso.ts`/`world.ts`/`update.ts`/`render.ts`. None of this
-applies to the active `farmScene.ts`, which has its own constants
-(`GROUND_Y`/`WALK_MIN_X`/`WALK_MAX_X`/`FIGURE_H` etc.) documented inline in that file.
+applies to the active `scenes.ts`, which has its own constants
+(`groundY`/`walkMinX`/`walkMaxX`/`FIGURE_H` etc.) documented inline in that file.
 - **Coordinates:** world coords are in *tile units* and may be fractional. Tile `(i,j)`
   is centred at world `(i,j)`. `worldToScreen`: `x=(wx-wy)*TILE_W/2`, `y=(wx+wy)*TILE_H/2`.
 - `TILE_W = 64`, `TILE_H = 32` (2:1 iso). This engine's render pipeline scaled by a
