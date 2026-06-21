@@ -3,7 +3,7 @@
 // continuous flowing landscape (NOT a visible diamond grid), and gentle, slow motion.
 
 import { TILE_W, TILE_H, worldToScreen, hashf } from './iso';
-import jussiUrl from '../assets/jussi.png';
+import jussiUrl from '../assets/jussi-sprite-sheet.png';
 import type {
   Aitta,
   Barn,
@@ -874,17 +874,18 @@ function drawDeer(ctx: Ctx, sx: number, sy: number, d: Deer): void {
   ctx.restore();
 }
 
-// The playable villager — drawn from a hand-drawn sprite sheet (assets/jussi.png):
-// 4 walk-cycle frames (columns) x 4 facing directions (rows: down, up, left, right),
-// 360x560 px per frame. The boots land on the same in-frame pixel row in every pose,
-// so that row is the anchor mapped onto the entity's ground point (sx, sy).
+// The playable villager — drawn from a hand-drawn sprite sheet
+// (assets/jussi-sprite-sheet.png): 4 walk-cycle frames (columns) x 4 facing directions
+// (rows: down, up, left, right), 180x280 px per frame. The boots land on the same
+// in-frame pixel row in every pose, so that row is the anchor mapped onto the entity's
+// ground point (sx, sy).
 const SKIN = '#d8a982'; // shared with the family villagers below
 
 const playerSheet = new Image();
 playerSheet.src = jussiUrl;
-const PLAYER_FRAME_W = 360;
-const PLAYER_FRAME_H = 560;
-const PLAYER_FOOT_Y = 516; // in-frame px row where the boots meet the ground
+const PLAYER_FRAME_W = 180;
+const PLAYER_FRAME_H = 280;
+const PLAYER_FOOT_Y = 258; // in-frame px row where the boots meet the ground
 const PLAYER_ROW_DOWN = 0;
 const PLAYER_ROW_UP = 1;
 const PLAYER_ROW_LEFT = 2;

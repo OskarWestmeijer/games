@@ -1,23 +1,28 @@
 // The farm scene (Pihapiiri): tupa, aitta, navetta — a static, hand-illustrated
-// backdrop (assets/farm-scene.svg) with Jussi (assets/jussi.png) walking left/right
-// across the yard. This is the new side-on, Pentiment-style presentation; see the
-// "Perspective" note in CLAUDE.md — it supersedes the isometric engine for now.
+// backdrop (assets/farm-scene.svg) with Jussi (assets/jussi-sprite-sheet.png) walking
+// left/right across the yard. This is the new side-on, Pentiment-style presentation;
+// see the "Perspective" note in CLAUDE.md — it supersedes the isometric engine for now.
 import type { Input } from './input';
 import { axis } from './input';
 import farmSceneUrl from '../assets/farm-scene.svg';
-import jussiUrl from '../assets/jussi.png';
+import jussiUrl from '../assets/jussi-sprite-sheet.png';
 
 // Native size of the illustrated scene (assets/farm-scene.svg viewBox).
 const SCENE_W = 1920;
 const SCENE_H = 1080;
 
-// jussi.png is a 4x4 sprite sheet, each cell 360x560. Row 2 (0-indexed) is a
-// side-on walk cycle drawn facing left: col1/col3 = stepping, col2/col4 = standing.
-const CELL_W = 360;
-const CELL_H = 560;
-const WALK_ROW = 2;
+// jussi-sprite-sheet.png is a 4x4 sheet, each cell 180x280 (the vector source is
+// assets/jussi-sprite-sheet.svg — edit that and re-export if the art needs to change).
+// Rows: 0 front, 1 back, 2 side-on walk facing left, 3 side-on walk facing right
+// (a true mirrored row, not a flip of row 2). Within a walk row, col0/col2 = stepping,
+// col1/col3 = legs-together passing pose.
+const CELL_W = 180;
+const CELL_H = 280;
+const FRONT_ROW = 0;
+const FRONT_FRAME = 0; // a plain, neutral standing pose — used whenever Jussi is idle
+const WALK_ROW_LEFT = 2;
+const WALK_ROW_RIGHT = 3;
 const FRAME_COUNT = 4;
-const IDLE_FRAME = 1;
 
 // Ground line Jussi's feet stand on, and how far he can walk either way, picked to
 // clear all three buildings and the two foreground trees (see assets/farm-scene.svg).
@@ -28,8 +33,9 @@ const WALK_MAX_X = 1740;
 const FIGURE_H = 180; // scene-space px — a small presence in a wide establishing shot
 const FIGURE_W = FIGURE_H * (CELL_W / CELL_H);
 
-const WALK_SPEED = 220; // scene px / second
-const FRAME_TIME = 0.12; // seconds per walk-cycle frame
+const WALK_SPEED = 340; // scene px / second
+const FRAME_TIME = 0.08; // seconds per walk-cycle frame, tuned to WALK_SPEED so the
+// stride length (frames per px travelled) looks the same as before, not just faster-footed
 
 function loadImage(src: string): HTMLImageElement {
   const img = new Image();
@@ -51,7 +57,7 @@ export function createFarmScene(): FarmScene {
   const jussi = loadImage(jussiUrl);
 
   let x = (WALK_MIN_X + WALK_MAX_X) / 2;
-  let facingRight = false; // sprite art faces left natively
+  let facingRight = false;
   let moving = false;
   let animTime = 0;
 
@@ -91,13 +97,19 @@ export function createFarmScene(): FarmScene {
 
   function drawJussi(ctx: CanvasRenderingContext2D): void {
     if (!jussi.complete || !jussi.naturalWidth) return;
-    const frame = moving ? Math.floor(animTime / FRAME_TIME) % FRAME_COUNT : IDLE_FRAME;
-    const sx = frame * CELL_W;
-    const sy = WALK_ROW * CELL_H;
+    let sx: number;
+    let sy: number;
+    if (moving) {
+      const frame = Math.floor(animTime / FRAME_TIME) % FRAME_COUNT;
+      sx = frame * CELL_W;
+      sy = (facingRight ? WALK_ROW_RIGHT : WALK_ROW_LEFT) * CELL_H;
+    } else {
+      sx = FRONT_FRAME * CELL_W;
+      sy = FRONT_ROW * CELL_H;
+    }
 
     ctx.save();
     ctx.translate(x, GROUND_Y);
-    if (facingRight) ctx.scale(-1, 1); // mirror the left-facing art to face right
     ctx.drawImage(jussi, sx, sy, CELL_W, CELL_H, -FIGURE_W / 2, -FIGURE_H, FIGURE_W, FIGURE_H);
     ctx.restore();
   }

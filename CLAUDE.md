@@ -221,7 +221,8 @@ The current, actually-running implementation is a single static **Pihapiiri** sc
 the isometric engine described below. `assets/farm-scene.svg` (1920×1080) is a
 hand-illustrated, side-on view of the tupa, aitta and navetta together with the forest
 backdrop and yard; `src/farmScene.ts` draws it scale-to-fit (letterboxed if the viewport
-isn't 16:9) and walks **Jussi** (`assets/jussi.png`, a 4×4 sprite sheet) left/right
+isn't 16:9) and walks **Jussi** (`assets/jussi-sprite-sheet.png`, a 4×4 sprite sheet;
+vector source `assets/jussi-sprite-sheet.svg`) left/right
 across a fixed ground line (`GROUND_Y`/`WALK_MIN_X`/`WALK_MAX_X` in that file) in front
 of it, via A/D or the arrow keys. `main.ts` boots this scene directly. Jussi doesn't move
 beyond left/right yet — no vertical movement, no scene transitions. This is the first
@@ -345,7 +346,7 @@ The earlier isometric vs. side-on tension noted above is **resolved in favour of
 side-on, static illustrated scenes** — confirmed by building the first one. The active
 implementation (`src/farmScene.ts`) draws a fixed hand-illustrated background
 (`assets/farm-scene.svg`: tupa, aitta, navetta, forest backdrop, all in one frame) with
-Jussi (`assets/jussi.png`) walking left/right across a fixed ground line in front of it
+Jussi (`assets/jussi-sprite-sheet.png`) walking left/right across a fixed ground line in front of it
 — a Pentiment-style "stage" rather than a freely-walkable world. The old **isometric**
 (2:1 diamond tile) engine (`iso.ts`/`world.ts`/`update.ts`/`render.ts`, the v4 umpipiha
 mockup) is still in the repo and still correct as a description of *that* code, but it
