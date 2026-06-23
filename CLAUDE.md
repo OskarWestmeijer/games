@@ -157,6 +157,10 @@ historical world that feels authentic, human, and deeply connected to the land.
   knowledge and tradition.
 - **The son** — does the heavier outdoor labour (woodcutting, and fishing once the lake
   area exists).
+- **The cat, Miina (kissa)** (playable character, and ambient NPC) — the farm cat. The
+  second entry in `src/characters.ts`, switchable with Jussi via the admin panel's
+  Character dropdown; also wanders the world on her own per chapter (see Active build
+  below). Not part of the narrative household roster above.
 
 The household is small and self-sufficient — no servants, no extended cast. The wider
 community (neighbours, other villagers) appears only where a chapter calls for it, most
@@ -222,10 +226,10 @@ The long-term set of locations, matching the chapters above:
 6. *(Optional)* **Tupa interior** — inside the main house: meals, family conversation,
    winter evenings, storytelling, holiday celebrations.
 
-### Active build: side-on scenes (Pihapiiri, Pelto ja riihi, Metsälaidun)
+### Active build: side-on scenes (Pihapiiri, Pelto ja riihi, Metsälaidun, Aitta interior)
 
 The current, actually-running implementation is `src/scenes.ts`, not the isometric
-engine described below. Three static scenes exist so far, each a single hand-illustrated
+engine described below. Four static scenes exist so far, each a single hand-illustrated
 1920×1080 SVG drawn scale-to-fit (letterboxed if the viewport isn't 16:9):
 - **Pihapiiri** (`assets/farm-scene.svg`) — tupa, aitta and navetta with the forest
   backdrop and yard.
@@ -237,6 +241,11 @@ engine described below. Three static scenes exist so far, each a single hand-ill
   reached through a doorway in Pihapiiri rather than off a scene edge (see Portals
   below). The only scene with **seasonal art** so far — which of the three files is drawn
   depends on the selected chapter's season (see "Chapter & character selection" below).
+- **Aitta (interior)** (`assets/aitta-interior-scene.svg`) — inside the storehouse: dark
+  log walls, a dim plank floor, reached through the Aitta's doorway in Pihapiiri (see
+  Portals below). The interior of a specific named building getting its own scene, not
+  just backdrop, is new — see "Inside a building" further down for how it differs from
+  the other three (no walking figure, sceneId `aittaInterior`).
 
 **Jussi** (`assets/jussi-sprite-sheet.png`, a 4×4 sprite sheet; vector source
 `assets/jussi-sprite-sheet.svg`) walks left/right via A/D or the arrow keys, across a
@@ -268,7 +277,10 @@ look, but pointing up/down instead of left/right) — walking through its `x` wi
 does nothing, so crossing it on the way to somewhere else in the scene can't trigger it
 by accident. Pihapiiri's doorway points up ("Metsälaidun ↑"); Metsälaidun's path back
 down points down ("Pihapiiri ↓") — they land each other exactly back at the doorway/path
-position they left from.
+position they left from. The Aitta's own doorway (also in Pihapiiri, at the building's
+threshold, `x: 305`) works the same way, leading to its interior scene instead
+("Aitta ↑" / "Pihapiiri ↓") — entering a building is just another portal, no new
+mechanism needed.
 
 **The whole ground is clickable**: clicking anywhere sets `autoWalkTargetX` (clamped to
 the scene's walk bounds) and Jussi walks there, same per-frame movement logic as holding
@@ -284,10 +296,47 @@ visible via the location HUD instead.
 
 **Buildings are hoverable too**, just informational (not clickable): each scene lists
 `buildings` in `SCENES` as an eyeballed hit-region ellipse (`cx`/`cy`/`rx`/`ry`) over its
-silhouette, with a small ring-and-dot badge drawn right on the building at that hotspot's
-centre (`BUILDING_MARKER_RADIUS`) that brightens on hover; its name label floats clear
-above the roofline (`BUILDING_LABEL_GAP`) — Tupa/Aitta/Navetta in Pihapiiri, Riihi in
-Pelto ja riihi. Same `hovering` flag drives the pointer cursor as the exit/portal markers.
+silhouette; hovering just floats its name label clear above the roofline
+(`BUILDING_LABEL_GAP`), no badge on the building itself (there used to be a small
+glowing ring-and-dot marker drawn there too — removed as visual clutter once Aitta's real
+doorway portal existed for comparison; it's gone for Tupa/Navetta/Riihi too, not just
+Aitta). Same `hovering` flag still drives the pointer cursor as the exit/portal markers.
+Tupa and Navetta keep their hotspot in Pihapiiri; **Aitta does not** — once a building
+gets a real interactive entrance (a doorway portal, see above) its hotspot is redundant
+and removed, the portal's own hover tooltip naming it instead. Riihi (Pelto ja riihi)
+has no doorway yet, so it keeps its plain hotspot.
+
+**Props** are small standalone images dropped into a scene on top of its background,
+listed as `props` in `SCENES` (`SceneProp` in `scenes.ts`): an image URL plus a
+bottom-centre anchor (`cx`/`groundY`) and display `width`/`height`, the same anchor
+convention `drawSpriteAt` uses for characters, plus an optional `rotationDeg` that tilts
+the image around that same anchor (e.g. a tool leaning against a wall instead of standing
+upright). Unlike buildings (painted into the background art already, hover-only for a
+name tooltip) a prop is a separate image drawn at runtime — for when something needs to
+exist as its own asset rather than be baked into the scene SVG. Hovering one only swaps in
+the pointer/hand cursor (via the same `hovering` flag) — no badge or tooltip, unlike
+buildings; the hover hit-test is an unrotated bounding box regardless of `rotationDeg`,
+close enough for a modest lean. First (and so far only) prop: **kuokka** (a hoe),
+`assets/kuokka.svg`, currently leaning against the right wall inside the Aitta interior
+(`cx: 1450, groundY: 980, rotationDeg: 15` — picked by iterating screenshots against the
+actual background art rather than computed from the SVG, since the room's perspective
+makes the wall's true position hard to derive any other way; if the wall position ever
+needs revisiting, re-check by eye against a fresh render, don't assume the geometry).
+That SVG as originally added had several preview variants (Leaning/Held Upright/Carried)
+plus debug text labels, with one explicitly marked "use this in game" — only that group
+was kept, same as the Miina sprite sheet cleanup above; if a future asset export has the
+same multi-variant-plus-labels shape, extract the marked group rather than asking for a
+re-export.
+
+**Inside a building (Aitta interior):** `aittaInterior` sets `noPlayerSprite: true` in its
+`SceneDef` — a first-person look into the space rather than a side-on stage with a
+visible player figure, so `drawCharacter` draws nothing at all for the player (an earlier
+version drew a pair of eyes instead; that was a misread of the brief — removed, don't
+reintroduce it). Movement, auto-walk, and the doorway portal back out all work completely
+normally; only what gets drawn for "the player" changes. `drawMiinaNpc` checks the same
+flag so her ambient NPC version is skipped too, in case a future chapter ever places her
+in a `noPlayerSprite` scene. This is the template for any future building interior that
+wants the same first-person treatment — set the flag, no new mechanism required.
 
 This is the first concrete instance of the "Perspective — resolved" direction in Visual
 style above; Lake shore and Tupa interior from the Levels list don't have scenes built
@@ -323,16 +372,39 @@ changed at any time, independent of which scene Jussi is standing in:
   above; Harvest and Riihi/Kekri both fall back to the summer art since there's no
   autumn Metsälaidun art yet). Pihapiiri and Pelto ja riihi have one asset each and so
   look the same in every chapter for now.
-- **Character** — one of `src/characters.ts` (`CHARACTERS`), each entry holding a sprite
-  sheet URL plus its cell size/row layout. Picking one calls `scene.setCharacter()`.
-  Jussi is the only entry today; the shape exists so a second playable character is just
-  another array entry, not a rework of `scenes.ts`'s drawing code.
+- **Character** — one of `src/characters.ts` (`CHARACTERS`): Jussi or Miina (kissa, the
+  farm cat) today. Each entry holds a sprite sheet URL, its cell size/row layout, and an
+  optional `heightScale` (relative to `FIGURE_H` in `scenes.ts`) for characters whose art
+  doesn't fill its cell the same way Jussi's does — Miina's is `0.35`, tuned by eye so she
+  reads as cat-sized next to Jussi rather than human-sized. Picking one calls
+  `scene.setCharacter()`; adding a third character is just another array entry, not a
+  rework of `scenes.ts`'s drawing code. Miina's sheet (`assets/miina-sprite-sheet.svg`)
+  only has 3 usable frames per walk direction (row 3/walk-left's 4th cell is a "sleep"
+  pose, not a walk frame), so her `frameCount` is 3, capping row 2/walk-right's otherwise-
+  4-frame cycle to match. The SVG as originally added had a baked-in debug overlay (an
+  opaque `#f4f2ee` background rect, 6 grid-divider lines, and per-cell text labels like
+  "idle-0"/"walk-r0"/"sleep") left over from however it was generated/previewed — that's
+  been stripped (it rendered as an opaque box over the scene otherwise); if a future
+  sprite sheet export has the same debug chrome, strip it the same way before wiring it
+  up, rather than asking for a re-export.
 - The scene's click-to-walk handler ignores clicks that don't land on the `<canvas>`
   itself, so interacting with either dropdown (or the location HUD) can't also send
   Jussi walking.
 - Where this panel should ultimately live (collapsed behind a toggle? a corner that
   reads more clearly as "dev-only"?) is still an open question — raise it with the user
   before settling on a final spot.
+
+**Miina as ambient NPC:** independent of the admin Character dropdown, Miina also just
+exists in the world — `MIINA_BY_CHAPTER` in `scenes.ts` gives her one fixed spot
+(`scene` + scene-space `x`) per chapter, drawn idle via the same `drawSpriteAt` helper
+`drawCharacter` (the player) uses, just at her own position instead of the player's.
+`scene.setChapter()` (called alongside `setSeason()` in `main.ts`'s `applyChapter()`)
+keeps her chapter in sync regardless of whether you got there by walking, an edge/portal,
+or the admin Scene teleport. If you're playing as Miina yourself (`currentCharacterId ===
+'miina'`), her NPC version isn't drawn at all, so there's never two of her on screen.
+Chapter 1 deliberately puts her in the piha (the Pihapiiri yard), per the user; chapters
+2–5's scene/spot are placeholders showing the system works across all three scenes, not
+deliberate choices — revisit whenever those chapters get real content.
 
 ### Earlier build (dormant): the isometric farm (umpipiha)
 
@@ -449,9 +521,10 @@ character in a large gentle landscape).
 The earlier isometric vs. side-on tension noted above is **resolved in favour of
 side-on, static illustrated scenes** — confirmed by building the first one. The active
 implementation (`src/scenes.ts`) draws a fixed hand-illustrated background per scene
-(currently `assets/farm-scene.svg`, `assets/field-scene.svg` and the three seasonal
-`assets/metsalaidun-scene-{spring,summer,winter}.svg` — tupa/aitta/navetta, field/riihi,
-and a forest-pasture clearing, forest backdrop, all in one frame each) with Jussi
+(currently `assets/farm-scene.svg`, `assets/field-scene.svg`, the three seasonal
+`assets/metsalaidun-scene-{spring,summer,winter}.svg`, and `assets/aitta-interior-
+scene.svg` — tupa/aitta/navetta, field/riihi, a forest-pasture clearing, and the aitta's
+dark interior, all in one frame each) with Jussi
 (`assets/jussi-sprite-sheet.png`) walking left/right across a fixed ground line in front
 of it, stepping between scenes at their edges or through portal doorways — a
 Pentiment-style "stage" rather than a freely-walkable world. The old **isometric**
@@ -551,10 +624,10 @@ index.html            canvas + hint + #location-panel (location HUD) +
 src/
   main.ts             bootstrap: canvas sizing (DPR), game loop, audio start, wiring,
                       populates and wires the chapter/character dropdowns
-  scenes.ts            ACTIVE: side-on scenes (Pihapiiri, Pelto ja riihi, Metsälaidun) +
-                      the player character (see Levels above)
+  scenes.ts            ACTIVE: side-on scenes (Pihapiiri, Pelto ja riihi, Metsälaidun,
+                      Aitta interior) + the player character (see Levels above)
   chapters.ts          CHAPTERS — the 5 chapters (id/title/season/months/description)
-  characters.ts        CHARACTERS — playable characters (Jussi only so far)
+  characters.ts        CHARACTERS — playable characters (Jussi, Miina)
   input.ts            keyboard state + screen-space axis()
   audio.ts            two-layer soundscape player, start()/toggleMute() (see Audio above)
   style.css

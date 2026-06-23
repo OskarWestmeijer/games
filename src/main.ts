@@ -62,6 +62,7 @@ sceneSelect.addEventListener('change', () => scene.teleportTo(sceneSelect.value 
 function applyChapter(id: number): void {
   const chapter = CHAPTERS.find((c) => c.id === id) ?? CHAPTERS[0];
   scene.setSeason(chapter.season);
+  scene.setChapter(chapter.id);
   chapterTitleEl.textContent = chapter.title;
   chapterMonthsEl.textContent = chapter.months;
   chapterDescEl.textContent = chapter.description;

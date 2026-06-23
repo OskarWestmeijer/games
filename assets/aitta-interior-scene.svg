@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" style="width: 100%; height: 100%; display: block; background: #0d0a07;">
+  <defs>
+    
+    <linearGradient id="floor-grad" x1="0" y1="1080" x2="0" y2="620">
+      <stop offset="0" stop-color="#352716"></stop>
+      <stop offset="1" stop-color="#19120b"></stop>
+    </linearGradient>
+    
+    <linearGradient id="back-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#201810"></stop>
+      <stop offset="1" stop-color="#2a2014"></stop>
+    </linearGradient>
+    
+    <linearGradient id="left-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4a3a25"></stop>
+      <stop offset="1" stop-color="#211810"></stop>
+    </linearGradient>
+    
+    <linearGradient id="right-grad" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0" stop-color="#332817"></stop>
+      <stop offset="1" stop-color="#1a130c"></stop>
+    </linearGradient>
+    
+    <linearGradient id="ceil-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e0a07"></stop>
+      <stop offset="1" stop-color="#161009"></stop>
+    </linearGradient>
+    
+    <radialGradient id="daylight" cx="0.5" cy="0.95" r="0.6">
+      <stop offset="0" stop-color="#b8c6d2" stop-opacity="0.15"></stop>
+      <stop offset="0.7" stop-color="#0d0a07" stop-opacity="0"></stop>
+    </radialGradient>
+    
+    <linearGradient id="backglow" x1="0" y1="720" x2="0" y2="560">
+      <stop offset="0" stop-color="#d4e1ea" stop-opacity="0.6"></stop>
+      <stop offset="1" stop-color="#9fb2c2" stop-opacity="0"></stop>
+    </linearGradient>
+    
+    <linearGradient id="shaft" x1="0" y1="1080" x2="0" y2="720">
+      <stop offset="0" stop-color="#eef4f8" stop-opacity="1"></stop>
+      <stop offset="0.35" stop-color="#d4e1ea" stop-opacity="0.78"></stop>
+      <stop offset="0.7" stop-color="#a4b6c5" stop-opacity="0.4"></stop>
+      <stop offset="1" stop-color="#6b7b89" stop-opacity="0.1"></stop>
+    </linearGradient>
+    <clipPath id="floor-clip">
+      <polygon points="0,1080 640,720 1280,720 1920,1080"></polygon>
+    </clipPath>
+  </defs>
+
+  
+
+  
+  <polygon points="0,0 1920,0 1280,300 640,300" fill="url(#ceil-grad)"></polygon>
+  
+  <line x1="0" y1="0" x2="700" y2="300" stroke="#1a140d" stroke-width="4" opacity="0.6"></line>
+  <line x1="480" y1="0" x2="800" y2="300" stroke="#1a140d" stroke-width="4" opacity="0.6"></line>
+  <line x1="960" y1="0" x2="960" y2="300" stroke="#1a140d" stroke-width="4" opacity="0.6"></line>
+  <line x1="1440" y1="0" x2="1120" y2="300" stroke="#1a140d" stroke-width="4" opacity="0.6"></line>
+  <line x1="1920" y1="0" x2="1220" y2="300" stroke="#1a140d" stroke-width="4" opacity="0.6"></line>
+
+  
+  <polygon points="0,0 640,300 640,720 0,1080" fill="url(#left-grad)"></polygon>
+  
+  <line x1="0" y1="150" x2="640" y2="353" stroke="#241a10" stroke-width="5" opacity="0.7"></line>
+  <line x1="0" y1="300" x2="640" y2="405" stroke="#241a10" stroke-width="5" opacity="0.7"></line>
+  <line x1="0" y1="450" x2="640" y2="458" stroke="#241a10" stroke-width="5" opacity="0.7"></line>
+  <line x1="0" y1="600" x2="640" y2="510" stroke="#241a10" stroke-width="5" opacity="0.7"></line>
+  <line x1="0" y1="760" x2="640" y2="562" stroke="#241a10" stroke-width="5" opacity="0.7"></line>
+  <line x1="0" y1="920" x2="640" y2="615" stroke="#241a10" stroke-width="5" opacity="0.7"></line>
+  <line x1="0" y1="1080" x2="640" y2="667" stroke="#241a10" stroke-width="5" opacity="0.7"></line>
+
+  
+  <polygon points="1920,0 1280,300 1280,720 1920,1080" fill="url(#right-grad)"></polygon>
+  
+  <line x1="1920" y1="150" x2="1280" y2="353" stroke="#1a120a" stroke-width="5" opacity="0.7"></line>
+  <line x1="1920" y1="300" x2="1280" y2="405" stroke="#1a120a" stroke-width="5" opacity="0.7"></line>
+  <line x1="1920" y1="450" x2="1280" y2="458" stroke="#1a120a" stroke-width="5" opacity="0.7"></line>
+  <line x1="1920" y1="600" x2="1280" y2="510" stroke="#1a120a" stroke-width="5" opacity="0.7"></line>
+  <line x1="1920" y1="760" x2="1280" y2="562" stroke="#1a120a" stroke-width="5" opacity="0.7"></line>
+  <line x1="1920" y1="920" x2="1280" y2="615" stroke="#1a120a" stroke-width="5" opacity="0.7"></line>
+  <line x1="1920" y1="1080" x2="1280" y2="667" stroke="#1a120a" stroke-width="5" opacity="0.7"></line>
+
+  
+  <polygon points="0,1080 640,720 1280,720 1920,1080" fill="url(#floor-grad)"></polygon>
+  
+  <line x1="0" y1="1080" x2="640" y2="720" stroke="#241a10" stroke-width="5" opacity="0.5"></line>
+  <line x1="274" y1="1080" x2="707" y2="720" stroke="#241a10" stroke-width="5" opacity="0.5"></line>
+  <line x1="549" y1="1080" x2="809" y2="720" stroke="#241a10" stroke-width="5" opacity="0.5"></line>
+  <line x1="823" y1="1080" x2="910" y2="720" stroke="#241a10" stroke-width="5" opacity="0.5"></line>
+  <line x1="1097" y1="1080" x2="1010" y2="720" stroke="#241a10" stroke-width="5" opacity="0.5"></line>
+  <line x1="1371" y1="1080" x2="1111" y2="720" stroke="#241a10" stroke-width="5" opacity="0.5"></line>
+  <line x1="1646" y1="1080" x2="1213" y2="720" stroke="#241a10" stroke-width="5" opacity="0.5"></line>
+  <line x1="1920" y1="1080" x2="1280" y2="720" stroke="#241a10" stroke-width="5" opacity="0.5"></line>
+  
+  <line x1="438" y1="930" x2="1482" y2="930" stroke="#241a10" stroke-width="4" opacity="0.4"></line>
+  <line x1="560" y1="822" x2="1360" y2="822" stroke="#241a10" stroke-width="3.5" opacity="0.38"></line>
+  <line x1="620" y1="763" x2="1300" y2="763" stroke="#241a10" stroke-width="3" opacity="0.35"></line>
+
+  
+  <rect x="640" y="300" width="640" height="420" fill="url(#back-grad)"></rect>
+  
+  <line x1="640" y1="353" x2="1280" y2="353" stroke="#241a10" stroke-width="5" opacity="0.65"></line>
+  <line x1="640" y1="405" x2="1280" y2="405" stroke="#241a10" stroke-width="5" opacity="0.65"></line>
+  <line x1="640" y1="458" x2="1280" y2="458" stroke="#241a10" stroke-width="5" opacity="0.65"></line>
+  <line x1="640" y1="510" x2="1280" y2="510" stroke="#241a10" stroke-width="5" opacity="0.65"></line>
+  <line x1="640" y1="562" x2="1280" y2="562" stroke="#241a10" stroke-width="5" opacity="0.65"></line>
+  <line x1="640" y1="615" x2="1280" y2="615" stroke="#241a10" stroke-width="5" opacity="0.65"></line>
+  <line x1="640" y1="667" x2="1280" y2="667" stroke="#241a10" stroke-width="5" opacity="0.65"></line>
+
+  
+  <line x1="640" y1="300" x2="0" y2="0" stroke="#1a120a" stroke-width="3" opacity="0.5"></line>
+  <line x1="1280" y1="300" x2="1920" y2="0" stroke="#1a120a" stroke-width="3" opacity="0.5"></line>
+  <line x1="640" y1="720" x2="0" y2="1080" stroke="#1a120a" stroke-width="3" opacity="0.5"></line>
+  <line x1="1280" y1="720" x2="1920" y2="1080" stroke="#1a120a" stroke-width="3" opacity="0.5"></line>
+  <rect x="640" y="300" width="640" height="420" fill="none" stroke="#1a120a" stroke-width="3" opacity="0.5"></rect>
+
+  
+  <g clip-path="url(#floor-clip)">
+    <polygon points="528,1080 1392,1080 1260,720 660,720" fill="url(#shaft)"></polygon>
+  </g>
+  
+  <polygon points="660,720 1260,720 1230,560 690,560" fill="url(#backglow)"></polygon>
+
+  
+  <rect width="1920" height="1080" fill="url(#daylight)"></rect>
+</svg>

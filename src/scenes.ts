@@ -16,6 +16,8 @@ import peltoUrl from '../assets/field-scene.svg';
 import metsalaidunSpringUrl from '../assets/metsalaidun-scene-spring.svg';
 import metsalaidunSummerUrl from '../assets/metsalaidun-scene-summer.svg';
 import metsalaidunWinterUrl from '../assets/metsalaidun-scene-winter.svg';
+import aittaInteriorUrl from '../assets/aitta-interior-scene.svg';
+import kuokkaUrl from '../assets/kuokka.svg';
 
 // Every scene shares this illustrated canvas size (see the scene SVGs' viewBox).
 const SCENE_W = 1920;
@@ -35,7 +37,7 @@ const FRAME_TIME = 0.08; // seconds per walk-cycle frame, tuned to WALK_SPEED so
 
 const ARRIVE_INSET = 60; // how far onto the new stage Jussi lands, clear of its own marker
 
-export type SceneId = 'pihapiiri' | 'pelto' | 'metsalaidun';
+export type SceneId = 'pihapiiri' | 'pelto' | 'metsalaidun' | 'aittaInterior';
 
 // The arrow a marker's chevron points: 'left'/'right' for edge exits (which way you walk
 // off the scene), 'up'/'down' for portals (in/out of a doorway), 'none' for a plain label
@@ -68,6 +70,18 @@ interface BuildingHotspot {
   ry: number;
 }
 
+// A small standalone prop image (e.g. a tool left in the field), drawn on top of the
+// background and anchored bottom-centre at (cx, groundY) like a character. Hovering it
+// just swaps in the pointer/hand cursor — no badge, no tooltip, unlike buildings.
+interface SceneProp {
+  imgUrl: string;
+  cx: number;
+  groundY: number;
+  width: number;
+  height: number;
+  rotationDeg?: number; // tilts around the (cx, groundY) anchor, e.g. leaning against a wall
+}
+
 interface SceneDef {
   label: string; // shown in the location HUD, and in exit tooltips
   bgUrl: string; // default art, used as-is if `seasonal` has no entry for the current season
@@ -81,6 +95,11 @@ interface SceneDef {
   exitRight?: SceneExit;
   buildings?: BuildingHotspot[];
   portals?: ScenePortal[];
+  props?: SceneProp[];
+  // A first-person look into the space rather than a side-on stage with a visible
+  // player figure — e.g. stepping inside a small building. No character sprite is
+  // drawn at all; movement/auto-walk/portals all still work exactly as normal.
+  noPlayerSprite?: boolean;
 }
 
 const SCENES: Record<SceneId, SceneDef> = {
@@ -92,12 +111,16 @@ const SCENES: Record<SceneId, SceneDef> = {
     walkMaxX: 1740,
     exitRight: { to: 'pelto', arriveAt: 'min' },
     buildings: [
-      { label: 'Aitta', cx: 305, cy: 660, rx: 140, ry: 120 },
+      // No Aitta hotspot here — its doorway portal below covers naming + entry instead.
       { label: 'Tupa', cx: 995, cy: 520, rx: 320, ry: 185 },
       { label: 'Navetta', cx: 1525, cy: 565, rx: 230, ry: 150 },
     ],
-    // The gap between aitta and tupa — a path out into the forest pasture beyond.
-    portals: [{ x: 560, to: 'metsalaidun', arriveAt: 950, label: 'Metsälaidun', arrow: 'up' }],
+    portals: [
+      // The gap between aitta and tupa — a path out into the forest pasture beyond.
+      { x: 560, to: 'metsalaidun', arriveAt: 950, label: 'Metsälaidun', arrow: 'up' },
+      // The aitta's own doorway, straight ahead into its interior.
+      { x: 305, to: 'aittaInterior', arriveAt: 960, label: 'Aitta', arrow: 'up' },
+    ],
   },
   pelto: {
     label: 'Pelto ja riihi',
@@ -119,12 +142,37 @@ const SCENES: Record<SceneId, SceneDef> = {
     // The worn path back down through the clearing, toward the pihapiiri.
     portals: [{ x: 950, to: 'pihapiiri', arriveAt: 560, label: 'Pihapiiri', arrow: 'down' }],
   },
+  aittaInterior: {
+    label: 'Aitta',
+    bgUrl: aittaInteriorUrl,
+    groundY: 950,
+    walkMinX: 650,
+    walkMaxX: 1270,
+    noPlayerSprite: true,
+    // Back out through the same doorway.
+    portals: [{ x: 960, to: 'pihapiiri', arriveAt: 305, label: 'Pihapiiri', arrow: 'down' }],
+    // Leaning against the right wall, base on the floor, top tilted into the wall.
+    props: [{ imgUrl: kuokkaUrl, cx: 1450, groundY: 980, width: 46, height: 170, rotationDeg: 15 }],
+  },
 };
 
 // The scenes in display order, for the admin teleport dropdown (see main.ts).
 export function listSceneIds(): { id: SceneId; label: string }[] {
   return (Object.keys(SCENES) as SceneId[]).map((id) => ({ id, label: SCENES[id].label }));
 }
+
+// Where Miina (the farm cat NPC) is found, per chapter — purely atmospheric for now, a
+// fixed spot rather than anything AI-driven. Chapter 1 deliberately places her in the
+// piha (the Pihapiiri yard, per the user); the rest are placeholders to show the system
+// working across chapters/scenes, not deliberate choices yet. Not drawn at all if the
+// player is currently controlling Miina themselves (see drawMiinaNpc).
+const MIINA_BY_CHAPTER: Record<number, { scene: SceneId; x: number }> = {
+  1: { scene: 'pihapiiri', x: 780 }, // piha, between the aitta/tupa portal and the tupa door
+  2: { scene: 'pelto', x: 650 },
+  3: { scene: 'pelto', x: 1450 }, // near the riihi
+  4: { scene: 'metsalaidun', x: 1400 },
+  5: { scene: 'pihapiiri', x: 1500 },
+};
 
 // Exit hotspot marker — a soft glow with a chevron, hoverable to preview where it leads,
 // clickable to walk straight there. Sits further out than the walk boundary itself,
@@ -134,10 +182,8 @@ const MARKER_OUTSET = 90; // scene-space px beyond walkMinX/walkMaxX, toward the
 const MARKER_RADIUS = 30;
 const MARKER_HOVER_RADIUS = 60; // hover/click hit-test radius, scene-space px
 
-// Building hotspot marker — a small ring-and-dot badge drawn right on the building
-// (at its hotspot centre) that brightens on hover, naming it. Not clickable; informational
-// only. Its name label floats clear above the building's silhouette instead.
-const BUILDING_MARKER_RADIUS = 11; // ring radius, base (non-hover) state
+// Building hotspot — hovering it just shows its name above the roofline (no marker
+// badge on the building itself); not clickable.
 const BUILDING_LABEL_GAP = 20; // clearance above the hotspot ellipse's top edge, for the label
 
 // Shared cache so the same URL (e.g. a scene's bgUrl reused across every season it has
@@ -239,6 +285,7 @@ export interface SceneManager {
   update(input: Input, dt: number): void;
   render(ctx: CanvasRenderingContext2D, cssW: number, cssH: number): void;
   setSeason(season: Season): void;
+  setChapter(id: number): void;
   setCharacter(id: string): void;
   teleportTo(id: SceneId): void;
   getLocationLabel(): string;
@@ -258,9 +305,14 @@ export function createSceneManager(): SceneManager {
   }
   const characterImages = new Map<string, HTMLImageElement>();
   for (const c of CHARACTERS) characterImages.set(c.id, loadImage(c.spriteUrl));
+  const propImages = new Map<string, HTMLImageElement>();
+  for (const id of sceneIds) {
+    for (const prop of SCENES[id].props ?? []) propImages.set(prop.imgUrl, loadImage(prop.imgUrl));
+  }
 
   let sceneId: SceneId = 'pihapiiri';
   let currentSeason: Season = 'spring'; // kept in sync with the chapter dropdown by main.ts
+  let currentChapterId = 1; // ditto — drives MIINA_BY_CHAPTER
   let currentCharacterId = CHARACTERS[0].id;
   let x = (SCENES.pihapiiri.walkMinX + SCENES.pihapiiri.walkMaxX) / 2;
   let facingRight = false;
@@ -393,6 +445,23 @@ export function createSceneManager(): SceneManager {
 
     const mouse = sceneMouse(scale, offX, offY);
     let hovering = false;
+    for (const prop of scene.props ?? []) {
+      const img = propImages.get(prop.imgUrl);
+      if (img && img.complete && img.naturalWidth) {
+        ctx.save();
+        ctx.translate(prop.cx, prop.groundY);
+        if (prop.rotationDeg) ctx.rotate((prop.rotationDeg * Math.PI) / 180);
+        ctx.drawImage(img, -prop.width / 2, -prop.height, prop.width, prop.height);
+        ctx.restore();
+      }
+      // Hit-test ignores rotation — close enough for a modest lean, and keeps this simple.
+      const isHovered =
+        mouse.x >= prop.cx - prop.width / 2 &&
+        mouse.x <= prop.cx + prop.width / 2 &&
+        mouse.y >= prop.groundY - prop.height &&
+        mouse.y <= prop.groundY;
+      hovering = hovering || isHovered;
+    }
     for (const { dir, markerX, exit } of edgeExits(scene)) {
       const my = scene.groundY - MARKER_Y_OFFSET;
       const isHovered = Math.hypot(mouse.x - markerX, mouse.y - my) <= MARKER_HOVER_RADIUS;
@@ -410,26 +479,32 @@ export function createSceneManager(): SceneManager {
     for (const b of scene.buildings ?? []) {
       const isHovered = inEllipse(mouse.x, mouse.y, b);
       hovering = hovering || isHovered;
-      drawBuildingMarker(ctx, b.cx, b.cy, isHovered);
       if (isHovered) drawTooltip(ctx, b.cx, b.cy, b.label, 'none', b.ry + BUILDING_LABEL_GAP);
     }
     ctx.canvas.style.cursor = hovering ? 'pointer' : '';
 
+    drawMiinaNpc(ctx, scene);
     drawCharacter(ctx, scene);
 
     ctx.restore();
   }
 
-  function drawCharacter(ctx: CanvasRenderingContext2D, scene: SceneDef): void {
-    const char = CHARACTERS.find((c) => c.id === currentCharacterId) ?? CHARACTERS[0];
+  function drawSpriteAt(
+    ctx: CanvasRenderingContext2D,
+    scene: SceneDef,
+    charId: string,
+    atX: number,
+    anim: { moving: boolean; facingRight: boolean; animTime: number }
+  ): void {
+    const char = CHARACTERS.find((c) => c.id === charId) ?? CHARACTERS[0];
     const sprite = characterImages.get(char.id);
     if (!sprite || !sprite.complete || !sprite.naturalWidth) return;
     let sx: number;
     let sy: number;
-    if (moving) {
-      const frame = Math.floor(animTime / FRAME_TIME) % char.frameCount;
+    if (anim.moving) {
+      const frame = Math.floor(anim.animTime / FRAME_TIME) % char.frameCount;
       sx = frame * char.cellW;
-      sy = (facingRight ? char.rows.walkRight : char.rows.walkLeft) * char.cellH;
+      sy = (anim.facingRight ? char.rows.walkRight : char.rows.walkLeft) * char.cellH;
     } else {
       sx = FRONT_FRAME * char.cellW;
       sy = char.rows.front * char.cellH;
@@ -438,9 +513,25 @@ export function createSceneManager(): SceneManager {
     const figureH = FIGURE_H * (char.heightScale ?? 1);
     const figureW = figureH * (char.cellW / char.cellH);
     ctx.save();
-    ctx.translate(x, scene.groundY);
+    ctx.translate(atX, scene.groundY);
     ctx.drawImage(sprite, sx, sy, char.cellW, char.cellH, -figureW / 2, -figureH, figureW, figureH);
     ctx.restore();
+  }
+
+  function drawCharacter(ctx: CanvasRenderingContext2D, scene: SceneDef): void {
+    if (scene.noPlayerSprite) return;
+    drawSpriteAt(ctx, scene, currentCharacterId, x, { moving, facingRight, animTime });
+  }
+
+  // Miina as ambient world dressing, sitting wherever MIINA_BY_CHAPTER puts her for the
+  // current chapter — skipped entirely if she's the one currently being played, so
+  // there's never two of her on screen at once (also skipped in noPlayerSprite scenes,
+  // same reasoning as drawCharacter).
+  function drawMiinaNpc(ctx: CanvasRenderingContext2D, scene: SceneDef): void {
+    if (currentCharacterId === 'miina' || scene.noPlayerSprite) return;
+    const spot = MIINA_BY_CHAPTER[currentChapterId];
+    if (!spot || spot.scene !== sceneId) return;
+    drawSpriteAt(ctx, scene, 'miina', spot.x, { moving: false, facingRight: false, animTime: 0 });
   }
 
   function drawExitMarker(
@@ -469,35 +560,6 @@ export function createSceneManager(): SceneManager {
     ctx.lineTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.stroke();
-
-    ctx.restore();
-  }
-
-  function drawBuildingMarker(
-    ctx: CanvasRenderingContext2D,
-    mx: number,
-    my: number,
-    hovered: boolean
-  ): void {
-    const pulse = Math.sin(time * 1.1) * 0.06;
-    const k = hovered ? 1.3 : 1;
-    const ringR = BUILDING_MARKER_RADIUS * k;
-
-    ctx.save();
-    ctx.translate(mx, my);
-
-    drawGlow(ctx, ringR * 1.6 + 12, '244, 222, 165', hovered ? 0.55 : 0.28 + pulse);
-
-    ctx.strokeStyle = `rgba(58, 45, 28, ${hovered ? 0.9 : 0.5 + pulse})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, ringR, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = `rgba(253, 250, 242, ${hovered ? 0.95 : 0.55 + pulse})`;
-    ctx.beginPath();
-    ctx.arc(0, 0, hovered ? 6 : 4.5, 0, Math.PI * 2);
-    ctx.fill();
 
     ctx.restore();
   }
@@ -539,6 +601,10 @@ export function createSceneManager(): SceneManager {
     currentSeason = season;
   }
 
+  function setChapter(id: number): void {
+    currentChapterId = id;
+  }
+
   function setCharacter(id: string): void {
     if (CHARACTERS.some((c) => c.id === id)) currentCharacterId = id;
   }
@@ -552,5 +618,5 @@ export function createSceneManager(): SceneManager {
     return SCENES[sceneId].label;
   }
 
-  return { update, render, setSeason, setCharacter, teleportTo, getLocationLabel };
+  return { update, render, setSeason, setChapter, setCharacter, teleportTo, getLocationLabel };
 }
