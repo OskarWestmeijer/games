@@ -1,6 +1,6 @@
-# Suvanto
+# Vuodenkierto: Vanha maatila
 
-A cosy isometric **walking sim** set in medieval rural Finland — a quiet homestead by
+A cosy **walking sim** set on a 17th-century Finnish farm — a quiet homestead by
 the water. Wander, watch the light on the lake, listen. No combat, no inventory, no
 quests. Inspired by *Songs of Glimmerwick* and *Pentiment*.
 

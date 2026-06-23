@@ -2,7 +2,12 @@
 // Boots the Vite dev server, loads the game in headless Chromium, lets it render
 // for a moment, optionally walks the player, and writes a PNG to tools/shots/.
 //
-//   node tools/shot.mjs [name] [--wait ms] [--keys WASD] [--w 1280] [--h 800]
+//   node tools/shot.mjs [name] [--wait ms] [--keys WASD] [--w 1280] [--h 800] [--enters N]
+//
+// Presses Enter twice on load to clear the title/chapter-intro overlay (see
+// src/intro.ts) before the wait/keys/screenshot, since almost every shot is meant to
+// review the game itself, not that one-time prelude: 0 = title screen, 1 = chapter-1
+// card, 2 (default) = dismissed into the game.
 //
 // Lets Claude review the rendered game without the user supplying screenshots.
 import { spawn } from 'node:child_process';
@@ -26,6 +31,7 @@ const waitMs = Number(opt('--wait', '1500'));
 const keys = opt('--keys', '');
 const W = Number(opt('--w', '1280'));
 const H = Number(opt('--h', '800'));
+const enters = Number(opt('--enters', '2'));
 
 function waitForServer(url, timeoutMs = 30000) {
   const start = Date.now();
@@ -57,6 +63,12 @@ try {
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto(url, { waitUntil: 'networkidle' });
+
+  for (let i = 0; i < enters; i++) {
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(150);
+  }
+
   await page.waitForTimeout(waitMs);
 
   // Optionally drive the player so we can review motion / different spots.

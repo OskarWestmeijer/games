@@ -1,6 +1,9 @@
-# Suvanto — project brief & working notes
+# Vuodenkierto: Vanha maatila — project brief & working notes
 
-> *Suvanto* (Finnish) = the calm, still stretch of a river between rapids. Working title.
+> *Vuodenkierto* (Finnish) = the turning of the year, its cycle of seasons. *Vanha
+> maatila* = "old farmstead". Previously developed under the working title *Suvanto*
+> (the calm, still stretch of a river between rapids) — that name is gone from the
+> game and docs now, but may still turn up in old commit messages.
 
 This file is the source of truth for what we're building and how. Keep it updated as
 the game evolves.
@@ -406,6 +409,60 @@ Chapter 1 deliberately puts her in the piha (the Pihapiiri yard), per the user; 
 2–5's scene/spot are placeholders showing the system works across all three scenes, not
 deliberate choices — revisit whenever those chapters get real content.
 
+### Title screen & chapter-1 intro (`src/intro.ts`)
+
+Before any of the above, the player sees a pitch-black prelude: the game's title, then
+a one-time card naming Chapter 1. Adapted from a design handoff (a static HTML/CSS
+mockup, not shipped code) with two deliberate deviations the user asked for, noted
+inline below. A DOM overlay (`#intro-overlay` in `index.html`, styled in `style.css`),
+not canvas — it's pure typography/CSS transitions, sitting in front of the canvas, the
+location HUD and the admin panel (`z-index: 1000`) until dismissed.
+
+- **Title state:** "Vuodenkierto" fades up from black (two-`requestAnimationFrame`-tick
+  delay before adding the `intro-shown` class, so the browser commits the initial
+  `opacity:0` first — otherwise the fade-up can get skipped), with the "VANHA MAATILA"
+  subtitle and a pulsing "PAINA ENTER · ALOITA" prompt, matching the handoff exactly:
+  Cormorant Garamond display type, EB Garamond letter-spaced labels, one muted-gold
+  accent (`#b9a06a`). The whole overlay is clickable, and Enter/Space advance it.
+- **Chapter-1 card state:** "Luku I" / "Kevätkylvö" / "Kevät" / its blurb, sourced from
+  `CHAPTERS[0].card` (see `chapters.ts` below) — **deviation 1:** stays pitch black
+  like the title, rather than blending in a dimmed, color-graded scene illustration
+  behind it as the handoff specified. **Deviation 2:** there's no prev/next paging
+  through all five chapters' cards, no counter, no back-to-title link — those all
+  existed in the handoff because its title screen doubled as a chapter *browser*; this
+  build only ever shows chapter 1, once, at boot. Chapters have no real progression
+  system yet (see Chapters above) — the admin dev dropdown is still the only thing that
+  changes which chapter is "active" during play, and switching it there does **not**
+  replay this card; the user asked for once-at-boot-only specifically so the dropdown's
+  existing instant-switch behaviour wouldn't change.
+- Pressing Enter/Space or clicking again fades the whole overlay out (a separate, faster
+  1.4s fade — distinct from the 2.4s/2.6s title↔card cross-fade) to reveal the
+  already-running game underneath, then `display:none`s it via a one-shot
+  `transitionend` listener so it stops being painted/hit-tested at all.
+- `main.ts` gates `scene.update(input, dt)` on `!intro.isActive()` each frame — the
+  canvas is already rendering chapter 1 / Pihapiiri underneath the overlay the whole
+  time (cheap, and simpler than delaying boot), but without the gate a player mashing
+  WASD during the title/card would silently walk Jussi around off-screen before ever
+  seeing the world.
+- **A real race, not just a test artifact:** the title's own fade-in is scheduled via
+  the double-RAF above: `if (phase === 'title') titleLayer.classList.add(...)`. That
+  guard matters — on a slow/throttled tab the callback can fire *after* the player has
+  already pressed Enter and moved to the card phase, and without the guard it would
+  unconditionally re-add `intro-shown` to a layer that's since moved on, leaving both
+  layers visible at once. Found via `tools/shot.mjs` (see below), not by eye.
+- `chapters.ts`'s `Chapter` interface gained a `card: ChapterCard` field
+  (`roman`/`titleFi`/`seasonLabel`/`blurb`) — the exact Finnish copy from the handoff,
+  kept as a sibling to the existing flat `title`/`description` fields rather than
+  replacing them, since those stay English for the dev-only admin panel while `card` is
+  in-world player-facing copy. `seasonLabel` exists separately from the `season` enum
+  because the handoff's per-chapter labels are more specific than the four seasons it
+  maps to scene art (chapter 2 "Keskikesä" and chapter 3 "Loppukesä" are both
+  `season: 'summer'`).
+- `tools/shot.mjs` takes an `--enters N` flag (0/1/2, default 2) that presses Enter that
+  many times right after page load before its usual wait/keys/screenshot — almost every
+  self-review shot is meant to review the game itself, not this one-time prelude, so the
+  default skips straight past it.
+
 ### Earlier build (dormant): the isometric farm (umpipiha)
 
 This is the older, **currently unused** isometric implementation — kept in the repo (not
@@ -505,9 +562,10 @@ character in a large gentle landscape).
 - **Camera sits CLOSE.** The character should be a clear presence, the landscape large
   around it. If in doubt, make the figure bigger relative to the frame (`FIGURE_H` in
   `scenes.ts`).
-- **Calm, not busy.** *Suvanto = still water.* Motion must be **subtle**: barely-there
-  sway, slow water, sparse slow dust. If anything reads as "jittery" or "everything is
-  moving", **reduce the amplitude**. Stillness is the feeling.
+- **Calm, not busy.** *Suvanto = still water* — the feeling the game is named around
+  even though that's no longer the literal title. Motion must be **subtle**:
+  barely-there sway, slow water, sparse slow dust. If anything reads as "jittery" or
+  "everything is moving", **reduce the amplitude**. Stillness is the feeling.
 - **Flowing, not "Minecraft".** The iso tiles must **not** read as a grid of diamonds.
   Colour the ground from **smooth low-frequency noise** sampled in world space (adjacent
   tiles nearly identical), avoid per-tile random checkerboard, soft-blend biome edges,
@@ -596,11 +654,14 @@ npm run build    # type-check (tsc) + production build to dist/
 ### Self-review screenshots (so the user doesn't have to send any)
 Claude can **see** PNGs via the Read tool, so it reviews its own visual work headlessly:
 ```bash
-node tools/shot.mjs <name> [--keys wasd] [--wait ms] [--w 1280] [--h 800]
+node tools/shot.mjs <name> [--keys wasd] [--wait ms] [--w 1280] [--h 800] [--enters N]
 ```
 `tools/shot.mjs` boots Vite on a fixed port, loads the game in **headless Chromium**
-(Playwright), waits, optionally **drives the player** with `--keys` (e.g. `--keys aaw`
-walks left/up to reframe), then writes `tools/shots/<name>.png` and prints page errors.
+(Playwright), presses Enter twice by default to clear the title/chapter-intro overlay
+(`--enters 0`/`1` to land on the title or chapter card instead — see "Title screen &
+chapter-1 intro" above), waits, optionally **drives the player** with `--keys` (e.g.
+`--keys aaw` walks left/up to reframe), then writes `tools/shots/<name>.png` and prints
+page errors.
 Then `Read` that PNG. To inspect detail, crop+upscale with ImageMagick:
 `magick tools/shots/x.png -crop 360x300+380+180 +repage -resize 300% out.png`.
 Requires `npm i -D playwright` + `npx playwright install chromium` (already done).
@@ -619,14 +680,17 @@ every push to `main` (official `actions/upload-pages-artifact` + `deploy-pages`)
 ## Architecture
 
 ```
-index.html            canvas + hint + #location-panel (location HUD) +
-                      #ui-panel (admin chapter/character dropdowns), loads /src/main.ts
+index.html            canvas + hint + #location-panel (location HUD) + #intro-overlay
+                      (title/chapter-1 intro) + #ui-panel (admin chapter/character
+                      dropdowns), loads /src/main.ts
 src/
   main.ts             bootstrap: canvas sizing (DPR), game loop, audio start, wiring,
                       populates and wires the chapter/character dropdowns
+  intro.ts            title screen + chapter-1 intro overlay (see "Title screen &
+                      chapter-1 intro" under Levels above)
   scenes.ts            ACTIVE: side-on scenes (Pihapiiri, Pelto ja riihi, Metsälaidun,
                       Aitta interior) + the player character (see Levels above)
-  chapters.ts          CHAPTERS — the 5 chapters (id/title/season/months/description)
+  chapters.ts          CHAPTERS — the 5 chapters (id/title/season/months/description/card)
   characters.ts        CHARACTERS — playable characters (Jussi, Miina)
   input.ts            keyboard state + screen-space axis()
   audio.ts            two-layer soundscape player, start()/toggleMute() (see Audio above)

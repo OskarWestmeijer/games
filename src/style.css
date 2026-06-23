@@ -172,3 +172,165 @@ body {
   line-height: 1.45;
   color: rgba(223, 227, 230, 0.85);
 }
+
+/* ===== Title + chapter-1 intro overlay (see src/intro.ts) =====
+   Pitch-black "illuminated manuscript" look: Cormorant Garamond display type, EB
+   Garamond for letter-spaced labels, a single muted-gold accent. Its own visual
+   language, distinct from the wood-plaque HUD above — full-screen narrative framing
+   shown once at boot, not persistent chrome. */
+#intro-overlay {
+  position: fixed;
+  inset: 0;
+  min-height: 560px;
+  background: #050504;
+  overflow: hidden;
+  z-index: 1000;
+  font-family: 'EB Garamond', Georgia, serif;
+  color: #ece4d2;
+  user-select: none;
+  cursor: pointer;
+  transition: opacity 1.4s ease;
+}
+
+#intro-overlay.intro-dismissed {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.intro-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 2.4s ease;
+}
+
+#intro-card.intro-shown {
+  transition: opacity 2.6s ease;
+}
+
+.intro-layer.intro-shown {
+  opacity: 1;
+}
+
+.intro-ornament {
+  display: flex;
+  align-items: center;
+  gap: 1.8vmin;
+  margin-bottom: 4.6vmin;
+}
+
+.intro-rule {
+  width: 7vmin;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(185, 160, 106, 0.7));
+}
+
+.intro-rule-right {
+  background: linear-gradient(270deg, transparent, rgba(185, 160, 106, 0.7));
+}
+
+.intro-rule-wide {
+  width: 9vmin;
+}
+
+.intro-lozenge {
+  width: 1.1vmin;
+  height: 1.1vmin;
+  background: #b9a06a;
+  transform: rotate(45deg);
+}
+
+.intro-title-text {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 500;
+  font-size: 13.2vmin;
+  line-height: 0.92;
+  letter-spacing: 0.005em;
+  color: #efe7d6;
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.7);
+}
+
+.intro-subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: 2.4vmin;
+  margin-top: 3.4vmin;
+}
+
+.intro-subtitle-text {
+  font-size: 2.7vmin;
+  letter-spacing: 0.62em;
+  text-transform: uppercase;
+  color: #c9b88f;
+  padding-left: 0.62em;
+}
+
+.intro-prompt {
+  margin-top: 9vmin;
+  font-size: 1.8vmin;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: #8d8474;
+  animation: intro-breathe 3.4s ease-in-out infinite;
+}
+
+#intro-card .intro-prompt {
+  margin-top: 6vmin;
+}
+
+@keyframes intro-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.intro-eyebrow {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 3.4vmin;
+  color: rgba(201, 184, 143, 0.85);
+  margin-bottom: 1.2vmin;
+}
+
+.intro-card-title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 500;
+  font-size: 9.6vmin;
+  line-height: 1;
+  color: #efe7d6;
+  text-shadow: 0 2px 50px rgba(0, 0, 0, 0.85);
+}
+
+.intro-season-row {
+  display: flex;
+  align-items: center;
+  gap: 2.2vmin;
+  margin-top: 3vmin;
+}
+
+.intro-season-text {
+  font-size: 2vmin;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: #c4b690;
+  padding-left: 0.42em;
+}
+
+.intro-blurb {
+  max-width: 54ch;
+  margin-top: 4.2vmin;
+  font-size: 2.35vmin;
+  line-height: 1.62;
+  font-style: italic;
+  color: #cfc6b4;
+}

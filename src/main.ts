@@ -4,6 +4,7 @@ import { createSceneManager, listSceneIds, type SceneId } from './scenes';
 import { startAudio, toggleMute } from './audio';
 import { CHAPTERS } from './chapters';
 import { CHARACTERS } from './characters';
+import { createIntro } from './intro';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d', { alpha: false })!;
@@ -21,6 +22,7 @@ resize();
 
 const scene = createSceneManager();
 const input = createInput();
+const intro = createIntro();
 
 // Chapter + character dropdowns — always visible, switchable at any time (see
 // "Active build" in CLAUDE.md). Chapter only swaps which seasonal scene art is shown
@@ -102,7 +104,9 @@ function frame(now: number): void {
   last = now;
   if (dt > 0.05) dt = 0.05; // clamp after tab-out etc.
 
-  scene.update(input, dt);
+  // Held off while the title/chapter-intro overlay covers the screen, so Jussi can't
+  // be walked around, off-screen, before the player has even seen the world.
+  if (!intro.isActive()) scene.update(input, dt);
 
   const label = scene.getLocationLabel();
   if (label !== lastLocationLabel) {
