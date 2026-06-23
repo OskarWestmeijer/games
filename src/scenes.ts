@@ -9,30 +9,25 @@
 // See the "Perspective" note in CLAUDE.md — this supersedes the isometric engine for now.
 import type { Input } from './input';
 import { axis } from './input';
+import type { Season } from './chapters';
+import { CHARACTERS } from './characters';
 import pihapiiriUrl from '../assets/farm-scene.svg';
 import peltoUrl from '../assets/field-scene.svg';
-import metsalaidunUrl from '../assets/metsalaidun-scene.svg';
-import jussiUrl from '../assets/jussi-sprite-sheet.png';
+import metsalaidunSpringUrl from '../assets/metsalaidun-scene-spring.svg';
+import metsalaidunSummerUrl from '../assets/metsalaidun-scene-summer.svg';
+import metsalaidunWinterUrl from '../assets/metsalaidun-scene-winter.svg';
 
 // Every scene shares this illustrated canvas size (see the scene SVGs' viewBox).
 const SCENE_W = 1920;
 const SCENE_H = 1080;
 
-// jussi-sprite-sheet.png is a 4x4 sheet, each cell 180x280 (the vector source is
-// assets/jussi-sprite-sheet.svg — edit that and re-export if the art needs to change).
-// Rows: 0 front, 1 back, 2 side-on walk facing left, 3 side-on walk facing right
-// (a true mirrored row, not a flip of row 2). Within a walk row, col0/col2 = stepping,
-// col1/col3 = legs-together passing pose.
-const CELL_W = 180;
-const CELL_H = 280;
-const FRONT_ROW = 0;
-const FRONT_FRAME = 0; // a plain, neutral standing pose — used whenever Jussi is idle
-const WALK_ROW_LEFT = 2;
-const WALK_ROW_RIGHT = 3;
-const FRAME_COUNT = 4;
+// A character's sprite sheet rows: 0 front, 1 back, 2 side-on walk facing left,
+// 3 side-on walk facing right (a true mirrored row, not a flip of row 2). Within a
+// walk row, col0/col2 = stepping, col1/col3 = legs-together passing pose. See
+// characters.ts for per-character cell size/frame count.
+const FRONT_FRAME = 0; // a plain, neutral standing pose — used whenever the character is idle
 
 const FIGURE_H = 235; // scene-space px — a clear presence against the wide backdrop
-const FIGURE_W = FIGURE_H * (CELL_W / CELL_H);
 
 const WALK_SPEED = 340; // scene px / second
 const FRAME_TIME = 0.08; // seconds per walk-cycle frame, tuned to WALK_SPEED so the
@@ -40,7 +35,7 @@ const FRAME_TIME = 0.08; // seconds per walk-cycle frame, tuned to WALK_SPEED so
 
 const ARRIVE_INSET = 60; // how far onto the new stage Jussi lands, clear of its own marker
 
-type SceneId = 'pihapiiri' | 'pelto' | 'metsalaidun';
+export type SceneId = 'pihapiiri' | 'pelto' | 'metsalaidun';
 
 // The arrow a marker's chevron points: 'left'/'right' for edge exits (which way you walk
 // off the scene), 'up'/'down' for portals (in/out of a doorway), 'none' for a plain label
@@ -74,8 +69,9 @@ interface BuildingHotspot {
 }
 
 interface SceneDef {
-  label: string; // shown as the location subtitle on entry, and in exit tooltips
-  bgUrl: string;
+  label: string; // shown in the location HUD, and in exit tooltips
+  bgUrl: string; // default art, used as-is if `seasonal` has no entry for the current season
+  seasonal?: Partial<Record<Season, string>>; // per-chapter-season art override (see chapters.ts)
   // Ground line Jussi's feet stand on, and how far he can walk either way — picked per
   // scene to clear its buildings/props/foreground trees (see the scene's SVG).
   groundY: number;
@@ -114,7 +110,9 @@ const SCENES: Record<SceneId, SceneDef> = {
   },
   metsalaidun: {
     label: 'Metsälaidun',
-    bgUrl: metsalaidunUrl,
+    // No autumn art yet — chapters 3/4 (Harvest, Riihi and Kekri) fall back to summer.
+    bgUrl: metsalaidunSummerUrl,
+    seasonal: { spring: metsalaidunSpringUrl, winter: metsalaidunWinterUrl },
     groundY: 1000,
     walkMinX: 120,
     walkMaxX: 1800,
@@ -123,11 +121,10 @@ const SCENES: Record<SceneId, SceneDef> = {
   },
 };
 
-// Location subtitle: fades in on scene entry, holds, then fades out.
-const SUBTITLE_FADE_IN = 0.5;
-const SUBTITLE_HOLD = 2.6;
-const SUBTITLE_FADE_OUT = 1.0;
-const SUBTITLE_TOTAL = SUBTITLE_FADE_IN + SUBTITLE_HOLD + SUBTITLE_FADE_OUT;
+// The scenes in display order, for the admin teleport dropdown (see main.ts).
+export function listSceneIds(): { id: SceneId; label: string }[] {
+  return (Object.keys(SCENES) as SceneId[]).map((id) => ({ id, label: SCENES[id].label }));
+}
 
 // Exit hotspot marker — a soft glow with a chevron, hoverable to preview where it leads,
 // clickable to walk straight there. Sits further out than the walk boundary itself,
@@ -143,10 +140,23 @@ const MARKER_HOVER_RADIUS = 60; // hover/click hit-test radius, scene-space px
 const BUILDING_MARKER_RADIUS = 11; // ring radius, base (non-hover) state
 const BUILDING_LABEL_GAP = 20; // clearance above the hotspot ellipse's top edge, for the label
 
+// Shared cache so the same URL (e.g. a scene's bgUrl reused across every season it has
+// no override for) only ever loads one HTMLImageElement.
+const imageCache = new Map<string, HTMLImageElement>();
 function loadImage(src: string): HTMLImageElement {
-  const img = new Image();
-  img.src = src;
+  let img = imageCache.get(src);
+  if (!img) {
+    img = new Image();
+    img.src = src;
+    imageCache.set(src, img);
+  }
   return img;
+}
+
+const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];
+
+function sceneBgUrl(scene: SceneDef, season: Season): string {
+  return scene.seasonal?.[season] ?? scene.bgUrl;
 }
 
 function clamp(v: number, a: number, b: number): number {
@@ -194,6 +204,20 @@ function chevronPoints(dir: 'left' | 'right' | 'up' | 'down'): [number, number][
   }
 }
 
+// A soft glow without canvas's `filter: blur()` — measured at ~50ms/frame for the two
+// marker blurs combined (60fps -> ~14fps), since Canvas2D filters aren't GPU-accelerated
+// the way CSS filters on DOM elements are. A radial gradient fading to transparent reads
+// as the same soft halo and costs effectively nothing.
+function drawGlow(ctx: CanvasRenderingContext2D, radius: number, rgb: string, alpha: number): void {
+  const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+  gradient.addColorStop(0, `rgba(${rgb}, ${alpha})`);
+  gradient.addColorStop(1, `rgba(${rgb}, 0)`);
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -214,23 +238,35 @@ function roundRect(
 export interface SceneManager {
   update(input: Input, dt: number): void;
   render(ctx: CanvasRenderingContext2D, cssW: number, cssH: number): void;
+  setSeason(season: Season): void;
+  setCharacter(id: string): void;
+  teleportTo(id: SceneId): void;
+  getLocationLabel(): string;
 }
 
 export function createSceneManager(): SceneManager {
-  const bgImages: Record<SceneId, HTMLImageElement> = {
-    pihapiiri: loadImage(SCENES.pihapiiri.bgUrl),
-    pelto: loadImage(SCENES.pelto.bgUrl),
-    metsalaidun: loadImage(SCENES.metsalaidun.bgUrl),
-  };
-  const jussi = loadImage(jussiUrl);
+  const sceneIds = Object.keys(SCENES) as SceneId[];
+  const bgImages: Record<SceneId, Record<Season, HTMLImageElement>> = {} as Record<
+    SceneId,
+    Record<Season, HTMLImageElement>
+  >;
+  for (const id of sceneIds) {
+    const scene = SCENES[id];
+    const bySeason = {} as Record<Season, HTMLImageElement>;
+    for (const season of SEASONS) bySeason[season] = loadImage(sceneBgUrl(scene, season));
+    bgImages[id] = bySeason;
+  }
+  const characterImages = new Map<string, HTMLImageElement>();
+  for (const c of CHARACTERS) characterImages.set(c.id, loadImage(c.spriteUrl));
 
   let sceneId: SceneId = 'pihapiiri';
+  let currentSeason: Season = 'spring'; // kept in sync with the chapter dropdown by main.ts
+  let currentCharacterId = CHARACTERS[0].id;
   let x = (SCENES.pihapiiri.walkMinX + SCENES.pihapiiri.walkMaxX) / 2;
   let facingRight = false;
   let moving = false;
   let animTime = 0;
   let time = 0;
-  let subtitleTimer = SUBTITLE_TOTAL; // shows the starting scene's label on load too
 
   // Set by clicking the ground, an exit marker, or a portal marker: walk toward this
   // scene-space x until arrival (ground click), until it triggers the exit at the scene
@@ -251,6 +287,8 @@ export function createSceneManager(): SceneManager {
     mouseY = e.clientY;
   });
   window.addEventListener('click', (e) => {
+    // Ignore clicks on the chapter/character UI panel — only the canvas itself walks Jussi.
+    if ((e.target as HTMLElement).tagName !== 'CANVAS') return;
     const { scale, offX, offY } = sceneTransform(window.innerWidth, window.innerHeight);
     const mx = (e.clientX - offX) / scale;
     const my = (e.clientY - offY) / scale;
@@ -282,14 +320,12 @@ export function createSceneManager(): SceneManager {
     const s = SCENES[id];
     x = typeof arriveAt === 'number' ? arriveAt : arriveAt === 'min' ? s.walkMinX + ARRIVE_INSET : s.walkMaxX - ARRIVE_INSET;
     animTime = 0;
-    subtitleTimer = SUBTITLE_TOTAL;
     autoWalkTargetX = null;
     pendingPortal = null;
   }
 
   function update(input: Input, dt: number): void {
     time += dt;
-    if (subtitleTimer > 0) subtitleTimer = Math.max(0, subtitleTimer - dt);
 
     const scene = SCENES[sceneId];
     const manualDx = axis(input).x;
@@ -350,7 +386,7 @@ export function createSceneManager(): SceneManager {
     ctx.scale(scale, scale);
 
     const scene = SCENES[sceneId];
-    const bg = bgImages[sceneId];
+    const bg = bgImages[sceneId][currentSeason];
     if (bg.complete && bg.naturalWidth) {
       ctx.drawImage(bg, 0, 0, SCENE_W, SCENE_H);
     }
@@ -379,28 +415,31 @@ export function createSceneManager(): SceneManager {
     }
     ctx.canvas.style.cursor = hovering ? 'pointer' : '';
 
-    drawJussi(ctx, scene);
-    drawSubtitle(ctx, scene);
+    drawCharacter(ctx, scene);
 
     ctx.restore();
   }
 
-  function drawJussi(ctx: CanvasRenderingContext2D, scene: SceneDef): void {
-    if (!jussi.complete || !jussi.naturalWidth) return;
+  function drawCharacter(ctx: CanvasRenderingContext2D, scene: SceneDef): void {
+    const char = CHARACTERS.find((c) => c.id === currentCharacterId) ?? CHARACTERS[0];
+    const sprite = characterImages.get(char.id);
+    if (!sprite || !sprite.complete || !sprite.naturalWidth) return;
     let sx: number;
     let sy: number;
     if (moving) {
-      const frame = Math.floor(animTime / FRAME_TIME) % FRAME_COUNT;
-      sx = frame * CELL_W;
-      sy = (facingRight ? WALK_ROW_RIGHT : WALK_ROW_LEFT) * CELL_H;
+      const frame = Math.floor(animTime / FRAME_TIME) % char.frameCount;
+      sx = frame * char.cellW;
+      sy = (facingRight ? char.rows.walkRight : char.rows.walkLeft) * char.cellH;
     } else {
-      sx = FRONT_FRAME * CELL_W;
-      sy = FRONT_ROW * CELL_H;
+      sx = FRONT_FRAME * char.cellW;
+      sy = char.rows.front * char.cellH;
     }
 
+    const figureH = FIGURE_H * (char.heightScale ?? 1);
+    const figureW = figureH * (char.cellW / char.cellH);
     ctx.save();
     ctx.translate(x, scene.groundY);
-    ctx.drawImage(jussi, sx, sy, CELL_W, CELL_H, -FIGURE_W / 2, -FIGURE_H, FIGURE_W, FIGURE_H);
+    ctx.drawImage(sprite, sx, sy, char.cellW, char.cellH, -figureW / 2, -figureH, figureW, figureH);
     ctx.restore();
   }
 
@@ -418,12 +457,7 @@ export function createSceneManager(): SceneManager {
     ctx.save();
     ctx.translate(mx, my);
 
-    ctx.filter = 'blur(7px)';
-    ctx.fillStyle = `rgba(244, 222, 165, ${alpha})`;
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.filter = 'none';
+    drawGlow(ctx, r + 16, '244, 222, 165', alpha);
 
     ctx.strokeStyle = `rgba(58, 45, 28, ${hovered ? 0.85 : 0.55})`;
     ctx.lineWidth = 5;
@@ -452,12 +486,7 @@ export function createSceneManager(): SceneManager {
     ctx.save();
     ctx.translate(mx, my);
 
-    ctx.filter = 'blur(6px)';
-    ctx.fillStyle = `rgba(244, 222, 165, ${hovered ? 0.55 : 0.28 + pulse})`;
-    ctx.beginPath();
-    ctx.arc(0, 0, ringR * 1.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.filter = 'none';
+    drawGlow(ctx, ringR * 1.6 + 12, '244, 222, 165', hovered ? 0.55 : 0.28 + pulse);
 
     ctx.strokeStyle = `rgba(58, 45, 28, ${hovered ? 0.9 : 0.5 + pulse})`;
     ctx.lineWidth = 2;
@@ -506,31 +535,22 @@ export function createSceneManager(): SceneManager {
     ctx.restore();
   }
 
-  function drawSubtitle(ctx: CanvasRenderingContext2D, scene: SceneDef): void {
-    if (subtitleTimer <= 0) return;
-    const elapsed = SUBTITLE_TOTAL - subtitleTimer;
-    let alpha: number;
-    if (elapsed < SUBTITLE_FADE_IN) alpha = elapsed / SUBTITLE_FADE_IN;
-    else if (subtitleTimer < SUBTITLE_FADE_OUT) alpha = subtitleTimer / SUBTITLE_FADE_OUT;
-    else alpha = 1;
-
-    const cx = SCENE_W / 2;
-    const cy = SCENE_H - 90;
-
-    ctx.save();
-    ctx.font = '600 34px Georgia, "Times New Roman", serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const w = ctx.measureText(scene.label).width + 64;
-
-    ctx.fillStyle = `rgba(20, 24, 18, ${0.4 * alpha})`;
-    roundRect(ctx, cx - w / 2, cy - 28, w, 56, 28);
-    ctx.fill();
-
-    ctx.fillStyle = `rgba(253, 250, 242, ${alpha})`;
-    ctx.fillText(scene.label, cx, cy + 2);
-    ctx.restore();
+  function setSeason(season: Season): void {
+    currentSeason = season;
   }
 
-  return { update, render };
+  function setCharacter(id: string): void {
+    if (CHARACTERS.some((c) => c.id === id)) currentCharacterId = id;
+  }
+
+  function teleportTo(id: SceneId): void {
+    const s = SCENES[id];
+    enterScene(id, (s.walkMinX + s.walkMaxX) / 2);
+  }
+
+  function getLocationLabel(): string {
+    return SCENES[sceneId].label;
+  }
+
+  return { update, render, setSeason, setCharacter, teleportTo, getLocationLabel };
 }

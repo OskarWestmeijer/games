@@ -1,7 +1,9 @@
 import './style.css';
 import { createInput } from './input';
-import { createSceneManager } from './scenes';
+import { createSceneManager, listSceneIds, type SceneId } from './scenes';
 import { startAudio, toggleMute } from './audio';
+import { CHAPTERS } from './chapters';
+import { CHARACTERS } from './characters';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d', { alpha: false })!;
@@ -19,6 +21,63 @@ resize();
 
 const scene = createSceneManager();
 const input = createInput();
+
+// Chapter + character dropdowns — always visible, switchable at any time (see
+// "Active build" in CLAUDE.md). Chapter only swaps which seasonal scene art is shown
+// for now; it isn't wired to gameplay/days yet.
+const adminToggle = document.getElementById('admin-toggle') as HTMLButtonElement;
+const uiPanel = document.getElementById('ui-panel') as HTMLDivElement;
+const sceneSelect = document.getElementById('scene-select') as HTMLSelectElement;
+const chapterSelect = document.getElementById('chapter-select') as HTMLSelectElement;
+const characterSelect = document.getElementById('character-select') as HTMLSelectElement;
+const chapterTitleEl = document.getElementById('chapter-info-title')!;
+const chapterMonthsEl = document.getElementById('chapter-info-months')!;
+const chapterDescEl = document.getElementById('chapter-info-desc')!;
+
+adminToggle.addEventListener('click', () => {
+  uiPanel.hidden = !uiPanel.hidden;
+});
+
+for (const s of listSceneIds()) {
+  const opt = document.createElement('option');
+  opt.value = s.id;
+  opt.textContent = s.label;
+  sceneSelect.appendChild(opt);
+}
+for (const ch of CHAPTERS) {
+  const opt = document.createElement('option');
+  opt.value = String(ch.id);
+  opt.textContent = `${ch.id}. ${ch.title}`;
+  chapterSelect.appendChild(opt);
+}
+for (const c of CHARACTERS) {
+  const opt = document.createElement('option');
+  opt.value = c.id;
+  opt.textContent = c.label;
+  characterSelect.appendChild(opt);
+}
+
+sceneSelect.addEventListener('change', () => scene.teleportTo(sceneSelect.value as SceneId));
+
+function applyChapter(id: number): void {
+  const chapter = CHAPTERS.find((c) => c.id === id) ?? CHAPTERS[0];
+  scene.setSeason(chapter.season);
+  chapterTitleEl.textContent = chapter.title;
+  chapterMonthsEl.textContent = chapter.months;
+  chapterDescEl.textContent = chapter.description;
+}
+
+chapterSelect.addEventListener('change', () => applyChapter(Number(chapterSelect.value)));
+characterSelect.addEventListener('change', () => scene.setCharacter(characterSelect.value));
+
+applyChapter(CHAPTERS[0].id);
+characterSelect.value = CHARACTERS[0].id;
+sceneSelect.value = 'pihapiiri';
+
+// Always-on location HUD, top-left — distinct from the admin panel above: this one is
+// in-world UI, kept in sync with whichever scene Jussi is currently standing in.
+const locationText = document.getElementById('location-text')!;
+let lastLocationLabel = '';
 
 // Audio starts on the first user gesture (browser autoplay policy); M toggles it.
 const hint = document.getElementById('hint');
@@ -43,6 +102,12 @@ function frame(now: number): void {
   if (dt > 0.05) dt = 0.05; // clamp after tab-out etc.
 
   scene.update(input, dt);
+
+  const label = scene.getLocationLabel();
+  if (label !== lastLocationLabel) {
+    lastLocationLabel = label;
+    locationText.textContent = label;
+  }
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   scene.render(ctx, window.innerWidth, window.innerHeight);

@@ -187,9 +187,11 @@ completed harvest.
 household crafts, and storytelling fill the cold season. Ends as preparations for the
 next spring begin again.
 
-Chapters are the long-term structuring device for the narrative; they are **not yet
-wired up in code**. Right now we're still heads-down on building the farm/Pihapiiri
-location itself (see Levels below), not chapters or days.
+Chapters are the long-term structuring device for the narrative. A first, partial wiring
+exists in code now — see "Chapter & character selection" under Active build below — but
+it only swaps seasonal scene art and shows each chapter's description; chapters aren't
+wired to actual days, tasks, or story content yet. We're still heads-down on building the
+farm/Pihapiiri location itself (see Levels below), not chapter gameplay.
 
 ## Levels
 
@@ -230,9 +232,11 @@ engine described below. Three static scenes exist so far, each a single hand-ill
 - **Pelto ja riihi** (`assets/field-scene.svg`) — a tilled field with the riihi in the
   background, forest all round. (Not a lato — riihi is the grain-drying building; see
   the Levels list above.)
-- **Metsälaidun** (`assets/metsalaidun-scene.svg`) — a forest pasture clearing: birch,
-  pine and shrubs around a grassy glade with a worn path, reached through a doorway in
-  Pihapiiri rather than off a scene edge (see Portals below).
+- **Metsälaidun** (`assets/metsalaidun-scene-{spring,summer,winter}.svg`) — a forest
+  pasture clearing: birch, pine and shrubs around a grassy glade with a worn path,
+  reached through a doorway in Pihapiiri rather than off a scene edge (see Portals
+  below). The only scene with **seasonal art** so far — which of the three files is drawn
+  depends on the selected chapter's season (see "Chapter & character selection" below).
 
 **Jussi** (`assets/jussi-sprite-sheet.png`, a 4×4 sprite sheet; vector source
 `assets/jussi-sprite-sheet.svg`) walks left/right via A/D or the arrow keys, across a
@@ -250,7 +254,11 @@ exiting west leads back) — Pelto ja riihi's far (east) edge and Pihapiiri's we
 still dead ends. Each scene edge that has an exit shows a small glowing marker (a soft
 glow + chevron) positioned a bit further out than the walk boundary itself, toward the
 scene's edge — `MARKER_OUTSET` in `scenes.ts`. It brightens on mouse hover with a
-tooltip naming the destination.
+tooltip naming the destination. The glow itself is a radial gradient (`drawGlow` in
+`scenes.ts`), not canvas's `filter: blur()` — that filter isn't GPU-accelerated the way
+CSS filters on DOM elements are and measured at ~50ms/frame for the marker blurs alone
+(60fps → ~14fps); a gradient reads as the same soft halo for near-zero cost. Don't
+reintroduce `ctx.filter` for glow/blur effects without re-profiling.
 
 **Portals (doorways):** some connections aren't at a scene's edge at all — e.g. the gap
 between aitta and tupa leading out to Metsälaidun. These are `portals` in `SCENES`: a
@@ -269,9 +277,10 @@ placed past the walk boundary, so he keeps going through the edge and triggers t
 transition instead of stopping; clicking a portal marker sets a `pendingPortal` alongside
 the target, consumed on arrival to step into the destination instead of stopping. Any
 manual key press cancels the auto-walk (and any pending portal) and hands control back.
-A location **subtitle** (the scene's `label`) fades in/out at the bottom of the frame
-whenever a scene is entered (including the very first one on load), so the player always
-knows where they are.
+There's no fade-in/out "you've arrived" subtitle on entering a scene (there used to be
+one, drawn on the canvas, but it was redundant once the location HUD below shipped, so it
+was removed rather than kept as an unused option) — the player's location is always
+visible via the location HUD instead.
 
 **Buildings are hoverable too**, just informational (not clickable): each scene lists
 `buildings` in `SCENES` as an eyeballed hit-region ellipse (`cx`/`cy`/`rx`/`ry`) over its
@@ -284,6 +293,46 @@ This is the first concrete instance of the "Perspective — resolved" direction 
 style above; Lake shore and Tupa interior from the Levels list don't have scenes built
 yet, and Riihi/Forest only have the one building/clearing each shown above, no scene or
 gameplay of their own yet.
+
+**Location HUD (real game UI):** a small carved-wood plaque, top-left, fixed (`#location-
+panel`/`#location-text` in `index.html`, styled in `style.css`), always on screen,
+showing the current scene's `label` — kept in sync every frame in `main.ts` by polling
+`scene.getLocationLabel()` and only touching the DOM when it changes. This is the first
+piece of real, in-world UI chrome (as opposed to the admin panel below) — its wood-plaque
+look is the intended visual language for further HUD elements (e.g. a future task list —
+see Iteration roadmap).
+
+**Admin/dev panel (not in-world UI):** a small HTML panel (`#ui-panel` in `index.html`,
+not part of the canvas) holds two `<select>` dropdowns, wired up in `main.ts`, for
+**testing only** — not designed to be part of the shipped game's UI, and visually
+plain/dark on purpose so it doesn't read as in-world chrome. It's collapsed by default
+(the `hidden` attribute) behind `#admin-toggle`, a small gear button fixed
+bottom-right; clicking it toggles `uiPanel.hidden`. (`#ui-panel[hidden] { display:
+none }` has to be declared explicitly in `style.css` — the panel's own `display: flex`
+rule otherwise outranks the UA stylesheet's default `[hidden]` styling, since author CSS
+always wins over UA styles regardless of selector specificity.) The dropdowns can be
+changed at any time, independent of which scene Jussi is standing in:
+- **Scene** — jumps straight to any scene via `scene.teleportTo()`, landing Jussi at the
+  middle of its walk bounds (bypassing edges/portals entirely). Built from
+  `listSceneIds()` in `scenes.ts`, so it can't drift out of sync with `SCENES`.
+- **Chapter** — one of the five chapters in `src/chapters.ts` (`CHAPTERS`), matching the
+  Chapters section above. Picking one calls `scene.setSeason()` and updates the panel's
+  title/months/description text from that chapter's data. A chapter only controls which
+  **season** is requested; if the current scene has no art for that season it falls back
+  to its `bgUrl` default (currently only Metsälaidun has `seasonal` overrides — see
+  above; Harvest and Riihi/Kekri both fall back to the summer art since there's no
+  autumn Metsälaidun art yet). Pihapiiri and Pelto ja riihi have one asset each and so
+  look the same in every chapter for now.
+- **Character** — one of `src/characters.ts` (`CHARACTERS`), each entry holding a sprite
+  sheet URL plus its cell size/row layout. Picking one calls `scene.setCharacter()`.
+  Jussi is the only entry today; the shape exists so a second playable character is just
+  another array entry, not a rework of `scenes.ts`'s drawing code.
+- The scene's click-to-walk handler ignores clicks that don't land on the `<canvas>`
+  itself, so interacting with either dropdown (or the location HUD) can't also send
+  Jussi walking.
+- Where this panel should ultimately live (collapsed behind a toggle? a corner that
+  reads more clearly as "dev-only"?) is still an open question — raise it with the user
+  before settling on a final spot.
 
 ### Earlier build (dormant): the isometric farm (umpipiha)
 
@@ -400,9 +449,9 @@ character in a large gentle landscape).
 The earlier isometric vs. side-on tension noted above is **resolved in favour of
 side-on, static illustrated scenes** — confirmed by building the first one. The active
 implementation (`src/scenes.ts`) draws a fixed hand-illustrated background per scene
-(currently `assets/farm-scene.svg`, `assets/field-scene.svg` and
-`assets/metsalaidun-scene.svg` — tupa/aitta/navetta, field/riihi, and a forest-pasture
-clearing, forest backdrop, all in one frame each) with Jussi
+(currently `assets/farm-scene.svg`, `assets/field-scene.svg` and the three seasonal
+`assets/metsalaidun-scene-{spring,summer,winter}.svg` — tupa/aitta/navetta, field/riihi,
+and a forest-pasture clearing, forest backdrop, all in one frame each) with Jussi
 (`assets/jussi-sprite-sheet.png`) walking left/right across a fixed ground line in front
 of it, stepping between scenes at their edges or through portal doorways — a
 Pentiment-style "stage" rather than a freely-walkable world. The old **isometric**
@@ -497,11 +546,15 @@ every push to `main` (official `actions/upload-pages-artifact` + `deploy-pages`)
 ## Architecture
 
 ```
-index.html            canvas + hint, loads /src/main.ts
+index.html            canvas + hint + #location-panel (location HUD) +
+                      #ui-panel (admin chapter/character dropdowns), loads /src/main.ts
 src/
-  main.ts             bootstrap: canvas sizing (DPR), game loop, audio start, wiring
+  main.ts             bootstrap: canvas sizing (DPR), game loop, audio start, wiring,
+                      populates and wires the chapter/character dropdowns
   scenes.ts            ACTIVE: side-on scenes (Pihapiiri, Pelto ja riihi, Metsälaidun) +
-                      Jussi (see Levels above)
+                      the player character (see Levels above)
+  chapters.ts          CHAPTERS — the 5 chapters (id/title/season/months/description)
+  characters.ts        CHARACTERS — playable characters (Jussi only so far)
   input.ts            keyboard state + screen-space axis()
   audio.ts            two-layer soundscape player, start()/toggleMute() (see Audio above)
   style.css
@@ -564,6 +617,12 @@ applies to the active `scenes.ts`, which has its own constants
   small reactive moments, still no inventory/quests.
 - **Polish:** smoother sprite-based character with 8-direction walk, soft shadows,
   better water, screen-space ambient occlusion-ish darkening under canopies.
+- **Task list HUD (wanted, conflicts with a Hard constraint below):** a simple wood/
+  parchment-styled tasks list, fitting the location HUD's material language above. This
+  is currently in tension with "No quest-log / objectives-checklist UI" in Hard
+  constraints — resolve that conflict (either relax the constraint, or find a more
+  diegetic form, e.g. a journal page you open rather than an always-on list) with the
+  user before building it.
 
 ## Notes for whoever picks this up
 - Keep it **cosy and calm**. When in doubt, remove UI, slow things down, add ambience.

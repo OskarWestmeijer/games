@@ -8,6 +8,28 @@
   <body>
     <canvas id="game"></canvas>
     <div id="hint">A/D or arrow keys to walk · M for music</div>
+    <div id="location-panel"><span id="location-text"></span></div>
+    <button id="admin-toggle" type="button" title="Admin (dev only)">⚙</button>
+    <div id="ui-panel" hidden>
+      <div id="ui-panel-eyebrow">Admin · dev only</div>
+      <div class="ui-row">
+        <label for="scene-select">Scene</label>
+        <select id="scene-select"></select>
+      </div>
+      <div class="ui-row">
+        <label for="chapter-select">Chapter</label>
+        <select id="chapter-select"></select>
+      </div>
+      <div class="ui-row">
+        <label for="character-select">Character</label>
+        <select id="character-select"></select>
+      </div>
+      <div id="chapter-info">
+        <div id="chapter-info-title"></div>
+        <div id="chapter-info-months"></div>
+        <div id="chapter-info-desc"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
