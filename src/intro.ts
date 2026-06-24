@@ -55,16 +55,5 @@ export function createIntro(): IntroOverlay {
   window.addEventListener('keydown', onKeydown);
   overlay.addEventListener('click', advance);
 
-  // Two RAF ticks (not one) so the browser has definitely committed the initial
-  // opacity:0 before the transition starts — otherwise the fade-up can get skipped.
-  // Guarded by phase: on a slow/throttled tab this can fire after the player has
-  // already pressed Enter, and would otherwise re-add 'intro-shown' to a layer that's
-  // since moved on.
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => {
-      if (phase === 'title') titleLayer.classList.add('intro-shown');
-    }),
-  );
-
   return { isActive: () => phase !== 'done' };
 }

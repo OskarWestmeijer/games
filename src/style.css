@@ -213,6 +213,14 @@ body {
   transition: opacity 2.6s ease;
 }
 
+/* The title is visible from first paint (see #intro-title's intro-shown class in
+   index.html, no JS fade-in) — this transition only ever fires once, when advancing
+   to the chapter card. Faster than the card's 2.6s fade-in so the two don't sit
+   cross-faded/overlapping on screen together for long. */
+#intro-title {
+  transition: opacity 0.8s ease;
+}
+
 .intro-layer.intro-shown {
   opacity: 1;
 }

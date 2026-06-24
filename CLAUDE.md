@@ -320,7 +320,7 @@ exist as its own asset rather than be baked into the scene SVG. Hovering one onl
 the pointer/hand cursor (via the same `hovering` flag) — no badge or tooltip, unlike
 buildings; the hover hit-test is an unrotated bounding box regardless of `rotationDeg`,
 close enough for a modest lean. First (and so far only) prop: **kuokka** (a hoe),
-`assets/kuokka.svg`, currently leaning against the right wall inside the Aitta interior
+`assets/kuokka.svg`, leaning against the right wall inside the Aitta interior
 (`cx: 1450, groundY: 980, rotationDeg: 15` — picked by iterating screenshots against the
 actual background art rather than computed from the SVG, since the room's perspective
 makes the wall's true position hard to derive any other way; if the wall position ever
@@ -330,6 +330,64 @@ plus debug text labels, with one explicitly marked "use this in game" — only t
 was kept, same as the Miina sprite sheet cleanup above; if a future asset export has the
 same multi-variant-plus-labels shape, extract the marked group rather than asking for a
 re-export.
+
+**Equipping / carried tools:** a prop with an `equip` URL set (`SceneProp.equip`, the
+kuokka's is its own `kuokkaUrl`) is **clickable to pick up** — clicking it sets the scene
+manager's single `equippedToolUrl` slot (not an inventory: one carried tool, respecting
+the "no traditional inventory" hard constraint) and the prop **vanishes** from its scene
+(`isPropHidden` skips it in both render and the click/hover hit-tests — it's in hand now,
+not on the floor). `equippedToolUrl` lives in the `createSceneManager` closure, so it
+**persists across scene changes**: pick the kuokka up inside the Aitta, walk back out, and
+Jussi carries it everywhere. It's drawn after (on top of) the player sprite, in **one of two
+poses depending on whether he's moving** (`drawShoulderTool` / `drawRestingTool`,
+`CARRY_*` / `REST_*` tunables in `scenes.ts`, all eyeballed against his sprite via
+`tools/shot.mjs`):
+- **Walking — over the shoulder** (`drawShoulderTool`): anchored to a fixed shoulder point
+  on the figure box rather than any per-frame hand position — his torso/head stay at a
+  constant height across the walk frames (only the legs cycle), so a fixed anchor tracks
+  him correctly. A tiny `CARRY_SWAY_DEG` angle wobble over the walk cycle keeps it from
+  looking glued on (kept small per "calm, not jittery").
+- **Standing still — planted on the ground** (`drawRestingTool`): stood upright beside his
+  hand, base on the ground line, blade up near shoulder height, leaning a hair toward him
+  — he just holds the shaft. (The over-the-shoulder pose looked wrong frozen in the idle
+  front stance, so standing gets its own pose; the swap on start/stop reads as him
+  hoisting it up to walk.)
+Both poses mirror by facing direction via `ctx.scale(dir, 1)` then one rotation, so the
+blade sits back-over-the-shoulder / the planted hoe stands on the last-faced side in both
+directions. **Only drawn for Jussi** (`currentCharacterId ===
+'jussi'`) — the geometry is tuned to his sprite and a cat with a hoe makes no sense;
+switching to Miina just hides it (still equipped, shown again on switching back). There's
+no drop/un-equip yet — the user only asked for pick-up; add one (e.g. clicking him, or a
+diegetic spot to set it down) if/when wanted. To screenshot the equip flow you need real
+clicks, which `tools/shot.mjs` can't do (keys only) — drive it with a throwaway Playwright
+script (teleport into `aittaInterior` via the admin Scene dropdown, click the kuokka, switch
+scene, hold a walk key, screenshot mid-walk).
+
+**Field patches (clearing with the kuokka):** `assets/field-patches-transparent.svg` is a
+sprite sheet of soil patches on a transparent background — a 3-column grid of 240×170
+cells, each an obstacle (boulder, stump, weeds, roots, stones — `PatchKind` in `scenes.ts`)
+plus a `cleared` cell (tilled furrow rows) and an `untilled`/`cleared` pair. Rows step 180px
+and are inset 6px; `PATCH_CELL` maps each kind to its col/row and `patchCellRect` turns that
+into a source rect (the SVG rasterises at its 720×726 natural size, so viewBox coords map
+1:1). A scene lists `fieldPatches` in `SCENES` (`FieldPatch`: a `kind` + centre-anchored
+`cx`/`cy`/`width`/`height`) — only **Pelto ja riihi** has them so far, four obstacles set
+just above the walk line so Jussi passes in front (they're drawn before the character).
+`drawFieldPatches` blits each cell and returns whether the mouse is over an un-cleared one
+(for the cursor). **Clicking** a patch (hit-test in the canvas click handler, before the
+ground-walk fallback):
+- with the kuokka equipped (`equippedToolUrl === kuokkaUrl`) → the patch is added to the
+  `clearedPatches` set (keyed `${sceneId}:${index}`, persists across scenes) and renders as
+  the `cleared` tilled cell from then on; already-cleared patches are inert.
+- without it → Jussi "says" `NEED_KUOKKA_SPEECH` (`'Tarvitsen kuokan aitasta.'` — Finnish,
+  doubles as the hint to go fetch it from the Aitta) via a cartoon **speech bubble**.
+
+The speech bubble (`drawSpeechBubble`) is a parchment rounded-rect with a downward tail,
+centred over Jussi's head, body+tail drawn as **one closed path** so the outline strokes
+cleanly around both; it's a single state slot (`speechText` + `speechStart`, gated by
+`SPEECH_DURATION` with a fade-out, cleared on scene change so it can't linger into the next
+stage). To screenshot this flow you again need real clicks (`tools/shot.mjs` can't) — a
+throwaway Playwright script: teleport to `pelto`, click a patch (speech), equip in the
+Aitta, return and click patches (clear). Patch centres come straight from `SCENES.pelto`.
 
 **Inside a building (Aitta interior):** `aittaInterior` sets `noPlayerSprite: true` in its
 `SceneDef` — a first-person look into the space rather than a side-on stage with a
@@ -418,12 +476,14 @@ inline below. A DOM overlay (`#intro-overlay` in `index.html`, styled in `style.
 not canvas — it's pure typography/CSS transitions, sitting in front of the canvas, the
 location HUD and the admin panel (`z-index: 1000`) until dismissed.
 
-- **Title state:** "Vuodenkierto" fades up from black (two-`requestAnimationFrame`-tick
-  delay before adding the `intro-shown` class, so the browser commits the initial
-  `opacity:0` first — otherwise the fade-up can get skipped), with the "VANHA MAATILA"
-  subtitle and a pulsing "PAINA ENTER · ALOITA" prompt, matching the handoff exactly:
-  Cormorant Garamond display type, EB Garamond letter-spaced labels, one muted-gold
-  accent (`#b9a06a`). The whole overlay is clickable, and Enter/Space advance it.
+- **Title state:** "Vuodenkierto" is visible immediately on load, no fade-in — `#intro-
+  title` carries the `intro-shown` class statically in `index.html` rather than having
+  `intro.ts` add it on a delay. (An earlier version faded it up from black via a
+  double-`requestAnimationFrame`-tick delay; the user asked for it to just be there from
+  the get-go instead.) Shows the "VANHA MAATILA" subtitle and a pulsing "PAINA ENTER ·
+  ALOITA" prompt, matching the handoff's typography: Cormorant Garamond display type, EB
+  Garamond letter-spaced labels, one muted-gold accent (`#b9a06a`). The whole overlay is
+  clickable, and Enter/Space advance it.
 - **Chapter-1 card state:** "Luku I" / "Kevätkylvö" / "Kevät" / its blurb, sourced from
   `CHAPTERS[0].card` (see `chapters.ts` below) — **deviation 1:** stays pitch black
   like the title, rather than blending in a dimmed, color-graded scene illustration
@@ -435,8 +495,14 @@ location HUD and the admin panel (`z-index: 1000`) until dismissed.
   changes which chapter is "active" during play, and switching it there does **not**
   replay this card; the user asked for once-at-boot-only specifically so the dropdown's
   existing instant-switch behaviour wouldn't change.
+- Advancing from the title to the chapter card cross-fades the two `.intro-layer`s:
+  `#intro-title` fades out in **0.8s** (its own override in `style.css`, faster than the
+  shared 2.4s default) while `#intro-card` fades in over **2.6s**. The mismatch is
+  deliberate — the user found the two layers sitting overlapped/double-exposed on
+  screen for too long when both used the slower duration, so only the outgoing title was
+  sped up; the card's own slow fade-in is unchanged.
 - Pressing Enter/Space or clicking again fades the whole overlay out (a separate, faster
-  1.4s fade — distinct from the 2.4s/2.6s title↔card cross-fade) to reveal the
+  1.4s fade — distinct from the title↔card cross-fade above) to reveal the
   already-running game underneath, then `display:none`s it via a one-shot
   `transitionend` listener so it stops being painted/hit-tested at all.
 - `main.ts` gates `scene.update(input, dt)` on `!intro.isActive()` each frame — the
@@ -444,12 +510,6 @@ location HUD and the admin panel (`z-index: 1000`) until dismissed.
   time (cheap, and simpler than delaying boot), but without the gate a player mashing
   WASD during the title/card would silently walk Jussi around off-screen before ever
   seeing the world.
-- **A real race, not just a test artifact:** the title's own fade-in is scheduled via
-  the double-RAF above: `if (phase === 'title') titleLayer.classList.add(...)`. That
-  guard matters — on a slow/throttled tab the callback can fire *after* the player has
-  already pressed Enter and moved to the card phase, and without the guard it would
-  unconditionally re-add `intro-shown` to a layer that's since moved on, leaving both
-  layers visible at once. Found via `tools/shot.mjs` (see below), not by eye.
 - `chapters.ts`'s `Chapter` interface gained a `card: ChapterCard` field
   (`roman`/`titleFi`/`seasonLabel`/`blurb`) — the exact Finnish copy from the handoff,
   kept as a sibling to the existing flat `title`/`description` fields rather than
