@@ -13,6 +13,7 @@ import type { Season } from './chapters';
 import { CHARACTERS } from './characters';
 import pihapiiriUrl from '../assets/pihapiiri/farm-scene.svg';
 import peltoSpringUrl from '../assets/pelto/field-scene-spring.svg';
+import peltoSpringTilledUrl from '../assets/pelto/field-scene-spring-tilled.svg';
 import peltoSummerUrl from '../assets/pelto/field-scene-summer.svg';
 import peltoHarvestUrl from '../assets/pelto/field-scene-harvest.svg';
 import peltoAutumnUrl from '../assets/pelto/field-scene-autumn.svg';
@@ -22,7 +23,6 @@ import metsalaidunSummerUrl from '../assets/metsalaidun/metsalaidun-scene-summer
 import metsalaidunWinterUrl from '../assets/metsalaidun/metsalaidun-scene-winter.svg';
 import aittaInteriorUrl from '../assets/aitta/aitta-interior-scene.svg';
 import kuokkaUrl from '../assets/props/kuokka.svg';
-import fieldPatchesUrl from '../assets/pelto/field-patches-transparent.svg';
 
 // Every scene shares this illustrated canvas size (see the scene SVGs' viewBox).
 const SCENE_W = 1920;
@@ -63,28 +63,12 @@ const REST_H = 205; // base on the ground line, blade up near shoulder height
 const REST_DX = 0.2; // beside his hand, fraction of figure width toward last-faced dir
 const REST_ANGLE_DEG = 5; // a hair off-vertical, leaning toward him, so it doesn't read as CAD-perfect
 
-// field-patches-transparent.svg is a sprite sheet of soil patches (transparent bg): a
-// 3-column grid of 240x170 cells, each an obstacle (boulder, stump, weeds, roots, stones)
-// or the tilled `cleared` patch you get after hoeing one. Rows step 180px and are inset 6px
-// from the top, matching the SVG's <use> layout — see PATCH_CELL for each kind's col/row.
-const PATCH_CELL_W = 240;
-const PATCH_CELL_H = 170;
-const PATCH_ROW_STEP = 180;
-const PATCH_ROW_INSET = 6;
-type PatchKind =
-  | 'untilled' | 'boulder' | 'cluster' | 'pebbles' | 'slab'
-  | 'root' | 'stump' | 'weeds' | 'clods' | 'cleared';
-const PATCH_CELL: Record<PatchKind, { col: number; row: number }> = {
-  untilled: { col: 0, row: 0 }, boulder: { col: 1, row: 0 }, cluster: { col: 2, row: 0 },
-  pebbles: { col: 0, row: 1 }, slab: { col: 1, row: 1 }, root: { col: 2, row: 1 },
-  stump: { col: 0, row: 2 }, weeds: { col: 1, row: 2 }, clods: { col: 2, row: 2 },
-  cleared: { col: 0, row: 3 },
-};
-// The source rect of a patch kind within the sheet (the SVG rasterises at its 720x726
-// natural size, so these viewBox coords map 1:1 onto the loaded image).
-function patchCellRect(kind: PatchKind): { sx: number; sy: number; sw: number; sh: number } {
-  const { col, row } = PATCH_CELL[kind];
-  return { sx: col * PATCH_CELL_W, sy: PATCH_ROW_INSET + row * PATCH_ROW_STEP, sw: PATCH_CELL_W, sh: PATCH_CELL_H };
+// A vertical strip of the field that Jussi can till with the kuokka. When cleared, the
+// corresponding region is drawn from the scene's tilledBgUrl instead of the rough base bg.
+// Six strips cover the full scene width so completing all of them fully transforms the field.
+interface FieldStrip {
+  x1: number; // left edge in scene space
+  x2: number; // right edge in scene space
 }
 
 // What Jussi says (Finnish) when asked to clear a patch bare-handed — also the hint that
@@ -141,23 +125,14 @@ interface SceneProp {
   equip?: string;
 }
 
-// A clearable obstacle in a field — one cell of the field-patches sheet, centre-anchored
-// at (cx, cy) in scene space. Clicking it with the kuokka equipped clears it to tilled soil
-// (the `cleared` cell); clicking it without the kuokka makes Jussi say he needs it. See the
-// click handler and drawFieldPatches.
-interface FieldPatch {
-  kind: PatchKind;
-  cx: number;
-  cy: number;
-  width: number;
-  height: number;
-}
-
 interface SceneDef {
   label: string; // shown in the location HUD, and in exit tooltips
   bgUrl: string; // default art, used as-is if `seasonal` has no entry for the current season
   seasonal?: Partial<Record<Season, string>>; // per-chapter-season art override (see chapters.ts)
-  bgUrlAllCleared?: string; // replaces the seasonal bg once every fieldPatch has been cleared
+  // Full-field "tilled" version composited strip by strip as Jussi works the field.
+  tilledBgUrl?: string;
+  // Top of the field area in scene space — strips are drawn and clickable from here to SCENE_H.
+  fieldY?: number;
   // Ground line Jussi's feet stand on, and how far he can walk either way — picked per
   // scene to clear its buildings/props/foreground trees (see the scene's SVG).
   groundY: number;
@@ -168,7 +143,7 @@ interface SceneDef {
   buildings?: BuildingHotspot[];
   portals?: ScenePortal[];
   props?: SceneProp[];
-  fieldPatches?: FieldPatch[];
+  fieldStrips?: FieldStrip[];
   // A first-person look into the space rather than a side-on stage with a visible
   // player figure — e.g. stepping inside a small building. No character sprite is
   // drawn at all; movement/auto-walk/portals all still work exactly as normal.
@@ -198,9 +173,6 @@ const SCENES: Record<SceneId, SceneDef> = {
   pelto: {
     label: 'Pelto ja riihi',
     bgUrl: peltoSummerUrl,
-    // Placeholder until a dedicated spring-tilled asset exists — swap for
-    // field-scene-spring-tilled.svg once Claude Design delivers it.
-    bgUrlAllCleared: peltoSummerUrl,
     seasonal: {
       spring: peltoSpringUrl,
       summer: peltoSummerUrl,
@@ -208,21 +180,23 @@ const SCENES: Record<SceneId, SceneDef> = {
       autumn: peltoAutumnUrl,
       winter: peltoWinterUrl,
     },
+    // Spring tilling: six strips across the full scene width. Each click (with kuokka)
+    // blits that strip from the tilled background onto the rough spring base.
+    tilledBgUrl: peltoSpringTilledUrl,
+    fieldY: 490, // top of the soil area — strips are drawn and clickable from here down
+    fieldStrips: [
+      { x1:    0, x2:  320 },
+      { x1:  320, x2:  640 },
+      { x1:  640, x2:  960 },
+      { x1:  960, x2: 1280 },
+      { x1: 1280, x2: 1600 },
+      { x1: 1600, x2: 1920 },
+    ],
     groundY: 950,
     walkMinX: 220,
     walkMaxX: 1780,
     exitLeft: { to: 'pihapiiri', arriveAt: 'max' },
     buildings: [{ label: 'Riihi', cx: 1240, cy: 335, rx: 265, ry: 135 }],
-    // Six patches spread across the spring field — untilled soil areas to hoe plus
-    // obstacles to clear. Drawn before the character so Jussi walks in front.
-    fieldPatches: [
-      { kind: 'untilled', cx: 310,  cy: 900, width: 190, height: 135 },
-      { kind: 'boulder',  cx: 570,  cy: 885, width: 180, height: 128 },
-      { kind: 'untilled', cx: 830,  cy: 910, width: 190, height: 135 },
-      { kind: 'stump',    cx: 1090, cy: 880, width: 150, height: 106 },
-      { kind: 'untilled', cx: 1350, cy: 900, width: 190, height: 135 },
-      { kind: 'cluster',  cx: 1610, cy: 895, width: 158, height: 112 },
-    ],
   },
   metsalaidun: {
     label: 'Metsälaidun',
@@ -399,10 +373,10 @@ export function createSceneManager(): SceneManager {
     for (const season of SEASONS) bySeason[season] = loadImage(sceneBgUrl(scene, season));
     bgImages[id] = bySeason;
   }
-  const allClearedImages = new Map<SceneId, HTMLImageElement>();
+  const tilledImages = new Map<SceneId, HTMLImageElement>();
   for (const id of sceneIds) {
     const scene = SCENES[id];
-    if (scene.bgUrlAllCleared) allClearedImages.set(id, loadImage(scene.bgUrlAllCleared));
+    if (scene.tilledBgUrl) tilledImages.set(id, loadImage(scene.tilledBgUrl));
   }
   const characterImages = new Map<string, HTMLImageElement>();
   for (const c of CHARACTERS) characterImages.set(c.id, loadImage(c.spriteUrl));
@@ -438,10 +412,9 @@ export function createSceneManager(): SceneManager {
   let equippedToolUrl: string | null = null;
   const isPropHidden = (prop: SceneProp): boolean => prop.equip != null && prop.equip === equippedToolUrl;
 
-  // Field patches already hoed clear, keyed `${sceneId}:${index}`; persists across scenes.
-  const clearedPatches = new Set<string>();
-  const patchKey = (id: SceneId, i: number): string => `${id}:${i}`;
-  const fieldPatchSheet = loadImage(fieldPatchesUrl);
+  // Field strips already hoed clear, keyed `${sceneId}:${index}`; persists across scenes.
+  const clearedStrips = new Set<string>();
+  const stripKey = (id: SceneId, i: number): string => `${id}:${i}`;
 
   // A short cartoon speech line above Jussi (e.g. "I need the kuokka"). Cleared by time in
   // render(), and on a scene change so it can't linger into the next stage.
@@ -465,19 +438,17 @@ export function createSceneManager(): SceneManager {
     const scene = SCENES[sceneId];
     pendingPortal = null;
 
-    // A click on an exit marker walks past the scene edge to trigger its transition.
+    // A click on an exit or portal marker steps directly to the destination.
     const groundMarkerY = scene.groundY - MARKER_Y_OFFSET;
-    for (const { markerX } of edgeExits(scene)) {
+    for (const { markerX, exit } of edgeExits(scene)) {
       if (Math.hypot(mx - markerX, my - groundMarkerY) <= MARKER_HOVER_RADIUS) {
-        autoWalkTargetX = markerX;
+        enterScene(exit.to, exit.arriveAt);
         return;
       }
     }
-    // A click on a portal marker walks there and steps through on arrival.
     for (const portal of scene.portals ?? []) {
       if (Math.hypot(mx - portal.x, my - groundMarkerY) <= MARKER_HOVER_RADIUS) {
-        autoWalkTargetX = portal.x;
-        pendingPortal = portal;
+        enterScene(portal.to, portal.arriveAt);
         return;
       }
     }
@@ -494,18 +465,17 @@ export function createSceneManager(): SceneManager {
         return;
       }
     }
-    // A click on a field patch hoes it clear if the kuokka is equipped; otherwise Jussi
-    // says he needs it. Already-cleared patches are inert (skipped). Centre-anchored box.
-    const patches = scene.fieldPatches ?? [];
-    for (let i = 0; i < patches.length; i++) {
-      const p = patches[i];
-      if (clearedPatches.has(patchKey(sceneId, i))) continue;
-      if (
-        mx >= p.cx - p.width / 2 && mx <= p.cx + p.width / 2 &&
-        my >= p.cy - p.height / 2 && my <= p.cy + p.height / 2
-      ) {
+    // A click inside an un-cleared field strip hoes it clear if the kuokka is equipped;
+    // otherwise Jussi says he needs it. Already-cleared strips are skipped (fall through
+    // to the ground-walk handler so the player can still walk by clicking a tilled strip).
+    const strips = scene.fieldStrips ?? [];
+    if (strips.length > 0 && scene.fieldY != null && my >= scene.fieldY) {
+      for (let i = 0; i < strips.length; i++) {
+        const s = strips[i];
+        if (mx < s.x1 || mx >= s.x2) continue;
+        if (clearedStrips.has(stripKey(sceneId, i))) continue;
         if (equippedToolUrl === kuokkaUrl) {
-          clearedPatches.add(patchKey(sceneId, i));
+          clearedStrips.add(stripKey(sceneId, i));
         } else {
           speechText = NEED_KUOKKA_SPEECH;
           speechStart = time;
@@ -589,18 +559,21 @@ export function createSceneManager(): SceneManager {
     ctx.scale(scale, scale);
 
     const scene = SCENES[sceneId];
-    const patches = scene.fieldPatches ?? [];
-    const allPatchesCleared =
-      patches.length > 0 && patches.every((_, i) => clearedPatches.has(patchKey(sceneId, i)));
-    const clearedBg = allPatchesCleared ? allClearedImages.get(sceneId) : undefined;
-    const bg = clearedBg ?? bgImages[sceneId][currentSeason];
-    if (bg.complete && bg.naturalWidth) {
-      ctx.drawImage(bg, 0, 0, SCENE_W, SCENE_H);
+    const seasonBg = bgImages[sceneId][currentSeason];
+    const tilledBg = tilledImages.get(sceneId);
+    const strips = scene.fieldStrips ?? [];
+    // If any strips are cleared, use the tilled bg as the base — cleared strips then show
+    // through it seamlessly with no per-strip compositing. Uncleared strips paint the
+    // rough seasonal bg back on top in one compound clip (see drawFieldStrips).
+    const anyCleared = strips.length > 0 && strips.some((_, i) => clearedStrips.has(stripKey(sceneId, i)));
+    const baseBg = anyCleared && tilledBg?.complete && tilledBg.naturalWidth ? tilledBg : seasonBg;
+    if (baseBg.complete && baseBg.naturalWidth) {
+      ctx.drawImage(baseBg, 0, 0, SCENE_W, SCENE_H);
     }
 
     const mouse = sceneMouse(scale, offX, offY);
     let hovering = false;
-    hovering = drawFieldPatches(ctx, scene, mouse) || hovering;
+    hovering = drawFieldStrips(ctx, scene, mouse, seasonBg) || hovering;
     for (const prop of scene.props ?? []) {
       if (isPropHidden(prop)) continue; // picked up — it's on the player now, not in the scene
       const img = propImages.get(prop.imgUrl);
@@ -659,31 +632,44 @@ export function createSceneManager(): SceneManager {
     ctx.restore();
   }
 
-  // Draws every field patch (cleared ones as tilled soil, the rest as their obstacle) and
-  // returns whether the mouse is over an un-cleared, still-clearable one (for the cursor).
-  function drawFieldPatches(
+  // For each cleared strip, blits that horizontal band from the tilled background on top
+  // of the rough base — building up the fully-worked field one strip at a time.
+  // Returns true if the mouse is over any un-cleared strip (for the pointer cursor).
+  // Composites the spring tilling progress. The tilled bg is already the base when any
+  // strips are cleared (see render()). This function paints the rough seasonal bg back
+  // over ALL uncleared strips in a single compound clip and one drawImage call — so there
+  // is only one SVG rasterization, no inter-strip edges, and no seams between strips.
+  function drawFieldStrips(
     ctx: CanvasRenderingContext2D,
     scene: SceneDef,
-    mouse: { x: number; y: number }
+    mouse: { x: number; y: number },
+    roughBg: HTMLImageElement
   ): boolean {
-    if (!fieldPatchSheet.complete || !fieldPatchSheet.naturalWidth) return false;
-    const patches = scene.fieldPatches ?? [];
-    // Once every patch is cleared the whole-field background takes over — individual
-    // patch overlays are redundant and hidden so the full tilled scene shows cleanly.
-    if (scene.bgUrlAllCleared && patches.every((_, i) => clearedPatches.has(patchKey(sceneId, i)))) return false;
+    const strips = scene.fieldStrips;
+    if (!strips || !scene.tilledBgUrl) return false;
+    const fieldY = scene.fieldY ?? 0;
+    const fieldH = SCENE_H - fieldY;
+
+    const uncleared: FieldStrip[] = [];
     let hovering = false;
-    for (let i = 0; i < patches.length; i++) {
-      const p = patches[i];
-      const cleared = clearedPatches.has(patchKey(sceneId, i));
-      const { sx, sy, sw, sh } = patchCellRect(cleared ? 'cleared' : p.kind);
-      ctx.drawImage(fieldPatchSheet, sx, sy, sw, sh, p.cx - p.width / 2, p.cy - p.height / 2, p.width, p.height);
-      if (!cleared) {
-        const over =
-          mouse.x >= p.cx - p.width / 2 && mouse.x <= p.cx + p.width / 2 &&
-          mouse.y >= p.cy - p.height / 2 && mouse.y <= p.cy + p.height / 2;
-        hovering = hovering || over;
-      }
+    for (let i = 0; i < strips.length; i++) {
+      const s = strips[i];
+      if (clearedStrips.has(stripKey(sceneId, i))) continue;
+      uncleared.push(s);
+      hovering = hovering || (mouse.x >= s.x1 && mouse.x < s.x2 && mouse.y >= fieldY);
     }
+
+    // Paint rough bg back over every uncleared strip in one draw call — no per-strip
+    // edges, so the only visible boundary is the natural tilled/rough field edge.
+    if (uncleared.length > 0 && roughBg.complete && roughBg.naturalWidth) {
+      ctx.save();
+      ctx.beginPath();
+      for (const s of uncleared) ctx.rect(s.x1, fieldY, s.x2 - s.x1, fieldH);
+      ctx.clip();
+      ctx.drawImage(roughBg, 0, 0, SCENE_W, SCENE_H);
+      ctx.restore();
+    }
+
     return hovering;
   }
 
