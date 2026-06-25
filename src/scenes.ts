@@ -11,14 +11,18 @@ import type { Input } from './input';
 import { axis } from './input';
 import type { Season } from './chapters';
 import { CHARACTERS } from './characters';
-import pihapiiriUrl from '../assets/farm-scene.svg';
-import peltoUrl from '../assets/field-scene.svg';
-import metsalaidunSpringUrl from '../assets/metsalaidun-scene-spring.svg';
-import metsalaidunSummerUrl from '../assets/metsalaidun-scene-summer.svg';
-import metsalaidunWinterUrl from '../assets/metsalaidun-scene-winter.svg';
-import aittaInteriorUrl from '../assets/aitta-interior-scene.svg';
-import kuokkaUrl from '../assets/kuokka.svg';
-import fieldPatchesUrl from '../assets/field-patches-transparent.svg';
+import pihapiiriUrl from '../assets/pihapiiri/farm-scene.svg';
+import peltoSpringUrl from '../assets/pelto/field-scene-spring.svg';
+import peltoSummerUrl from '../assets/pelto/field-scene-summer.svg';
+import peltoHarvestUrl from '../assets/pelto/field-scene-harvest.svg';
+import peltoAutumnUrl from '../assets/pelto/field-scene-autumn.svg';
+import peltoWinterUrl from '../assets/pelto/field-scene-winter.svg';
+import metsalaidunSpringUrl from '../assets/metsalaidun/metsalaidun-scene-spring.svg';
+import metsalaidunSummerUrl from '../assets/metsalaidun/metsalaidun-scene-summer.svg';
+import metsalaidunWinterUrl from '../assets/metsalaidun/metsalaidun-scene-winter.svg';
+import aittaInteriorUrl from '../assets/aitta/aitta-interior-scene.svg';
+import kuokkaUrl from '../assets/props/kuokka.svg';
+import fieldPatchesUrl from '../assets/pelto/field-patches-transparent.svg';
 
 // Every scene shares this illustrated canvas size (see the scene SVGs' viewBox).
 const SCENE_W = 1920;
@@ -153,6 +157,7 @@ interface SceneDef {
   label: string; // shown in the location HUD, and in exit tooltips
   bgUrl: string; // default art, used as-is if `seasonal` has no entry for the current season
   seasonal?: Partial<Record<Season, string>>; // per-chapter-season art override (see chapters.ts)
+  bgUrlAllCleared?: string; // replaces the seasonal bg once every fieldPatch has been cleared
   // Ground line Jussi's feet stand on, and how far he can walk either way — picked per
   // scene to clear its buildings/props/foreground trees (see the scene's SVG).
   groundY: number;
@@ -192,19 +197,31 @@ const SCENES: Record<SceneId, SceneDef> = {
   },
   pelto: {
     label: 'Pelto ja riihi',
-    bgUrl: peltoUrl,
+    bgUrl: peltoSummerUrl,
+    // Placeholder until a dedicated spring-tilled asset exists — swap for
+    // field-scene-spring-tilled.svg once Claude Design delivers it.
+    bgUrlAllCleared: peltoSummerUrl,
+    seasonal: {
+      spring: peltoSpringUrl,
+      summer: peltoSummerUrl,
+      harvest: peltoHarvestUrl,
+      autumn: peltoAutumnUrl,
+      winter: peltoWinterUrl,
+    },
     groundY: 950,
     walkMinX: 220,
     walkMaxX: 1780,
     exitLeft: { to: 'pihapiiri', arriveAt: 'max' },
     buildings: [{ label: 'Riihi', cx: 1240, cy: 335, rx: 265, ry: 135 }],
-    // Scattered obstacles in the field to clear with the kuokka — placed above the walk
-    // line so Jussi passes in front of them (drawn before the character).
+    // Six patches spread across the spring field — untilled soil areas to hoe plus
+    // obstacles to clear. Drawn before the character so Jussi walks in front.
     fieldPatches: [
-      { kind: 'boulder', cx: 470, cy: 905, width: 180, height: 128 },
-      { kind: 'stump', cx: 830, cy: 875, width: 150, height: 106 },
-      { kind: 'weeds', cx: 1140, cy: 920, width: 165, height: 117 },
-      { kind: 'cluster', cx: 1520, cy: 895, width: 158, height: 112 },
+      { kind: 'untilled', cx: 310,  cy: 900, width: 190, height: 135 },
+      { kind: 'boulder',  cx: 570,  cy: 885, width: 180, height: 128 },
+      { kind: 'untilled', cx: 830,  cy: 910, width: 190, height: 135 },
+      { kind: 'stump',    cx: 1090, cy: 880, width: 150, height: 106 },
+      { kind: 'untilled', cx: 1350, cy: 900, width: 190, height: 135 },
+      { kind: 'cluster',  cx: 1610, cy: 895, width: 158, height: 112 },
     ],
   },
   metsalaidun: {
@@ -278,7 +295,7 @@ function loadImage(src: string): HTMLImageElement {
   return img;
 }
 
-const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];
+const SEASONS: Season[] = ['spring', 'summer', 'harvest', 'autumn', 'winter'];
 
 function sceneBgUrl(scene: SceneDef, season: Season): string {
   return scene.seasonal?.[season] ?? scene.bgUrl;
@@ -381,6 +398,11 @@ export function createSceneManager(): SceneManager {
     const bySeason = {} as Record<Season, HTMLImageElement>;
     for (const season of SEASONS) bySeason[season] = loadImage(sceneBgUrl(scene, season));
     bgImages[id] = bySeason;
+  }
+  const allClearedImages = new Map<SceneId, HTMLImageElement>();
+  for (const id of sceneIds) {
+    const scene = SCENES[id];
+    if (scene.bgUrlAllCleared) allClearedImages.set(id, loadImage(scene.bgUrlAllCleared));
   }
   const characterImages = new Map<string, HTMLImageElement>();
   for (const c of CHARACTERS) characterImages.set(c.id, loadImage(c.spriteUrl));
@@ -567,7 +589,11 @@ export function createSceneManager(): SceneManager {
     ctx.scale(scale, scale);
 
     const scene = SCENES[sceneId];
-    const bg = bgImages[sceneId][currentSeason];
+    const patches = scene.fieldPatches ?? [];
+    const allPatchesCleared =
+      patches.length > 0 && patches.every((_, i) => clearedPatches.has(patchKey(sceneId, i)));
+    const clearedBg = allPatchesCleared ? allClearedImages.get(sceneId) : undefined;
+    const bg = clearedBg ?? bgImages[sceneId][currentSeason];
     if (bg.complete && bg.naturalWidth) {
       ctx.drawImage(bg, 0, 0, SCENE_W, SCENE_H);
     }
@@ -641,8 +667,11 @@ export function createSceneManager(): SceneManager {
     mouse: { x: number; y: number }
   ): boolean {
     if (!fieldPatchSheet.complete || !fieldPatchSheet.naturalWidth) return false;
-    let hovering = false;
     const patches = scene.fieldPatches ?? [];
+    // Once every patch is cleared the whole-field background takes over — individual
+    // patch overlays are redundant and hidden so the full tilled scene shows cleanly.
+    if (scene.bgUrlAllCleared && patches.every((_, i) => clearedPatches.has(patchKey(sceneId, i)))) return false;
+    let hovering = false;
     for (let i = 0; i < patches.length; i++) {
       const p = patches[i];
       const cleared = clearedPatches.has(patchKey(sceneId, i));

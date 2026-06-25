@@ -1,8 +1,8 @@
 // The player can be one of these — picked via the character dropdown in the UI.
 // Jussi was the only one with art at first; this shape exists so a second character
 // (Miina) is just another entry, not a rework of scenes.ts.
-import jussiUrl from '../assets/jussi-sprite-sheet.png';
-import miinaUrl from '../assets/miina-sprite-sheet.svg';
+import jussiUrl from '../assets/characters/jussi-sprite-sheet.png';
+import miinaUrl from '../assets/characters/miina-sprite-sheet.svg';
 
 export interface Character {
   id: string;

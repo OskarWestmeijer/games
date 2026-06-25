@@ -1,7 +1,7 @@
 // The year's chapters — see "Chapters" in CLAUDE.md. Not yet wired to gameplay/days;
 // for now a chapter only picks which seasonal scene art is shown (see scenes.ts'
 // `seasonal` lookup) and shows its own description in the UI.
-export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+export type Season = 'spring' | 'summer' | 'harvest' | 'autumn' | 'winter';
 
 // The exact in-world copy for a chapter's pitch-black intro card (see intro.ts) — a
 // separate, Finnish-language sibling to the flat fields below, which stay English for
@@ -10,8 +10,8 @@ export interface ChapterCard {
   roman: string; // 'I'..'V' — shown as "Luku {roman}"
   titleFi: string; // Finnish chapter title, e.g. 'Kevätkylvö'
   seasonLabel: string; // Finnish season label shown on the card — more specific than
-  // `season` below (e.g. chapter 2's 'Keskikesä' / chapter 3's 'Loppukesä' both fall
-  // under `season: 'summer'`), so it can't just be derived from that enum.
+  // `season` below (e.g. chapter 2's 'Keskikesä' is 'summer', chapter 3's 'Loppukesä'
+  // is 'harvest'), so it can't just be derived from that enum.
   blurb: string;
 }
 
@@ -58,7 +58,7 @@ export const CHAPTERS: Chapter[] = [
   {
     id: 3,
     title: 'Harvest',
-    season: 'autumn',
+    season: 'harvest',
     months: 'Elokuu (August)',
     description:
       "The year's outcome. Crops are harvested and brought in from the fields — the single most important period of the farming year.",
