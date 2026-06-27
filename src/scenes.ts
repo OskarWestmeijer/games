@@ -22,8 +22,10 @@ import metsalaidunSpringUrl from '../assets/metsalaidun/metsalaidun-scene-spring
 import metsalaidunSummerUrl from '../assets/metsalaidun/metsalaidun-scene-summer.svg';
 import metsalaidunWinterUrl from '../assets/metsalaidun/metsalaidun-scene-winter.svg';
 import aittaInteriorUrl from '../assets/aitta/aitta-interior-scene.svg';
+import navettaInteriorUrl from '../assets/navetta/navetta-interior-scene.svg';
 import kuokkaUrl from '../assets/props/kuokka.svg';
 import kylvoLakanaUrl from '../assets/kylvo-lakana-spritesheet.svg';
+import cowSpriteUrl from '../assets/cow-sprite-sheet.svg';
 
 // Tools whose equip visual is a sprite-sheet overlay drawn on top of Jussi in sync with
 // his walk frames, rather than a static image held at shoulder/hand position.
@@ -91,7 +93,7 @@ const NEED_KUOKKA_SPEECH = 'Tarvitsen kuokan aitasta.';
 const NEED_SIEMENET_SPEECH = 'Tarvitsen siemenet.';
 const SPEECH_DURATION = 3.4; // seconds the bubble stays up, including its fade-out
 
-export type SceneId = 'pihapiiri' | 'pelto' | 'metsalaidun' | 'aittaInterior';
+export type SceneId = 'pihapiiri' | 'pelto' | 'metsalaidun' | 'aittaInterior' | 'navettaInterior';
 
 // The arrow a marker's chevron points: 'left'/'right' for edge exits (which way you walk
 // off the scene), 'up'/'down' for portals (in/out of a doorway), 'none' for a plain label
@@ -185,15 +187,16 @@ const SCENES: Record<SceneId, SceneDef> = {
     walkMaxX: 1740,
     exitRight: { to: 'pelto', arriveAt: 'min' },
     buildings: [
-      // No Aitta hotspot here — its doorway portal below covers naming + entry instead.
+      // No Aitta or Navetta hotspot — their doorway portals below cover naming + entry.
       { label: 'Tupa', cx: 995, cy: 520, rx: 320, ry: 185 },
-      { label: 'Navetta', cx: 1525, cy: 565, rx: 230, ry: 150 },
     ],
     portals: [
       // The gap between aitta and tupa — a path out into the forest pasture beyond.
       { x: 560, to: 'metsalaidun', arriveAt: 950, label: 'Metsälaidun', arrow: 'up' },
       // The aitta's own doorway, straight ahead into its interior.
       { x: 305, to: 'aittaInterior', arriveAt: 960, label: 'Aitta', arrow: 'up' },
+      // The navetta's doorway.
+      { x: 1525, to: 'navettaInterior', arriveAt: 960, label: 'Navetta', arrow: 'up' },
     ],
   },
   pelto: {
@@ -256,6 +259,16 @@ const SCENES: Record<SceneId, SceneDef> = {
       { imgUrl: kylvoLakanaUrl, label: 'Kylvölakana', cx: 170, groundY: 890, width: 210, height: 225, src: { x: 40, y: 87, w: 88, h: 97 }, equip: kylvoLakanaUrl },
       { cx: 170, groundY: 780, width: 280, height: 140, unequip: kylvoLakanaUrl },
     ],
+  },
+  navettaInterior: {
+    label: 'Navetta',
+    bgUrl: navettaInteriorUrl,
+    // groundY at the stall floor — used for the cow's feet position.
+    groundY: 750,
+    walkMinX: 100,
+    walkMaxX: 1820,
+    noPlayerSprite: true,
+    portals: [{ x: 960, to: 'pihapiiri', arriveAt: 1525, label: 'Pihapiiri', arrow: 'down' }],
   },
 };
 
@@ -421,6 +434,7 @@ export function createSceneManager(): SceneManager {
   }
   const characterImages = new Map<string, HTMLImageElement>();
   for (const c of CHARACTERS) characterImages.set(c.id, loadImage(c.spriteUrl));
+  const cowImage = loadImage(cowSpriteUrl);
   const propImages = new Map<string, HTMLImageElement>();
   for (const id of sceneIds) {
     for (const prop of SCENES[id].props ?? []) {
@@ -468,6 +482,32 @@ export function createSceneManager(): SceneManager {
   // render(), and on a scene change so it can't linger into the next stage.
   let speechText: string | null = null;
   let speechStart = 0; // value of `time` when it appeared
+
+  // Lehmä (cow) NPC — wanders the metsälaidun, grazes and idles between walks.
+  const COW_CELL_W = 180;
+  const COW_CELL_H = 280;
+  const COW_H = 330; // display height in scene space — larger than Jussi's 235 feels right for a cow
+  const COW_W = COW_H * (COW_CELL_W / COW_CELL_H);
+  const COW_FRAME_GRAZE = 0.38;  // eating — languid
+  const COW_FRAME_STAND = 0.50;  // standing idle — very slow subtle sway
+  const COW_FRAME_WALK  = 0.18;  // walking — moderate stride
+  const COW_WALK_SPEED = 55; // scene px/s
+  const COW_MIN_X = 350;
+  const COW_MAX_X = 1550;
+
+  type CowPhase = 'grazing' | 'standing' | 'walking';
+  let cowX = 600;
+  let cowFacingRight = false;
+  let cowPhase: CowPhase = 'grazing';
+  let cowAnimTime = 0;
+  let cowPhaseTimer = 0;
+  let cowPhaseDuration = 7 + Math.random() * 6; // seconds in current phase
+  let cowTargetX = 950;
+  // Navetta cow — simpler two-state idle: standing or lying.
+  type CowNavettaPhase = 'standing' | 'lying';
+  let cowNavettaPhase: CowNavettaPhase = 'standing';
+  let cowNavettaTimer = 0;
+  let cowNavettaDuration = 8 + Math.random() * 10;
 
   // Tracked in CSS pixels (client coords); the canvas fills the viewport at (0,0), so
   // these map directly onto the cssW/cssH space render() is called with.
@@ -573,6 +613,7 @@ export function createSceneManager(): SceneManager {
 
   function update(input: Input, dt: number): void {
     time += dt;
+    updateCow(dt);
 
     const scene = SCENES[sceneId];
     const manualDx = axis(input).x;
@@ -708,6 +749,7 @@ export function createSceneManager(): SceneManager {
     }
     ctx.canvas.style.cursor = hovering ? 'pointer' : '';
 
+    drawCow(ctx, scene);
     drawMiinaNpc(ctx, scene);
     drawCharacter(ctx, scene);
 
@@ -962,6 +1004,93 @@ export function createSceneManager(): SceneManager {
     ctx.translate(atX, scene.groundY);
     ctx.drawImage(img, sx, sy, cellW, cellH, -figureW / 2, -figureH, figureW, figureH);
     ctx.restore();
+  }
+
+  function updateCow(dt: number): void {
+    cowAnimTime += dt;
+    cowPhaseTimer += dt;
+    cowNavettaTimer += dt;
+    if (cowNavettaTimer >= cowNavettaDuration) {
+      cowNavettaPhase = cowNavettaPhase === 'standing' ? 'lying' : 'standing';
+      cowNavettaTimer = 0;
+      cowNavettaDuration = cowNavettaPhase === 'standing' ? 8 + Math.random() * 10 : 15 + Math.random() * 20;
+    }
+    if (cowPhase === 'walking') {
+      const dir = cowTargetX > cowX ? 1 : -1;
+      cowFacingRight = dir > 0;
+      cowX += dir * COW_WALK_SPEED * dt;
+      const arrived = dir > 0 ? cowX >= cowTargetX : cowX <= cowTargetX;
+      if (arrived || cowPhaseTimer >= cowPhaseDuration) {
+        cowX = clamp(arrived ? cowTargetX : cowX, COW_MIN_X, COW_MAX_X);
+        // After walking, alternate between grazing and standing still.
+        cowPhase = Math.random() < 0.6 ? 'grazing' : 'standing';
+        cowPhaseTimer = 0;
+        cowAnimTime = 0;
+        cowPhaseDuration = cowPhase === 'grazing' ? 5 + Math.random() * 8 : 3 + Math.random() * 6;
+      }
+    } else {
+      // grazing or standing — both are stationary; after the duration, either switch
+      // to the other stationary state or pick a new walk destination.
+      if (cowPhaseTimer >= cowPhaseDuration) {
+        const roll = Math.random();
+        if (roll < 0.4) {
+          // Switch to the other idle pose.
+          cowPhase = cowPhase === 'grazing' ? 'standing' : 'grazing';
+          cowPhaseDuration = cowPhase === 'grazing' ? 5 + Math.random() * 8 : 3 + Math.random() * 6;
+        } else {
+          // Walk to a new spot.
+          cowTargetX = COW_MIN_X + Math.random() * (COW_MAX_X - COW_MIN_X);
+          cowFacingRight = cowTargetX > cowX;
+          cowPhase = 'walking';
+          cowPhaseDuration = Math.abs(cowTargetX - cowX) / COW_WALK_SPEED + 2;
+        }
+        cowPhaseTimer = 0;
+        cowAnimTime = 0;
+      }
+    }
+  }
+
+  function drawCowSprite(
+    ctx: CanvasRenderingContext2D,
+    atX: number, atY: number,
+    row: number, frame: number
+  ): void {
+    // Clip to the exact display rect so adjacent cells in the sheet can't bleed through.
+    ctx.save();
+    ctx.translate(atX, atY);
+    ctx.beginPath();
+    ctx.rect(-COW_W / 2, -COW_H, COW_W, COW_H);
+    ctx.clip();
+    ctx.drawImage(cowImage, frame * COW_CELL_W, row * COW_CELL_H, COW_CELL_W, COW_CELL_H, -COW_W / 2, -COW_H, COW_W, COW_H);
+    ctx.restore();
+  }
+
+  function drawCow(ctx: CanvasRenderingContext2D, scene: SceneDef): void {
+    if (!cowImage.complete || !cowImage.naturalWidth) return;
+    const indoors = currentChapterId === 1 || currentChapterId === 5;
+
+    if (sceneId === 'navettaInterior' && indoors) {
+      // Kevät and winter: standing (row 1) or lying (row 3), no grazing/walking.
+      const row = cowNavettaPhase === 'lying' ? 3 : 1;
+      const frame = Math.floor(cowAnimTime / COW_FRAME_STAND) % 4;
+      drawCowSprite(ctx, 325, scene.groundY, row, frame);
+      return;
+    }
+
+    if (sceneId === 'metsalaidun' && !indoors) {
+      // Summer / harvest / autumn: outside grazing and wandering.
+      let row: number;
+      let frameTime: number;
+      if (cowPhase === 'grazing') {
+        row = 2;
+        frameTime = COW_FRAME_GRAZE;
+      } else {
+        row = cowFacingRight ? 1 : 0;
+        frameTime = cowPhase === 'walking' ? COW_FRAME_WALK : COW_FRAME_STAND;
+      }
+      const frame = Math.floor(cowAnimTime / frameTime) % 4;
+      drawCowSprite(ctx, cowX, scene.groundY, row, frame);
+    }
   }
 
   // Miina as ambient world dressing, sitting wherever MIINA_BY_CHAPTER puts her for the
