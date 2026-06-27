@@ -64,6 +64,77 @@ body {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
+/* Task list — a parchment note, top-right. In-world UI, like the location HUD. */
+#task-panel {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  background: linear-gradient(160deg, #f7ead5 0%, #ede0c2 100%);
+  padding: 11px 16px 15px;
+  box-shadow:
+    2px 3px 10px rgba(0, 0, 0, 0.32),
+    inset 0 0 0 1px rgba(160, 120, 60, 0.18);
+  transform: rotate(-1.2deg);
+  min-width: 196px;
+  font-family: 'EB Garamond', Georgia, serif;
+  color: #2b1a0a;
+  pointer-events: none;
+  user-select: none;
+  z-index: 10;
+}
+
+#task-title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6b4218;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(107, 66, 24, 0.25);
+}
+
+#task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+#task-list li {
+  font-size: 15px;
+  line-height: 1.45;
+  padding-left: 16px;
+  position: relative;
+  transition: color 0.5s ease;
+}
+
+#task-list li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  font-size: 12px;
+  color: rgba(107, 66, 24, 0.45);
+  top: 2px;
+}
+
+#task-list li.task-done {
+  text-decoration: line-through;
+  text-decoration-color: rgba(43, 26, 10, 0.45);
+  color: rgba(43, 26, 10, 0.38);
+}
+
+#task-list li.task-hidden {
+  display: none;
+}
+
+#task-panel[hidden] {
+  display: none;
+}
+
 /* Dev-only — deliberately plain/flat, not the wood/parchment in-world look, so it
    never reads as part of the game. Collapsed by default behind #admin-toggle. */
 #admin-toggle {

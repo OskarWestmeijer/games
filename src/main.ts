@@ -1,6 +1,6 @@
 import './style.css';
 import { createInput } from './input';
-import { createSceneManager, listSceneIds, type SceneId } from './scenes';
+import { createSceneManager, listSceneIds, type SceneId, type TaskState } from './scenes';
 import { startAudio, toggleMute } from './audio';
 import { CHAPTERS } from './chapters';
 import { CHARACTERS } from './characters';
@@ -35,6 +35,7 @@ const characterSelect = document.getElementById('character-select') as HTMLSelec
 const chapterTitleEl = document.getElementById('chapter-info-title')!;
 const chapterMonthsEl = document.getElementById('chapter-info-months')!;
 const chapterDescEl = document.getElementById('chapter-info-desc')!;
+const taskPanel = document.getElementById('task-panel') as HTMLElement;
 
 adminToggle.addEventListener('click', () => {
   uiPanel.hidden = !uiPanel.hidden;
@@ -68,6 +69,7 @@ function applyChapter(id: number): void {
   chapterTitleEl.textContent = chapter.title;
   chapterMonthsEl.textContent = chapter.months;
   chapterDescEl.textContent = chapter.description;
+  taskPanel.hidden = chapter.id !== 1;
 }
 
 chapterSelect.addEventListener('change', () => applyChapter(Number(chapterSelect.value)));
@@ -81,6 +83,22 @@ sceneSelect.value = 'pihapiiri';
 // in-world UI, kept in sync with whichever scene Jussi is currently standing in.
 const locationText = document.getElementById('location-text')!;
 let lastLocationLabel = '';
+
+// Task panel — parchment note, top-right; updated whenever task state changes.
+const taskItems = Array.from(document.querySelectorAll('#task-list li')) as HTMLElement[];
+let prevTaskState: TaskState = { fetchedKuokka: false, tilledField: false, fetchedLakana: false, sownField: false };
+function applyTaskState(ts: TaskState): void {
+  const done = [ts.fetchedKuokka, ts.tilledField, ts.fetchedLakana, ts.sownField];
+  // Show completed tasks + the first uncompleted one; hide the rest.
+  const firstIncomplete = done.findIndex(d => !d);
+  const visibleUpTo = firstIncomplete === -1 ? done.length - 1 : firstIncomplete;
+  done.forEach((isDone, i) => {
+    taskItems[i]?.classList.toggle('task-done', isDone);
+    taskItems[i]?.classList.toggle('task-hidden', i > visibleUpTo);
+  });
+}
+
+applyTaskState(prevTaskState);
 
 // Audio starts on the first user gesture (browser autoplay policy); M toggles it.
 const hint = document.getElementById('hint');
@@ -112,6 +130,17 @@ function frame(now: number): void {
   if (label !== lastLocationLabel) {
     lastLocationLabel = label;
     locationText.textContent = label;
+  }
+
+  const ts = scene.getTaskState();
+  if (
+    ts.fetchedKuokka !== prevTaskState.fetchedKuokka ||
+    ts.tilledField !== prevTaskState.tilledField ||
+    ts.fetchedLakana !== prevTaskState.fetchedLakana ||
+    ts.sownField !== prevTaskState.sownField
+  ) {
+    applyTaskState(ts);
+    prevTaskState = ts;
   }
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

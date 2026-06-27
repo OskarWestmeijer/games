@@ -123,4 +123,20 @@
 
   
   <rect width="1920" height="1080" fill="url(#daylight)"></rect>
+
+  <!-- Naula: iron hook on the left wall, below the pegs, for the kylvölakana -->
+  <ellipse cx="138" cy="665" rx="10" ry="6" fill="#2e2828" stroke="#181010" stroke-width="1.5"/>
+  <rect x="138" y="659" width="38" height="12" rx="5" fill="#3e3838" stroke="#181010" stroke-width="1.5"/>
+  <ellipse cx="176" cy="665" rx="7" ry="5" fill="#545050" stroke="#181010" stroke-width="1.5"/>
+
+  <!-- Teline: two wall pegs on the left wall for hanging tools -->
+  <!-- Each peg is a cylinder sticking out from the log wall surface toward the viewer -->
+  <!-- Upper peg — kuokka hangs here when not carried -->
+  <ellipse cx="252" cy="499" rx="11" ry="7" fill="#2a1708" stroke="#160d05" stroke-width="1.5"/>
+  <rect x="252" y="492" width="66" height="14" rx="6" fill="#5a3c1a" stroke="#2a1508" stroke-width="1.5"/>
+  <ellipse cx="318" cy="499" rx="9" ry="6" fill="#7a5228" stroke="#2a1508" stroke-width="1.5"/>
+  <!-- Lower peg — empty -->
+  <ellipse cx="252" cy="547" rx="11" ry="7" fill="#2a1708" stroke="#160d05" stroke-width="1.5"/>
+  <rect x="252" y="540" width="66" height="14" rx="6" fill="#5a3c1a" stroke="#2a1508" stroke-width="1.5"/>
+  <ellipse cx="318" cy="547" rx="9" ry="6" fill="#7a5228" stroke="#2a1508" stroke-width="1.5"/>
 </svg>

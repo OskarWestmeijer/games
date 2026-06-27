@@ -23,6 +23,20 @@ import metsalaidunSummerUrl from '../assets/metsalaidun/metsalaidun-scene-summer
 import metsalaidunWinterUrl from '../assets/metsalaidun/metsalaidun-scene-winter.svg';
 import aittaInteriorUrl from '../assets/aitta/aitta-interior-scene.svg';
 import kuokkaUrl from '../assets/props/kuokka.svg';
+import kylvoLakanaUrl from '../assets/kylvo-lakana-spritesheet.svg';
+
+// Tools whose equip visual is a sprite-sheet overlay drawn on top of Jussi in sync with
+// his walk frames, rather than a static image held at shoulder/hand position.
+// Sheet layout: rows 0-1 right-facing (idle then walk), rows 2-3 pre-mirrored left-facing.
+interface OverlayDef {
+  cellW: number;
+  cellH: number;
+  frameCount: number;
+  rows: { walkRight: number; walkLeft: number; front: number };
+}
+const TOOL_OVERLAYS: Readonly<Record<string, OverlayDef>> = {
+  [kylvoLakanaUrl]: { cellW: 180, cellH: 280, frameCount: 4, rows: { walkRight: 1, walkLeft: 3, front: 0 } },
+};
 
 // Every scene shares this illustrated canvas size (see the scene SVGs' viewBox).
 const SCENE_W = 1920;
@@ -74,6 +88,7 @@ interface FieldStrip {
 // What Jussi says (Finnish) when asked to clear a patch bare-handed — also the hint that
 // tells the player where the tool is.
 const NEED_KUOKKA_SPEECH = 'Tarvitsen kuokan aitasta.';
+const NEED_SIEMENET_SPEECH = 'Tarvitsen siemenet.';
 const SPEECH_DURATION = 3.4; // seconds the bubble stays up, including its fade-out
 
 export type SceneId = 'pihapiiri' | 'pelto' | 'metsalaidun' | 'aittaInterior';
@@ -110,19 +125,24 @@ interface BuildingHotspot {
 }
 
 // A small standalone prop image (e.g. a tool left in the field), drawn on top of the
-// background and anchored bottom-centre at (cx, groundY) like a character. Hovering it
-// just swaps in the pointer/hand cursor — no badge, no tooltip, unlike buildings.
+// background and anchored bottom-centre at (cx, groundY) like a character. Hovering shows
+// a name tooltip if `label` is set (same drawTooltip as buildings/exits, dir 'none').
 interface SceneProp {
-  imgUrl: string;
+  imgUrl?: string; // absent for invisible drop zones (e.g. a rack hit-area drawn into the scene SVG)
+  label?: string;  // shown on hover; omit for drop zones and unlabelled props
   cx: number;
   groundY: number;
   width: number;
   height: number;
   rotationDeg?: number; // tilts around the (cx, groundY) anchor, e.g. leaning against a wall
+  src?: { x: number; y: number; w: number; h: number }; // source-rect clip for sprite sheets — shows one cell
   // If set, clicking the prop equips this tool URL onto the player (carried over the
   // shoulder, see drawCarriedTool) and the prop vanishes from the scene — it's now in
   // hand, not on the floor. Same URL convention as imgUrl; usually equip === imgUrl.
   equip?: string;
+  // If set, clicking here while that tool URL is equipped returns it to the scene
+  // (unequips). Used for diegetic drop spots, e.g. a rack drawn into the scene SVG.
+  unequip?: string;
 }
 
 interface SceneDef {
@@ -144,6 +164,12 @@ interface SceneDef {
   portals?: ScenePortal[];
   props?: SceneProp[];
   fieldStrips?: FieldStrip[];
+  // Bounds for seed rendering inside fieldStrips — tighter than the strip x-bounds because
+  // the foreground trees overlap the outermost columns and the soil art starts below fieldY.
+  // Default: walkMinX/walkMaxX for x, fieldY for y.
+  fieldSeedMinX?: number;
+  fieldSeedMaxX?: number;
+  fieldSeedMinY?: number;
   // A first-person look into the space rather than a side-on stage with a visible
   // player figure — e.g. stepping inside a small building. No character sprite is
   // drawn at all; movement/auto-walk/portals all still work exactly as normal.
@@ -183,7 +209,10 @@ const SCENES: Record<SceneId, SceneDef> = {
     // Spring tilling: six strips across the full scene width. Each click (with kuokka)
     // blits that strip from the tilled background onto the rough spring base.
     tilledBgUrl: peltoSpringTilledUrl,
-    fieldY: 490, // top of the soil area — strips are drawn and clickable from here down
+    fieldY: 490, // click/tilling threshold — soil art starts lower; see fieldSeedMinY
+    fieldSeedMinX: 250,  // left foreground spruce extends to ~x=200 into the soil area
+    fieldSeedMaxX: 1700, // right foreground spruce extends from ~x=1748
+    fieldSeedMinY: 640,  // brown soil path starts at y=622; give a small margin
     fieldStrips: [
       { x1:    0, x2:  320 },
       { x1:  320, x2:  640 },
@@ -218,10 +247,14 @@ const SCENES: Record<SceneId, SceneDef> = {
     noPlayerSprite: true,
     // Back out through the same doorway.
     portals: [{ x: 960, to: 'pihapiiri', arriveAt: 305, label: 'Pihapiiri', arrow: 'down' }],
-    // Leaning against the right wall, base on the floor, top tilted into the wall.
-    // Clicking it equips the kuokka — it then rides on the player's shoulder outside.
+    // Tools on the left wall. Kuokka hangs from the upper peg (teline); kylvölakana from
+    // a separate hook (naula) lower on the same wall, clearly below and left of the pegs.
+    // Each has an invisible drop zone so the player can return it to its spot.
     props: [
-      { imgUrl: kuokkaUrl, cx: 1450, groundY: 980, width: 46, height: 170, rotationDeg: 15, equip: kuokkaUrl },
+      { imgUrl: kuokkaUrl, label: 'Kuokka', cx: 283, groundY: 665, width: 46, height: 170, equip: kuokkaUrl },
+      { cx: 283, groundY: 525, width: 220, height: 100, unequip: kuokkaUrl },
+      { imgUrl: kylvoLakanaUrl, label: 'Kylvölakana', cx: 170, groundY: 890, width: 210, height: 225, src: { x: 40, y: 87, w: 88, h: 97 }, equip: kylvoLakanaUrl },
+      { cx: 170, groundY: 780, width: 280, height: 140, unequip: kylvoLakanaUrl },
     ],
   },
 };
@@ -351,6 +384,13 @@ function roundRect(
   ctx.closePath();
 }
 
+export interface TaskState {
+  fetchedKuokka: boolean;
+  tilledField: boolean;
+  fetchedLakana: boolean;
+  sownField: boolean;
+}
+
 export interface SceneManager {
   update(input: Input, dt: number): void;
   render(ctx: CanvasRenderingContext2D, cssW: number, cssH: number): void;
@@ -359,6 +399,7 @@ export interface SceneManager {
   setCharacter(id: string): void;
   teleportTo(id: SceneId): void;
   getLocationLabel(): string;
+  getTaskState(): TaskState;
 }
 
 export function createSceneManager(): SceneManager {
@@ -382,7 +423,9 @@ export function createSceneManager(): SceneManager {
   for (const c of CHARACTERS) characterImages.set(c.id, loadImage(c.spriteUrl));
   const propImages = new Map<string, HTMLImageElement>();
   for (const id of sceneIds) {
-    for (const prop of SCENES[id].props ?? []) propImages.set(prop.imgUrl, loadImage(prop.imgUrl));
+    for (const prop of SCENES[id].props ?? []) {
+      if (prop.imgUrl) propImages.set(prop.imgUrl, loadImage(prop.imgUrl));
+    }
   }
 
   let sceneId: SceneId = 'pihapiiri';
@@ -414,7 +457,12 @@ export function createSceneManager(): SceneManager {
 
   // Field strips already hoed clear, keyed `${sceneId}:${index}`; persists across scenes.
   const clearedStrips = new Set<string>();
+  // Field strips that have been sown (kylvölakana used on a cleared strip).
+  const sownStrips = new Set<string>();
   const stripKey = (id: SceneId, i: number): string => `${id}:${i}`;
+  // Task progress — set once when each tool is first picked up.
+  let kuokkaEverEquipped = false;
+  let lakanaEverEquipped = false;
 
   // A short cartoon speech line above Jussi (e.g. "I need the kuokka"). Cleared by time in
   // render(), and on a scene change so it can't linger into the next stage.
@@ -452,6 +500,17 @@ export function createSceneManager(): SceneManager {
         return;
       }
     }
+    // A click on a rack/drop zone returns the matching carried tool to the scene.
+    for (const prop of scene.props ?? []) {
+      if (!prop.unequip || prop.unequip !== equippedToolUrl) continue;
+      if (
+        mx >= prop.cx - prop.width / 2 && mx <= prop.cx + prop.width / 2 &&
+        my >= prop.groundY - prop.height && my <= prop.groundY
+      ) {
+        equippedToolUrl = null;
+        return;
+      }
+    }
     // A click on an equippable prop picks it up (it then rides on the player — see
     // drawCarriedTool) rather than walking. Same unrotated bounding box as the hover
     // hit-test in render(); skipped once equipped, since the prop's then hidden.
@@ -462,25 +521,40 @@ export function createSceneManager(): SceneManager {
         my >= prop.groundY - prop.height && my <= prop.groundY
       ) {
         equippedToolUrl = prop.equip;
+        if (prop.equip === kuokkaUrl) kuokkaEverEquipped = true;
+        if (prop.equip === kylvoLakanaUrl) lakanaEverEquipped = true;
         return;
       }
     }
-    // A click inside an un-cleared field strip hoes it clear if the kuokka is equipped;
-    // otherwise Jussi says he needs it. Already-cleared strips are skipped (fall through
-    // to the ground-walk handler so the player can still walk by clicking a tilled strip).
+    // Clicking a field strip in spring:
+    //   uncleared → hoe it (kuokka) or say need kuokka
+    //   cleared but unsown → sow it (kylvölakana) or say need siemenet
+    //   sown → fall through to walk so the player can still move around the field
     const strips = scene.fieldStrips ?? [];
-    if (strips.length > 0 && scene.fieldY != null && my >= scene.fieldY) {
+    if (currentSeason === 'spring' && strips.length > 0 && scene.fieldY != null && my >= scene.fieldY) {
       for (let i = 0; i < strips.length; i++) {
         const s = strips[i];
         if (mx < s.x1 || mx >= s.x2) continue;
-        if (clearedStrips.has(stripKey(sceneId, i))) continue;
-        if (equippedToolUrl === kuokkaUrl) {
-          clearedStrips.add(stripKey(sceneId, i));
-        } else {
-          speechText = NEED_KUOKKA_SPEECH;
-          speechStart = time;
+        const key = stripKey(sceneId, i);
+        if (!clearedStrips.has(key)) {
+          if (equippedToolUrl === kuokkaUrl) {
+            clearedStrips.add(key);
+          } else {
+            speechText = NEED_KUOKKA_SPEECH;
+            speechStart = time;
+          }
+          return;
         }
-        return;
+        if (!sownStrips.has(key)) {
+          if (equippedToolUrl === kylvoLakanaUrl) {
+            sownStrips.add(key);
+          } else {
+            speechText = NEED_SIEMENET_SPEECH;
+            speechStart = time;
+          }
+          return;
+        }
+        // Already sown — fall through to ground-walk.
       }
     }
     // Otherwise clicking anywhere walks Jussi along the ground to that x.
@@ -562,10 +636,12 @@ export function createSceneManager(): SceneManager {
     const seasonBg = bgImages[sceneId][currentSeason];
     const tilledBg = tilledImages.get(sceneId);
     const strips = scene.fieldStrips ?? [];
+    // Tilling progress only applies in spring — in other seasons just show the seasonal bg.
+    const tillingActive = currentSeason === 'spring';
     // If any strips are cleared, use the tilled bg as the base — cleared strips then show
     // through it seamlessly with no per-strip compositing. Uncleared strips paint the
     // rough seasonal bg back on top in one compound clip (see drawFieldStrips).
-    const anyCleared = strips.length > 0 && strips.some((_, i) => clearedStrips.has(stripKey(sceneId, i)));
+    const anyCleared = tillingActive && strips.length > 0 && strips.some((_, i) => clearedStrips.has(stripKey(sceneId, i)));
     const baseBg = anyCleared && tilledBg?.complete && tilledBg.naturalWidth ? tilledBg : seasonBg;
     if (baseBg.complete && baseBg.naturalWidth) {
       ctx.drawImage(baseBg, 0, 0, SCENE_W, SCENE_H);
@@ -573,24 +649,43 @@ export function createSceneManager(): SceneManager {
 
     const mouse = sceneMouse(scale, offX, offY);
     let hovering = false;
-    hovering = drawFieldStrips(ctx, scene, mouse, seasonBg) || hovering;
+    hovering = tillingActive && drawFieldStrips(ctx, scene, mouse, seasonBg) || hovering;
+    if (tillingActive) hovering = drawSownSeeds(ctx, scene, mouse) || hovering;
     for (const prop of scene.props ?? []) {
-      if (isPropHidden(prop)) continue; // picked up — it's on the player now, not in the scene
-      const img = propImages.get(prop.imgUrl);
-      if (img && img.complete && img.naturalWidth) {
-        ctx.save();
-        ctx.translate(prop.cx, prop.groundY);
-        if (prop.rotationDeg) ctx.rotate((prop.rotationDeg * Math.PI) / 180);
-        ctx.drawImage(img, -prop.width / 2, -prop.height, prop.width, prop.height);
-        ctx.restore();
+      const hidden = isPropHidden(prop);
+      // Render the prop image when visible and an image exists (drop zones have no imgUrl).
+      if (!hidden && prop.imgUrl) {
+        const img = propImages.get(prop.imgUrl);
+        if (img && img.complete && img.naturalWidth) {
+          ctx.save();
+          ctx.translate(prop.cx, prop.groundY);
+          if (prop.rotationDeg) ctx.rotate((prop.rotationDeg * Math.PI) / 180);
+          if (prop.src) {
+            ctx.drawImage(img, prop.src.x, prop.src.y, prop.src.w, prop.src.h, -prop.width / 2, -prop.height, prop.width, prop.height);
+          } else {
+            ctx.drawImage(img, -prop.width / 2, -prop.height, prop.width, prop.height);
+          }
+          ctx.restore();
+        }
       }
-      // Hit-test ignores rotation — close enough for a modest lean, and keeps this simple.
-      const isHovered =
-        mouse.x >= prop.cx - prop.width / 2 &&
-        mouse.x <= prop.cx + prop.width / 2 &&
-        mouse.y >= prop.groundY - prop.height &&
-        mouse.y <= prop.groundY;
-      hovering = hovering || isHovered;
+      // Hover/pointer cursor:
+      // - equip prop: hoverable when not hidden (i.e. not already picked up)
+      // - unequip drop zone: hoverable only when the matching tool is currently equipped
+      const isInteractive = prop.unequip
+        ? prop.unequip === equippedToolUrl
+        : !hidden;
+      if (isInteractive) {
+        const isHit =
+          mouse.x >= prop.cx - prop.width / 2 &&
+          mouse.x <= prop.cx + prop.width / 2 &&
+          mouse.y >= prop.groundY - prop.height &&
+          mouse.y <= prop.groundY;
+        hovering = hovering || isHit;
+        if (isHit && prop.label) {
+          const tipY = prop.groundY - prop.height;
+          drawTooltip(ctx, prop.cx, tipY, prop.label, 'none', 0);
+        }
+      }
     }
     for (const { dir, markerX, exit } of edgeExits(scene)) {
       const my = scene.groundY - MARKER_Y_OFFSET;
@@ -673,6 +768,66 @@ export function createSceneManager(): SceneManager {
     return hovering;
   }
 
+  // Scatter grain seeds visually on each sown strip. Returns true if the mouse is over
+  // any cleared-but-unsown strip (so the cursor stays interactive before sowing too).
+  function drawSownSeeds(
+    ctx: CanvasRenderingContext2D,
+    scene: SceneDef,
+    mouse: { x: number; y: number }
+  ): boolean {
+    const strips = scene.fieldStrips;
+    if (!strips || !scene.fieldY) return false;
+    const fieldY = scene.fieldY;
+    const fieldH = SCENE_H - fieldY;
+    let hovering = false;
+
+    for (let i = 0; i < strips.length; i++) {
+      const s = strips[i];
+      const key = stripKey(sceneId, i);
+      if (!clearedStrips.has(key)) continue;
+
+      if (!sownStrips.has(key)) {
+        // Cleared but unsown — still interactive; nothing to draw yet.
+        if (mouse.x >= s.x1 && mouse.x < s.x2 && mouse.y >= fieldY) hovering = true;
+        continue;
+      }
+
+      // Clamp seed placement to the visible soil area — fieldSeedMin/Max bounds are set
+      // per-scene to avoid foreground trees (which overlap the outermost strip columns)
+      // and the green transition zone above the actual brown soil art.
+      const seedX1 = Math.max(s.x1, scene.fieldSeedMinX ?? scene.walkMinX);
+      const seedX2 = Math.min(s.x2, scene.fieldSeedMaxX ?? scene.walkMaxX);
+      if (seedX2 <= seedX1) continue;
+      const seedY0 = scene.fieldSeedMinY ?? fieldY;
+      const seedW = seedX2 - seedX1;
+      const seedH = SCENE_H - seedY0;
+      const count = Math.floor(seedW / 4); // ~1 seed per 4 scene-px of strip width
+      for (let j = 0; j < count; j++) {
+        const base = i * 10000 + j;
+        const sx = seedX1 + seededRand(base) * seedW;
+        const sy = seedY0 + seededRand(base + 1) * seedH;
+        const angle = seededRand(base + 2) * Math.PI;
+        const rx = 5 + seededRand(base + 3) * 4;
+        const ry = 2 + seededRand(base + 4) * 1.5;
+        const alpha = 0.55 + seededRand(base + 5) * 0.35;
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(angle);
+        ctx.fillStyle = `rgba(180, 138, 42, ${alpha})`;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    return hovering;
+  }
+
+  function seededRand(n: number): number {
+    const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
   function drawSpriteAt(
     ctx: CanvasRenderingContext2D,
     scene: SceneDef,
@@ -712,8 +867,13 @@ export function createSceneManager(): SceneManager {
     if (equippedToolUrl && currentCharacterId === 'jussi') {
       const img = loadImage(equippedToolUrl);
       if (img.complete && img.naturalWidth) {
-        if (moving) drawShoulderTool(ctx, scene, img, x, facingRight, animTime);
-        else drawRestingTool(ctx, scene, img, x, facingRight);
+        const overlayDef = TOOL_OVERLAYS[equippedToolUrl];
+        if (overlayDef) {
+          drawOverlayTool(ctx, scene, img, x, facingRight, animTime, overlayDef);
+        } else {
+          if (moving) drawShoulderTool(ctx, scene, img, x, facingRight, animTime);
+          else drawRestingTool(ctx, scene, img, x, facingRight);
+        }
       }
     }
   }
@@ -768,6 +928,39 @@ export function createSceneManager(): SceneManager {
     ctx.translate(handX, scene.groundY);
     ctx.rotate(-angle);
     ctx.drawImage(img, -REST_W / 2, -REST_H, REST_W, REST_H); // bottom-centre anchor, blade up
+    ctx.restore();
+  }
+
+  // Body-overlay tools (kylvölakana etc.) — drawn on top of Jussi in sync with his walk
+  // frames, covering him like a piece of clothing rather than being held at arm's length.
+  // The sheet's left-facing rows have the mirror baked in, so no ctx.scale flip is needed.
+  function drawOverlayTool(
+    ctx: CanvasRenderingContext2D,
+    scene: SceneDef,
+    img: HTMLImageElement,
+    atX: number,
+    facingRight: boolean,
+    anim: number,
+    def: OverlayDef
+  ): void {
+    const { cellW, cellH, frameCount, rows } = def;
+    let sx: number;
+    let sy: number;
+    if (moving) {
+      const frame = Math.floor(anim / FRAME_TIME) % frameCount;
+      sx = frame * cellW;
+      sy = (facingRight ? rows.walkRight : rows.walkLeft) * cellH;
+    } else {
+      sx = FRONT_FRAME * cellW;
+      sy = rows.front * cellH;
+    }
+    // Draw at exactly Jussi's figure dimensions so the overlay aligns with his body.
+    const jussi = CHARACTERS.find((c) => c.id === 'jussi') ?? CHARACTERS[0];
+    const figureH = FIGURE_H;
+    const figureW = figureH * (jussi.cellW / jussi.cellH);
+    ctx.save();
+    ctx.translate(atX, scene.groundY);
+    ctx.drawImage(img, sx, sy, cellW, cellH, -figureW / 2, -figureH, figureW, figureH);
     ctx.restore();
   }
 
@@ -918,5 +1111,15 @@ export function createSceneManager(): SceneManager {
     return SCENES[sceneId].label;
   }
 
-  return { update, render, setSeason, setChapter, setCharacter, teleportTo, getLocationLabel };
+  function getTaskState(): TaskState {
+    const numStrips = SCENES.pelto.fieldStrips?.length ?? 0;
+    return {
+      fetchedKuokka: kuokkaEverEquipped,
+      tilledField: numStrips > 0 && clearedStrips.size >= numStrips,
+      fetchedLakana: lakanaEverEquipped,
+      sownField: numStrips > 0 && sownStrips.size >= numStrips,
+    };
+  }
+
+  return { update, render, setSeason, setChapter, setCharacter, teleportTo, getLocationLabel, getTaskState };
 }
