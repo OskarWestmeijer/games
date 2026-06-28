@@ -488,9 +488,10 @@ export function createSceneManager(): SceneManager {
   const COW_CELL_H = 280;
   const COW_H = 330; // display height in scene space — larger than Jussi's 235 feels right for a cow
   const COW_W = COW_H * (COW_CELL_W / COW_CELL_H);
-  const COW_FRAME_GRAZE = 0.38;  // eating — languid
-  const COW_FRAME_STAND = 0.50;  // standing idle — very slow subtle sway
-  const COW_FRAME_WALK  = 0.18;  // walking — moderate stride
+  const COW_FRAME_GRAZE   = 0.38; // eating — languid
+  const COW_FRAME_STAND   = 0.50; // standing idle outdoors — slow subtle sway
+  const COW_FRAME_WALK    = 0.18; // walking — moderate stride
+  const COW_FRAME_NAVETTA = 1.4;  // stall idle — barely moving, calm
   const COW_WALK_SPEED = 55; // scene px/s
   const COW_MIN_X = 350;
   const COW_MAX_X = 1550;
@@ -1070,9 +1071,9 @@ export function createSceneManager(): SceneManager {
     const indoors = currentChapterId === 1 || currentChapterId === 5;
 
     if (sceneId === 'navettaInterior' && indoors) {
-      // Kevät and winter: standing (row 1) or lying (row 3), no grazing/walking.
-      const row = cowNavettaPhase === 'lying' ? 3 : 1;
-      const frame = Math.floor(cowAnimTime / COW_FRAME_STAND) % 4;
+      // Kevät and winter: idle standing (row 0) or lying (row 3), no grazing/walking.
+      const row = cowNavettaPhase === 'lying' ? 3 : 0;
+      const frame = Math.floor(cowAnimTime / COW_FRAME_NAVETTA) % 4;
       drawCowSprite(ctx, 325, scene.groundY, row, frame);
       return;
     }
