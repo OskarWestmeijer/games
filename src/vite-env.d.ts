@@ -1,8 +1,12 @@
 /// <reference types="vite/client" />
 
-// Generated at dev/build time by the audioManifest() plugin in vite.config.ts —
-// the actual audio files present in public/audio/{nature,music}/ (filenames only).
-declare module 'virtual:audio-manifest' {
-  export const nature: string[];
-  export const music: string[];
+declare module 'virtual:model-manifest' {
+  export interface ModelEntry {
+    url: string;
+    name: string;
+    source: string;
+    thumbnail: string | null;
+    sizeBytes: number;
+  }
+  export const models: ModelEntry[];
 }

@@ -3,77 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vuodenkierto: Vanha maatila</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,400&family=EB+Garamond:ital,wght@0,400;1,400&display=swap"
-      rel="stylesheet"
-    />
+    <title>3D Asset Viewer</title>
+    <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <canvas id="game"></canvas>
-    <div id="hint">A/D or arrow keys to walk · M for music</div>
-    <div id="location-panel"><span id="location-text"></span></div>
-    <div id="task-panel">
-      <div id="task-title">Kevätkylvö</div>
-      <ul id="task-list">
-        <li>Hae kuokka aitasta</li>
-        <li>Kuokka pelto</li>
-        <li>Hae kylvölakana aitasta</li>
-        <li>Kylvä pelto</li>
-      </ul>
-    </div>
-
-    <!-- Title + chapter-1 intro, pitch black, shown once at boot then dismissed for
-         good — see intro.ts. Sits above everything else until dismissed. -->
-    <div id="intro-overlay">
-      <div id="intro-title" class="intro-layer intro-shown">
-        <div class="intro-ornament">
-          <span class="intro-rule"></span>
-          <span class="intro-lozenge"></span>
-          <span class="intro-rule intro-rule-right"></span>
+    <div id="app">
+      <aside id="gallery">
+        <h1>Assets</h1>
+        <div id="mode-toggle">
+          <button type="button" id="mode-single" class="mode-btn active">Single</button>
+          <button type="button" id="mode-scene" class="mode-btn">All together</button>
         </div>
-        <div class="intro-title-text">Vuodenkierto</div>
-        <div class="intro-subtitle-row">
-          <span class="intro-rule intro-rule-wide"></span>
-          <span class="intro-subtitle-text">Vanha&nbsp;maatila</span>
-          <span class="intro-rule intro-rule-right intro-rule-wide"></span>
-        </div>
-        <div class="intro-prompt">Paina&nbsp;Enter&nbsp;·&nbsp;aloita</div>
-      </div>
-      <div id="intro-card" class="intro-layer">
-        <div id="intro-card-roman" class="intro-eyebrow"></div>
-        <div id="intro-card-title" class="intro-card-title"></div>
-        <div class="intro-season-row">
-          <span class="intro-rule"></span>
-          <span id="intro-card-season" class="intro-season-text"></span>
-          <span class="intro-rule intro-rule-right"></span>
-        </div>
-        <div id="intro-card-blurb" class="intro-blurb"></div>
-        <div class="intro-prompt">Paina&nbsp;Enter&nbsp;·&nbsp;jatka</div>
-      </div>
-    </div>
-    <button id="admin-toggle" type="button" title="Admin (dev only)">⚙</button>
-    <div id="ui-panel" hidden>
-      <div id="ui-panel-eyebrow">Admin · dev only</div>
-      <div class="ui-row">
-        <label for="scene-select">Scene</label>
-        <select id="scene-select"></select>
-      </div>
-      <div class="ui-row">
-        <label for="chapter-select">Chapter</label>
-        <select id="chapter-select"></select>
-      </div>
-      <div class="ui-row">
-        <label for="character-select">Character</label>
-        <select id="character-select"></select>
-      </div>
-      <div id="chapter-info">
-        <div id="chapter-info-title"></div>
-        <div id="chapter-info-months"></div>
-        <div id="chapter-info-desc"></div>
-      </div>
+        <ul id="gallery-list"></ul>
+        <p id="credits">
+          Models generated with
+          <a href="https://www.meshy.ai/" target="_blank" rel="noopener">Meshy</a>
+          and
+          <a href="https://www.tripo3d.ai/" target="_blank" rel="noopener">Tripo3D</a>.
+        </p>
+        <a id="homepage-link" href="https://oskar-westmeijer.com/" target="_blank" rel="noopener">
+          oskar-westmeijer.com ↗
+        </a>
+      </aside>
+      <main id="viewport-wrap">
+        <canvas id="viewport"></canvas>
+        <div id="model-name"></div>
+        <div id="empty-state" hidden>No .glb files found in ai-assets/.</div>
+      </main>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -1,151 +1,94 @@
+import { models } from 'virtual:model-manifest';
+import { createViewer } from './viewer';
 import './style.css';
-import { createInput } from './input';
-import { createSceneManager, listSceneIds, type SceneId, type TaskState } from './scenes';
-import { startAudio, toggleMute } from './audio';
-import { CHAPTERS } from './chapters';
-import { CHARACTERS } from './characters';
-import { createIntro } from './intro';
 
-const canvas = document.getElementById('game') as HTMLCanvasElement;
-const ctx = canvas.getContext('2d', { alpha: false })!;
+const canvas = document.querySelector<HTMLCanvasElement>('#viewport')!;
+const list = document.querySelector<HTMLUListElement>('#gallery-list')!;
+const nameLabel = document.querySelector<HTMLDivElement>('#model-name')!;
+const emptyState = document.querySelector<HTMLDivElement>('#empty-state')!;
+const modeSingleBtn = document.querySelector<HTMLButtonElement>('#mode-single')!;
+const modeSceneBtn = document.querySelector<HTMLButtonElement>('#mode-scene')!;
 
-let dpr = 1;
-function resize(): void {
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.floor(window.innerWidth * dpr);
-  canvas.height = Math.floor(window.innerHeight * dpr);
-  canvas.style.width = window.innerWidth + 'px';
-  canvas.style.height = window.innerHeight + 'px';
-}
-window.addEventListener('resize', resize);
-resize();
-
-const scene = createSceneManager();
-const input = createInput();
-const intro = createIntro();
-
-// Chapter + character dropdowns — always visible, switchable at any time (see
-// "Active build" in CLAUDE.md). Chapter only swaps which seasonal scene art is shown
-// for now; it isn't wired to gameplay/days yet.
-const adminToggle = document.getElementById('admin-toggle') as HTMLButtonElement;
-const uiPanel = document.getElementById('ui-panel') as HTMLDivElement;
-const sceneSelect = document.getElementById('scene-select') as HTMLSelectElement;
-const chapterSelect = document.getElementById('chapter-select') as HTMLSelectElement;
-const characterSelect = document.getElementById('character-select') as HTMLSelectElement;
-const chapterTitleEl = document.getElementById('chapter-info-title')!;
-const chapterMonthsEl = document.getElementById('chapter-info-months')!;
-const chapterDescEl = document.getElementById('chapter-info-desc')!;
-const taskPanel = document.getElementById('task-panel') as HTMLElement;
-
-adminToggle.addEventListener('click', () => {
-  uiPanel.hidden = !uiPanel.hidden;
-});
-
-for (const s of listSceneIds()) {
-  const opt = document.createElement('option');
-  opt.value = s.id;
-  opt.textContent = s.label;
-  sceneSelect.appendChild(opt);
-}
-for (const ch of CHAPTERS) {
-  const opt = document.createElement('option');
-  opt.value = String(ch.id);
-  opt.textContent = `${ch.id}. ${ch.title}`;
-  chapterSelect.appendChild(opt);
-}
-for (const c of CHARACTERS) {
-  const opt = document.createElement('option');
-  opt.value = c.id;
-  opt.textContent = c.label;
-  characterSelect.appendChild(opt);
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
 
-sceneSelect.addEventListener('change', () => scene.teleportTo(sceneSelect.value as SceneId));
+if (models.length === 0) {
+  emptyState.hidden = false;
+} else {
+  const viewer = createViewer(canvas);
+  let lastSingleIndex = 0;
 
-function applyChapter(id: number): void {
-  const chapter = CHAPTERS.find((c) => c.id === id) ?? CHAPTERS[0];
-  scene.setSeason(chapter.season);
-  scene.setChapter(chapter.id);
-  chapterTitleEl.textContent = chapter.title;
-  chapterMonthsEl.textContent = chapter.months;
-  chapterDescEl.textContent = chapter.description;
-  taskPanel.hidden = chapter.id !== 1;
-}
+  models.forEach((model, i) => {
+    const item = document.createElement('li');
+    item.className = 'gallery-item';
+    item.dataset.index = String(i);
 
-chapterSelect.addEventListener('change', () => applyChapter(Number(chapterSelect.value)));
-characterSelect.addEventListener('change', () => scene.setCharacter(characterSelect.value));
+    if (model.thumbnail) {
+      const img = document.createElement('img');
+      img.className = 'gallery-thumb';
+      img.src = model.thumbnail;
+      img.alt = '';
+      item.appendChild(img);
+    } else {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'gallery-thumb placeholder';
+      placeholder.textContent = '3D';
+      item.appendChild(placeholder);
+    }
 
-applyChapter(CHAPTERS[0].id);
-characterSelect.value = CHARACTERS[0].id;
-sceneSelect.value = 'pihapiiri';
+    const meta = document.createElement('div');
+    meta.className = 'gallery-meta';
+    const name = document.createElement('div');
+    name.className = 'gallery-name';
+    name.textContent = model.name;
+    const source = document.createElement('div');
+    source.className = 'gallery-source';
+    source.textContent = `${model.source} · ${formatBytes(model.sizeBytes)}`;
+    meta.append(name, source);
+    item.appendChild(meta);
 
-// Always-on location HUD, top-left — distinct from the admin panel above: this one is
-// in-world UI, kept in sync with whichever scene Jussi is currently standing in.
-const locationText = document.getElementById('location-text')!;
-let lastLocationLabel = '';
-
-// Task panel — parchment note, top-right; updated whenever task state changes.
-const taskItems = Array.from(document.querySelectorAll('#task-list li')) as HTMLElement[];
-let prevTaskState: TaskState = { fetchedKuokka: false, tilledField: false, fetchedLakana: false, sownField: false };
-function applyTaskState(ts: TaskState): void {
-  const done = [ts.fetchedKuokka, ts.tilledField, ts.fetchedLakana, ts.sownField];
-  // Show completed tasks + the first uncompleted one; hide the rest.
-  const firstIncomplete = done.findIndex(d => !d);
-  const visibleUpTo = firstIncomplete === -1 ? done.length - 1 : firstIncomplete;
-  done.forEach((isDone, i) => {
-    taskItems[i]?.classList.toggle('task-done', isDone);
-    taskItems[i]?.classList.toggle('task-hidden', i > visibleUpTo);
+    item.addEventListener('click', () => {
+      lastSingleIndex = i;
+      setMode('single');
+    });
+    list.appendChild(item);
   });
-}
 
-applyTaskState(prevTaskState);
-
-// Audio starts on the first user gesture (browser autoplay policy); M toggles it.
-const hint = document.getElementById('hint');
-function kickAudio(): void {
-  startAudio();
-  window.removeEventListener('keydown', kickAudio);
-  window.removeEventListener('pointerdown', kickAudio);
-}
-window.addEventListener('keydown', kickAudio);
-window.addEventListener('pointerdown', kickAudio);
-window.addEventListener('keydown', (e) => {
-  if (e.key.toLowerCase() === 'm') {
-    const m = toggleMute();
-    if (hint) hint.textContent = m ? 'music off (M)' : 'music on (M)';
-  }
-});
-
-let last = performance.now();
-function frame(now: number): void {
-  let dt = (now - last) / 1000;
-  last = now;
-  if (dt > 0.05) dt = 0.05; // clamp after tab-out etc.
-
-  // Held off while the title/chapter-intro overlay covers the screen, so Jussi can't
-  // be walked around, off-screen, before the player has even seen the world.
-  if (!intro.isActive()) scene.update(input, dt);
-
-  const label = scene.getLocationLabel();
-  if (label !== lastLocationLabel) {
-    lastLocationLabel = label;
-    locationText.textContent = label;
+  async function selectModel(index: number) {
+    const model = models[index];
+    list.querySelectorAll('.gallery-item').forEach((el) => el.classList.remove('active'));
+    list.querySelector(`[data-index="${index}"]`)?.classList.add('active');
+    nameLabel.textContent = `${model.name} — ${model.source} — ${formatBytes(model.sizeBytes)}`;
+    await viewer.load(model.url);
   }
 
-  const ts = scene.getTaskState();
-  if (
-    ts.fetchedKuokka !== prevTaskState.fetchedKuokka ||
-    ts.tilledField !== prevTaskState.tilledField ||
-    ts.fetchedLakana !== prevTaskState.fetchedLakana ||
-    ts.sownField !== prevTaskState.sownField
-  ) {
-    applyTaskState(ts);
-    prevTaskState = ts;
+  /** Switches between inspecting one model at a time and viewing all of them together. */
+  function setMode(mode: 'single' | 'scene') {
+    modeSingleBtn.classList.toggle('active', mode === 'single');
+    modeSceneBtn.classList.toggle('active', mode === 'scene');
+    list.classList.toggle('inert', mode === 'scene');
+
+    if (mode === 'single') {
+      selectModel(lastSingleIndex);
+    } else {
+      list.querySelectorAll('.gallery-item').forEach((el) => el.classList.remove('active'));
+      const totalBytes = models.reduce((sum, m) => sum + m.sizeBytes, 0);
+      nameLabel.textContent = `All ${models.length} models — ${formatBytes(totalBytes)} total`;
+      viewer.loadScene(models);
+    }
   }
 
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  scene.render(ctx, window.innerWidth, window.innerHeight);
+  modeSingleBtn.addEventListener('click', () => setMode('single'));
+  modeSceneBtn.addEventListener('click', () => setMode('scene'));
 
-  requestAnimationFrame(frame);
+  setMode('single');
 }
-requestAnimationFrame(frame);
