@@ -1,4 +1,4 @@
-import { models } from 'virtual:model-manifest';
+import { models as rawModels } from 'virtual:model-manifest';
 import { createViewer } from './viewer';
 import './style.css';
 
@@ -8,6 +8,16 @@ const nameLabel = document.querySelector<HTMLDivElement>('#model-name')!;
 const emptyState = document.querySelector<HTMLDivElement>('#empty-state')!;
 const modeSingleBtn = document.querySelector<HTMLButtonElement>('#mode-single')!;
 const modeSceneBtn = document.querySelector<HTMLButtonElement>('#mode-scene')!;
+
+/**
+ * Manifest URLs are publicDir-relative with no leading slash (see `ModelEntry` in
+ * vite.config.ts) — resolve them against the deployed base path (e.g. "/games/" on
+ * GitHub Pages) rather than the domain root, the same way the old game's audio player
+ * did for its track paths.
+ */
+function withBase(path: string): string {
+  return import.meta.env.BASE_URL + path;
+}
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -20,6 +30,13 @@ function formatBytes(bytes: number): string {
   }
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
+
+// Resolve manifest paths against the deployed base path once, up front.
+const models = rawModels.map((m) => ({
+  ...m,
+  url: withBase(m.url),
+  thumbnail: m.thumbnail ? withBase(m.thumbnail) : null
+}));
 
 if (models.length === 0) {
   emptyState.hidden = false;

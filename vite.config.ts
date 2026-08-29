@@ -5,13 +5,20 @@ import { join, extname, basename } from 'node:path';
 const ASSET_ROOT = 'ai-assets';
 
 interface ModelEntry {
-  /** Site-root-relative URL (encoded), e.g. "/tripo3d/rock%20with%20moss...glb". */
+  /**
+   * URL (encoded) relative to publicDir, e.g. "tripo3d/rock%20with%20moss...glb" — no
+   * leading slash. Deliberately NOT root-absolute: Vite's `base: './'` only rewrites
+   * references it recognizes at build time (HTML/CSS/import URLs), not arbitrary string
+   * data like this manifest, so a leading "/" would point at the domain root instead of
+   * the deployed /games/ sub-path on GitHub Pages. Callers must prefix with
+   * `import.meta.env.BASE_URL` before using it (see `withBase()` in `main.ts`).
+   */
   url: string;
   /** Human-readable name derived from the filename. */
   name: string;
   /** Source folder under ai-assets/ (e.g. "meshy", "tripo3d"). */
   source: string;
-  /** Site-root-relative URL of a best-effort matching thumbnail, if any. */
+  /** Best-effort matching thumbnail, same relative/no-leading-slash convention as `url`. */
   thumbnail: string | null;
   /** Size of the .glb file itself, in bytes. */
   sizeBytes: number;
@@ -62,10 +69,10 @@ function scanModels(): ModelEntry[] {
       const thumbnail = matched.length > 0 ? matched[0] : (unclaimedPngs.shift() ?? null);
 
       entries.push({
-        url: `/${encodeURIComponent(source)}/${encodeURIComponent(glb)}`,
+        url: `${encodeURIComponent(source)}/${encodeURIComponent(glb)}`,
         name: name || glb,
         source,
-        thumbnail: thumbnail ? `/${encodeURIComponent(source)}/${encodeURIComponent(thumbnail)}` : null,
+        thumbnail: thumbnail ? `${encodeURIComponent(source)}/${encodeURIComponent(thumbnail)}` : null,
         sizeBytes: statSync(join(dir, glb)).size
       });
     });
