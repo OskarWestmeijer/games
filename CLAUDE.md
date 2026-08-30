@@ -65,9 +65,12 @@ src/
   pod.ts               the room: walls, the rounded window + frame + glass, LED strips.
                        Also exports ROOM / EYE_HEIGHT / ROOM_BOUNDS
   space.ts             the planet, its two atmosphere shells, the starfield and the
-                       nebula skydome — all procedural, plus the shared fbm noise GLSL
+                       nebula skydome. Owns the shared simplex-noise GLSL and the planet
+                       shader that restyles the NASA maps
   fpv-controls.ts      createFpvControls() — PointerLockControls plus walk-on-the-floor
                        movement clamped to ROOM_BOUNDS
+  textures/            NASA Earth maps (day/night/clouds) as WebP, imported from space.ts
+                       — see "Planet textures" below
   vite-env.d.ts        type declarations, incl. the virtual:model-manifest module shape
   style.css
 ```
@@ -114,8 +117,17 @@ Conventions worth knowing before touching it:
 
 - **Two scales in one scene.** The pod is in metres (7 x 3.2 x 5 m, origin on the floor at
   the room's centre); the planet is toy-scaled at `PLANET_RADIUS = 300` with the station
-  orbiting `ORBIT_ALTITUDE = 70` above it, centred on the world origin. That keeps the
+  orbiting `ORBIT_ALTITUDE = 20` above it, centred on the world origin. That keeps the
   camera's near/far at a plain `0.1 / 20000` — no logarithmic depth buffer needed.
+- **The orbit is deliberately low.** At altitude 20 the limb sits `asin(300/320)` ≈ 69.6°
+  off the nadir — ISS-like — which is what makes the horizon read as a wide shallow arc
+  rather than the edge of a ball. Raising the altitude rounds the planet off again, and
+  `WINDOW_PITCH` has to follow because it's derived from that angle.
+- **Anything wrapping the planet must stay inside the orbit radius** (`PLANET_RADIUS +
+  ORBIT_ALTITUDE` = 320). The atmosphere shells are the live case: a `BackSide` fresnel
+  shell larger than the orbit ends up wrapped *around* the camera and smears glow across
+  the whole sky instead of ringing the planet. This bit once already when the altitude
+  dropped from 70 to 20 and the outer shell was still at `1.22 × R`.
 - **The camera is a child of `stationRig`**, the group that carries the pod around its
   orbit. This is what keeps the movement code simple: `PointerLockControls` writes
   `camera.position`/`camera.quaternion` and reads `camera.matrix`, all of which are local
@@ -124,15 +136,33 @@ Conventions worth knowing before touching it:
 - **The window is on the pod's -Z wall.** `Matrix4.lookAt` puts +Z *away* from its target,
   so aiming the rig at the planet leaves -Z — and the window — facing it.
 - **`WINDOW_PITCH` is the one knob for framing.** It pitches the pod up off the
-  planet-centre axis. The limb sits `asin(R / (R + altitude))` ≈ 54° off that axis, so the
-  current ~52° puts the horizon a little over halfway up the window with stars above.
-  Raise it to push the horizon down the window.
+  planet-centre axis, and the limb lands at `α - WINDOW_PITCH` relative to the optical
+  axis, where `α = asin(R / (R + altitude))` ≈ 69.6°. From the start position the window
+  spans -14.4° to +15.9° about that axis, so the current ~71° puts the horizon at -1.4° —
+  a little over halfway down the window, surface below, stars above. Raise it to push the
+  horizon further down.
 - **Nothing animates the scene explicitly.** `SUN_DIR` is a fixed world-space constant, so
   simply going round the orbit (`ORBIT_PERIOD`, 5 minutes a lap) sweeps the terminator
   across the visible face; the night side and its city lights arrive on their own.
 - **The planet ignores scene lights.** It's a custom `ShaderMaterial` lit by `SUN_DIR`
   inside the fragment shader — surface, clouds, terminator and city lights all come out of
   that one material. The lights added in `planet-view.ts` only light the pod interior.
+- **The surface is real Earth data, heavily restyled.** `src/textures/` holds NASA maps
+  (day/night/clouds) downscaled to 4K/2K/2K WebP, ~1.3 MB total — see "Planet textures"
+  below. The shader domain-warps the UV lookup so the geography reads as an invented world,
+  remaps the day map's luminance through a hand-authored electric-blue `palette()`, and
+  adds ridged-noise filament networks that the source photography can't supply. Procedural
+  noise is still there but only as the high-frequency detail layer that keeps the surface
+  crisp from 20 units up; the texture carries the structure.
+- **Textures need anisotropy.** From this orbit we look *along* the surface at a grazing
+  angle for nearly the whole view, which is the worst case for plain mipmapping. That's why
+  `buildSpace()` takes the renderer — purely to read `capabilities.getMaxAnisotropy()`.
+- **The limb haze is remapped, not raw.** `grazing` never drops below ~0.62 anywhere in
+  view at this altitude, so feeding it straight to `pow()` hazes the entire visible strip
+  into a pale smear. It runs through a `smoothstep(0.62, 1.0, …)` first.
+- **The planet must never be a black sphere on load.** Planet view is the site's landing
+  view and the maps take a moment, so the shader carries a procedural fallback selected by
+  the `uHasMaps` uniform, faded in over ~0.4s once the textures resolve.
 - **Bloom does the glowing.** The LED strips and the atmosphere are authored with colour
   channels deliberately over 1.0 and `UnrealBloomPass` has a threshold just above 1.0, so
   only those pick up a halo. `OutputPass` must stay last in the composer chain — with a
@@ -142,6 +172,36 @@ Conventions worth knowing before touching it:
 - The fbm noise in `space.ts` sums to a bell curve tight around 0.5, so the terrain and
   cloud shaders stretch it (`0.5 + (raw - 0.5) * 2.6`) before thresholding. That's what
   makes constants like "land above 0.6" mean something you can reason about.
+
+## Planet textures — provenance and licence
+
+`src/textures/planet-{day,night,clouds}.webp` are derived from **NASA Visible Earth**:
+
+| file | source | original |
+| --- | --- | --- |
+| `planet-day.webp` (4096×2048) | [Blue Marble Next Generation, Dec 2004](https://visibleearth.nasa.gov/images/73909) | `world.topo.bathy.200412.3x5400x2700.jpg` |
+| `planet-night.webp` (2048×1024) | [Night Lights 2012](https://visibleearth.nasa.gov/images/79765) | `dnb_land_ocean_ice.2012.3600x1800.jpg` |
+| `planet-clouds.webp` (2048×1024) | [Blue Marble clouds](https://visibleearth.nasa.gov/images/57747) | `cloud_combined_2048.jpg` |
+
+Downscaled and re-encoded with ImageMagick (`-quality 80..82 -define webp:method=6`), then
+recoloured at runtime by the planet shader.
+
+**Why NASA specifically.** This repo is public and these files are committed, so the licence
+has to permit redistribution with no strings attached. NASA content "generally are not
+subject to copyright in the United States" and their guidance names texture maps explicitly;
+attribution is *requested, not required*, so nothing is imposed on the repo or on forks. The
+credit in `#planet-credit` is courtesy, plus provenance.
+
+The obvious alternative, [Solar System Scope](https://www.solarsystemscope.com/textures/), is
+**CC BY 4.0, not CC0** — redistribution is permitted, but only on condition of carrying
+creator credit, a licence link and a "changes were made" notice everywhere the files travel,
+forever, forks included. Its Earth textures are NASA-derived anyway, so going to the source
+loses nothing and drops the condition. If more layers are ever needed, go to NASA first.
+
+They live in `src/textures/` and are imported from TS, **not** dropped in `ai-assets/`: Vite
+emits imported assets to `dist/assets/` with a content hash and rewrites paths relative to
+`base: './'`, and it keeps `ai-assets/` meaning what this document says it means (AI-generated
+3D models) as well as keeping them away from `scanModels()`.
 
 ## Deploy — GitHub Pages
 `.github/workflows/deploy.yml` builds with Vite and publishes `dist/` to GitHub Pages on

@@ -88,8 +88,32 @@ body {
   transition: opacity 0.2s ease;
 }
 
+#planet-credit {
+  position: absolute;
+  left: 1.25rem;
+  bottom: 1rem;
+  margin: 0;
+  max-width: 22rem;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+}
+
+#planet-credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+}
+
+#planet-credit a:hover {
+  color: var(--accent);
+}
+
 /* While the pointer is locked the player is "in" the scene — get the UI out of the way. */
-body.pointer-locked #planet-hint {
+body.pointer-locked #planet-hint,
+body.pointer-locked #planet-credit {
   opacity: 0;
 }
 

@@ -31,13 +31,17 @@ const ORBIT_START = 1.45;
 
 /**
  * How far the pod is pitched up from pointing straight at the planet's centre, in radians.
+ * This is the one knob for how the planet is framed in the window.
  *
- * This is the one knob for how the planet is framed in the window. From this altitude the
- * limb sits `asin(R / (R + altitude))` ≈ 54° off the planet-centre axis, so pitching up by
- * ~52° leaves it just above the eyeline — the horizon lands a little over halfway up the
- * window, with the surface below it and stars above. Raise it to push the horizon down.
+ * From the start position (eye at y=1.6, z=1.2; window plane at z=-2.5, opening 2.0 tall
+ * centred at 1.65) the window spans -14.4° to +15.9° about the optical axis, and the limb
+ * sits at `α - WINDOW_PITCH` relative to that axis, where `α = asin(R / (R + altitude))`
+ * ≈ 69.6°. So ≈71° puts the horizon at -1.4° — a little over halfway down the window, with
+ * the surface below and stars above. Raise it to push the horizon further down.
+ *
+ * `α` depends on `ORBIT_ALTITUDE`, so changing that means recomputing this.
  */
-const WINDOW_PITCH = 0.90;
+const WINDOW_PITCH = 1.24;
 
 const PLANET_CENTER = new THREE.Vector3(0, 0, 0);
 const ORBIT_UP = new THREE.Vector3(0, 1, 0);
@@ -92,7 +96,8 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
   stationRig.add(planetShine);
   stationRig.add(planetShine.target);
 
-  const space = buildSpace();
+  // Takes the renderer so the planet's textures can pick up its max anisotropy.
+  const space = buildSpace(renderer);
   scene.add(space.group);
 
   const controls = createFpvControls(camera, canvas, {
@@ -147,7 +152,7 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
 
     controls.update(dt);
     updateOrbit(elapsed);
-    space.update(elapsed);
+    space.update(elapsed, dt);
     composer.render();
   }
 
