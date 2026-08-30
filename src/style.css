@@ -28,6 +28,75 @@ body {
   width: 100vw;
 }
 
+#mode-switcher {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+}
+
+#mode-select {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#mode-select:hover {
+  border-color: var(--accent);
+}
+
+#asset-view {
+  display: flex;
+  width: 100%;
+}
+
+#planet-view {
+  position: relative;
+  width: 100%;
+}
+
+/* Author `display: flex` above otherwise beats the UA stylesheet's [hidden] rule. */
+#asset-view[hidden],
+#planet-view[hidden] {
+  display: none;
+}
+
+#planet-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+#planet-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(12, 14, 18, 0.65);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* While the pointer is locked the player is "in" the scene — get the UI out of the way. */
+body.pointer-locked #planet-hint {
+  opacity: 0;
+}
+
+body.pointer-locked #mode-switcher {
+  opacity: 0.2;
+}
+
 #gallery {
   width: 260px;
   flex-shrink: 0;

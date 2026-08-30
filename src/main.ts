@@ -1,11 +1,16 @@
 import { models as rawModels } from 'virtual:model-manifest';
 import { createViewer } from './viewer';
+import { createPlanetView } from './planet-view';
 import './style.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#viewport')!;
 const list = document.querySelector<HTMLUListElement>('#gallery-list')!;
 const nameLabel = document.querySelector<HTMLDivElement>('#model-name')!;
 const emptyState = document.querySelector<HTMLDivElement>('#empty-state')!;
+const modeSelect = document.querySelector<HTMLSelectElement>('#mode-select')!;
+const assetView = document.querySelector<HTMLDivElement>('#asset-view')!;
+const planetView = document.querySelector<HTMLDivElement>('#planet-view')!;
+const planetCanvas = document.querySelector<HTMLCanvasElement>('#planet-canvas')!;
 
 /**
  * Manifest URLs are publicDir-relative with no leading slash (see `ModelEntry` in
@@ -36,11 +41,12 @@ const models = rawModels.map((m) => ({
   thumbnail: m.thumbnail ? withBase(m.thumbnail) : null
 }));
 
+let viewer: ReturnType<typeof createViewer> | null = null;
+let selectedIndex = 0;
+
 if (models.length === 0) {
   emptyState.hidden = false;
 } else {
-  const viewer = createViewer(canvas);
-
   models.forEach((model, i) => {
     const item = document.createElement('li');
     item.className = 'gallery-item';
@@ -73,14 +79,62 @@ if (models.length === 0) {
     item.addEventListener('click', () => selectModel(i));
     list.appendChild(item);
   });
-
-  async function selectModel(index: number) {
-    const model = models[index];
-    list.querySelectorAll('.gallery-item').forEach((el) => el.classList.remove('active'));
-    list.querySelector(`[data-index="${index}"]`)?.classList.add('active');
-    nameLabel.textContent = `${model.name} — ${model.source} — ${formatBytes(model.sizeBytes)}`;
-    await viewer.load(model.url);
-  }
-
-  selectModel(0);
 }
+
+/**
+ * Highlights a gallery entry and loads it. Safe to call before the viewer exists — the
+ * selection is remembered in `selectedIndex` and picked up by `ensureViewer()`.
+ */
+async function selectModel(index: number) {
+  selectedIndex = index;
+  const model = models[index];
+  list.querySelectorAll('.gallery-item').forEach((el) => el.classList.remove('active'));
+  list.querySelector(`[data-index="${index}"]`)?.classList.add('active');
+  nameLabel.textContent = `${model.name} — ${model.source} — ${formatBytes(model.sizeBytes)}`;
+  await viewer?.load(model.url);
+}
+
+type Mode = 'asset' | 'planet';
+
+// Both views are built the first time they're opened rather than up front. Each is a whole
+// WebGL scene, and the gallery additionally fetches a model that runs to tens of megabytes —
+// no reason to pay for either until someone actually looks at it.
+let planet: ReturnType<typeof createPlanetView> | null = null;
+
+function ensureViewer() {
+  if (viewer || models.length === 0) return;
+  viewer = createViewer(canvas);
+  selectModel(selectedIndex);
+}
+
+function setMode(mode: Mode) {
+  // Unhide first — the renderers measure their canvas, which is 0x0 while its container is
+  // still hidden.
+  assetView.hidden = mode !== 'asset';
+  planetView.hidden = mode !== 'planet';
+
+  if (mode === 'asset') {
+    planet?.stop();
+    ensureViewer();
+    viewer?.setActive(true);
+  } else {
+    viewer?.setActive(false);
+    planet ??= createPlanetView(planetCanvas, {
+      onLockChange: (locked) => document.body.classList.toggle('pointer-locked', locked)
+    });
+    planet.start();
+  }
+}
+
+modeSelect.addEventListener('change', () => {
+  const mode = modeSelect.value as Mode;
+  // Reflect the mode in the URL so a view can be linked to directly. `replaceState` rather
+  // than assigning `location.hash`, which would pile up history entries on every toggle.
+  history.replaceState(null, '', mode === 'asset' ? '#assets' : '#');
+  setMode(mode);
+});
+
+// Planet view is what the site opens on; the gallery is one hash away.
+const startMode: Mode = window.location.hash === '#assets' ? 'asset' : 'planet';
+modeSelect.value = startMode;
+setMode(startMode);

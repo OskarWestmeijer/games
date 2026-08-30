@@ -7,25 +7,37 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
+    <div id="mode-switcher">
+      <select id="mode-select">
+        <option value="planet">Planet View</option>
+        <option value="asset">Asset View</option>
+      </select>
+    </div>
     <div id="app">
-      <aside id="gallery">
-        <h1>Assets</h1>
-        <ul id="gallery-list"></ul>
-        <p id="credits">
-          Models generated with
-          <a href="https://www.meshy.ai/" target="_blank" rel="noopener">Meshy</a>
-          and
-          <a href="https://www.tripo3d.ai/" target="_blank" rel="noopener">Tripo3D</a>.
-        </p>
-        <a id="homepage-link" href="https://oskar-westmeijer.com/" target="_blank" rel="noopener">
-          oskar-westmeijer.com ↗
-        </a>
-      </aside>
-      <main id="viewport-wrap">
-        <canvas id="viewport"></canvas>
-        <div id="model-name"></div>
-        <div id="empty-state" hidden>No .glb files found in ai-assets/.</div>
-      </main>
+      <div id="asset-view" class="view" hidden>
+        <aside id="gallery">
+          <h1>Assets</h1>
+          <ul id="gallery-list"></ul>
+          <p id="credits">
+            Models generated with
+            <a href="https://www.meshy.ai/" target="_blank" rel="noopener">Meshy</a>
+            and
+            <a href="https://www.tripo3d.ai/" target="_blank" rel="noopener">Tripo3D</a>.
+          </p>
+          <a id="homepage-link" href="https://oskar-westmeijer.com/" target="_blank" rel="noopener">
+            oskar-westmeijer.com ↗
+          </a>
+        </aside>
+        <main id="viewport-wrap">
+          <canvas id="viewport"></canvas>
+          <div id="model-name"></div>
+          <div id="empty-state" hidden>No .glb files found in ai-assets/.</div>
+        </main>
+      </div>
+      <div id="planet-view" class="view">
+        <canvas id="planet-canvas"></canvas>
+        <div id="planet-hint">Click to look around · WASD to move · Esc to release</div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
