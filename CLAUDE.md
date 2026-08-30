@@ -31,6 +31,10 @@ match its model's basename rather than relying on the fallback.
 `ai-assets/` is committed to git (not gitignored) — it's the actual content the site
 serves, not a build artifact or licensed reference material.
 
+**Exception:** `ai-assets/not-public/` is gitignored. Its contents must never be pushed
+to GitHub (this repo is public) — use it for assets that shouldn't be published, e.g.
+under review, unlicensed, or otherwise not cleared for public release.
+
 ## Architecture
 
 ```
@@ -60,24 +64,15 @@ formatted client-side (`formatBytes()` in `main.ts`) and shown per-item in the g
 and in the `#model-name` info line under the viewport (a running total in scene mode).
 
 ### Viewer behaviour
-- **Two modes**, toggled top of the sidebar (`#mode-toggle` in `index.html`,
-  `setMode()` in `main.ts`): **Single** (default) shows one model at a time, gallery
-  clicks select it; **All together** (`viewer.loadScene()`) loads every model into one
-  shared scene, arranged in a grid on the ground so they can be compared side by side.
-  In scene mode the gallery list is dimmed and inert (`#gallery-list.inert`, `pointer-
-  events: none`) rather than hidden, since it's still useful as a legend of what's shown.
-- Switching mode/model fully disposes whatever was previously in the scene — a single
-  model or the whole group — via `disposeCurrent()`/`disposeObject()` in `viewer.ts`, to
-  avoid leaking GPU memory across a long browsing session. Both `load()` and
-  `loadScene()` are `async` (loading one or many `.glb`s) and guard against a slower call
-  being superseded by a newer one before it resolves, via a bumped `loadToken`.
-- Camera auto-frames to whatever's now in the scene — one model or the whole group — via
-  its combined bounding box (`Box3.setFromObject`, `frameToObject()`). Each model is
-  shifted to sit on the ground grid (`y -= box.min.y`) rather than straddling it, since
-  exported models don't share a common scale or origin; in scene mode each is additionally
-  re-centred on its own footprint before being placed on the grid (spacing derived from
-  the largest model's footprint), so the grid layout only has to reason about spacing,
-  not each model's own off-centre origin.
+- Single-model view only: the gallery lists every discovered `.glb`, and clicking one
+  loads it into the shared viewport (`selectModel()` in `main.ts`).
+- Switching models fully disposes whatever was previously in the scene via
+  `disposeCurrent()`/`disposeObject()` in `viewer.ts`, to avoid leaking GPU memory across
+  a long browsing session. `load()` is `async` and guards against a slower call being
+  superseded by a newer one before it resolves, via a bumped `loadToken`.
+- Camera auto-frames to the loaded model via its bounding box (`Box3.setFromObject`,
+  `frameToObject()`), shifted to sit on the ground grid (`y -= box.min.y`) rather than
+  straddling it, since exported models don't share a common scale or origin.
 - Lighting is a simple three-point-ish studio setup (hemisphere + key + fill directional
   lights) — these are isolated asset previews, not a scene with its own mood/atmosphere.
 

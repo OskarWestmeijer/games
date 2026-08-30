@@ -6,8 +6,6 @@ const canvas = document.querySelector<HTMLCanvasElement>('#viewport')!;
 const list = document.querySelector<HTMLUListElement>('#gallery-list')!;
 const nameLabel = document.querySelector<HTMLDivElement>('#model-name')!;
 const emptyState = document.querySelector<HTMLDivElement>('#empty-state')!;
-const modeSingleBtn = document.querySelector<HTMLButtonElement>('#mode-single')!;
-const modeSceneBtn = document.querySelector<HTMLButtonElement>('#mode-scene')!;
 
 /**
  * Manifest URLs are publicDir-relative with no leading slash (see `ModelEntry` in
@@ -42,7 +40,6 @@ if (models.length === 0) {
   emptyState.hidden = false;
 } else {
   const viewer = createViewer(canvas);
-  let lastSingleIndex = 0;
 
   models.forEach((model, i) => {
     const item = document.createElement('li');
@@ -73,10 +70,7 @@ if (models.length === 0) {
     meta.append(name, source);
     item.appendChild(meta);
 
-    item.addEventListener('click', () => {
-      lastSingleIndex = i;
-      setMode('single');
-    });
+    item.addEventListener('click', () => selectModel(i));
     list.appendChild(item);
   });
 
@@ -88,24 +82,5 @@ if (models.length === 0) {
     await viewer.load(model.url);
   }
 
-  /** Switches between inspecting one model at a time and viewing all of them together. */
-  function setMode(mode: 'single' | 'scene') {
-    modeSingleBtn.classList.toggle('active', mode === 'single');
-    modeSceneBtn.classList.toggle('active', mode === 'scene');
-    list.classList.toggle('inert', mode === 'scene');
-
-    if (mode === 'single') {
-      selectModel(lastSingleIndex);
-    } else {
-      list.querySelectorAll('.gallery-item').forEach((el) => el.classList.remove('active'));
-      const totalBytes = models.reduce((sum, m) => sum + m.sizeBytes, 0);
-      nameLabel.textContent = `All ${models.length} models — ${formatBytes(totalBytes)} total`;
-      viewer.loadScene(models);
-    }
-  }
-
-  modeSingleBtn.addEventListener('click', () => setMode('single'));
-  modeSceneBtn.addEventListener('click', () => setMode('scene'));
-
-  setMode('single');
+  selectModel(0);
 }
