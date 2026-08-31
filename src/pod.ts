@@ -12,8 +12,23 @@ export const ROOM = { width: 7, height: 3.2, depth: 5 };
 /** Camera height above the floor. There's no body, so this is just where the eyes sit. */
 export const EYE_HEIGHT = 1.6;
 
-/** The window opening, centred horizontally in the -Z wall. */
-const WINDOW = { width: 5.0, height: 2.0, centerY: 1.65, cornerRadius: 0.45 };
+/**
+ * The window opening, centred horizontally in the -Z wall. Deliberately close to the size of
+ * the wall itself — 6.2 x 2.7 in a 7 x 3.2 wall — so what is left of the wall reads as a rim
+ * around a viewport rather than a wall with a porthole in it. From the start position that is
+ * ±40° horizontally and -19.8° to +20.3° vertically, a third again as much sky as the 5 x 2
+ * opening it replaces. The margins it leaves (0.4 at the sides, ~0.25 top and bottom) are
+ * what `FRAME_WIDTH` has to fit inside.
+ */
+const WINDOW = { width: 6.2, height: 2.7, centerY: 1.62, cornerRadius: 0.5 };
+
+/**
+ * How far the frame ring sticks out past the opening, and how far it stands proud of the
+ * wall. Thin on purpose: the frame is there to give the hole an edge and catch a highlight,
+ * and anything chunkier eats the view it is framing.
+ */
+const FRAME_WIDTH = 0.1;
+const FRAME_DEPTH = 0.14;
 
 /** How far from the walls the player is held. Doubles as the "you have a body" fudge. */
 const WALL_CLEARANCE = 0.45;
@@ -141,15 +156,15 @@ export function buildPod(): THREE.Group {
   // The frame is a ring — a slightly larger rounded rect with the opening as its hole —
   // extruded back into the room, so the window reads as a hole with depth rather than a
   // picture painted on a flat wall.
-  const frameShape = windowShape(0.22);
+  const frameShape = windowShape(FRAME_WIDTH);
   frameShape.holes.push(windowHole());
 
   const frame = new THREE.Mesh(
     new THREE.ExtrudeGeometry(frameShape, {
-      depth: 0.24,
+      depth: FRAME_DEPTH,
       bevelEnabled: true,
-      bevelSize: 0.03,
-      bevelThickness: 0.03,
+      bevelSize: 0.02,
+      bevelThickness: 0.02,
       bevelSegments: 2,
       curveSegments: 16
     }),
@@ -187,14 +202,15 @@ export function buildPod(): THREE.Group {
     pod.add(bar);
   };
 
+  // Ceiling only. There were verticals flanking the window too, but the window has since
+  // grown to nearly the full wall — there is no wall left to put them on, and keeping the
+  // glow overhead leaves the eye nothing bright to compete with the planet.
+  //
   // Along both ceiling/side-wall seams, running the depth of the room.
   strip(0.05, 0.05, D - 0.4, -W / 2 + 0.12, H - 0.12, 0);
   strip(0.05, 0.05, D - 0.4, W / 2 - 0.12, H - 0.12, 0);
   // Across the ceiling just inside the window wall.
   strip(W - 0.7, 0.05, 0.05, 0, H - 0.1, -D / 2 + 0.4);
-  // Short verticals flanking the window.
-  strip(0.05, 2.1, 0.04, -WINDOW.width / 2 - 0.55, 1.5, -D / 2 + 0.05);
-  strip(0.05, 2.1, 0.04, WINDOW.width / 2 + 0.55, 1.5, -D / 2 + 0.05);
 
   return pod;
 }

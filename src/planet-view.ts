@@ -4,7 +4,15 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { buildPod, EYE_HEIGHT, ROOM, ROOM_BOUNDS } from './pod';
-import { buildSpace, ORBIT_ALTITUDE, PLANET_RADIUS } from './space';
+import {
+  buildSpace,
+  ATMOSPHERE_RADIUS,
+  ORBIT_DAWN,
+  ORBIT_NOON,
+  ORBIT_NORMAL,
+  PLANET_RADIUS
+} from './space';
+import type { TextureQuality } from './space';
 import { createFpvControls } from './fpv-controls';
 
 /**
@@ -15,44 +23,93 @@ import { createFpvControls } from './fpv-controls';
  * That's the whole trick that keeps this simple: the rig handles orbiting and staying
  * pointed at the planet, while the player walks around in plain room coordinates,
  * oblivious to where the room currently is in space.
+ *
+ * The orbit is steeply inclined and the window is aimed down and forward rather than flat at
+ * the horizon — `ALTITUDE_RANGE`, `HORIZON_ELEVATION` and `WINDOW_YAW` below are the knobs,
+ * plus `SUN_BETA` in `space.ts`, which tilts the orbital plane this flies in and decides how
+ * much of the lap is flown in daylight.
  */
 
-const ORBIT_RADIUS = PLANET_RADIUS + ORBIT_ALTITUDE;
+/**
+ * How high the pod flies, in world units above the surface — the slider in the corner, and
+ * the biggest single lever on what the window looks like.
+ *
+ * At the bottom of the range the limb is `asin(300/320)` ≈ 69.6° off the nadir, an ISS-like
+ * orbit where the horizon is a wide shallow arc and you are reading terrain; by the top it
+ * is 19.5° and the planet is a ball hanging in the glass with space around it. The default
+ * sits where the curvature of the world is unmistakable but the surface is still close
+ * enough to have texture in it.
+ *
+ * The floor is not arbitrary: at altitude 10.5 the pod would be inside the outer atmosphere
+ * shell (`ATMOSPHERE_RADIUS`), which wraps the camera in glow. 20 keeps clear of it.
+ * The ceiling is well inside the starfield at 8000 and the camera's far plane at 20000.
+ */
+export const ALTITUDE_RANGE = { min: 20, max: 600, initial: 120 };
 
 /** Seconds for one full lap. Slow enough to be ambient rather than a ride. */
 const ORBIT_PERIOD = 300;
 
 /**
- * Where on the orbit we start, in radians. Chosen so the terminator is already crossing
- * the visible face: the planet opens lit, with the night side and its city lights sliding
- * into view over the following minutes.
+ * Where on the orbit we start, in radians, measured from local noon (see `ORBIT_NOON`).
+ * ≈264° is just past sunrise: the opening frame has the terminator running diagonally
+ * across the window and then two and a half minutes of full daylight ahead of it.
  */
-const ORBIT_START = 1.45;
+const ORBIT_START = 4.6;
 
 /**
- * How far the pod is pitched up from pointing straight at the planet's centre, in radians.
- * This is the one knob for how the planet is framed in the window.
+ * Where the horizon sits in the window, in radians above the optical axis — 9.4°, which from
+ * the start position (eye at y=1.6, z=1.2; window plane at z=-2.5, opening 2.7 tall centred
+ * at 1.62, so the glass spans -19.8° to +20.3° vertically) puts it about three quarters of
+ * the way up: surface below it, a band of stars above.
  *
- * From the start position (eye at y=1.6, z=1.2; window plane at z=-2.5, opening 2.0 tall
- * centred at 1.65) the window spans -14.4° to +15.9° about the optical axis, and the limb
- * sits at `α - WINDOW_PITCH` relative to that axis, where `α = asin(R / (R + altitude))`
- * ≈ 69.6°. So ≈71° puts the horizon at -1.4° — a little over halfway down the window, with
- * the surface below and stars above. Raise it to push the horizon further down.
- *
- * `α` depends on `ORBIT_ALTITUDE`, so changing that means recomputing this.
+ * This is the framing constant now, rather than the pitch itself. The limb sits at
+ * `α - pitch` relative to the optical axis, where `α = asin(R / (R + altitude))`, so pinning
+ * the limb and solving for the pitch (`pitchFor()`) is what lets the altitude slider move
+ * without the horizon sliding off the top or the bottom of the glass on the way. Lower this
+ * to trade planet for sky; at 0 the window looks flat out at the limb, which is where this
+ * started and why so little of the planet was in it.
  */
-const WINDOW_PITCH = 1.24;
+const HORIZON_ELEVATION = 0.164;
+
+/** The pitch that puts the limb `HORIZON_ELEVATION` above the optical axis at this altitude. */
+function pitchFor(altitude: number): number {
+  return Math.asin(PLANET_RADIUS / (PLANET_RADIUS + altitude)) - HORIZON_ELEVATION;
+}
+
+/**
+ * How far the pod is turned about its own vertical before being pitched up, in radians —
+ * positive swings the window towards the direction of travel.
+ *
+ * At 0 the window looks square across the track and the ground slides straight sideways
+ * past it, which is a very static way to see a planet. At ≈34° the view is oblique: terrain
+ * comes towards you and passes off to one side, and the terminator crosses the glass on a
+ * diagonal rather than as a vertical bar. Because a horizon is a cone about the nadir, this
+ * is a pure azimuth change — it does not tilt the horizon or move it up or down, so it stays
+ * independent of the pitch.
+ */
+const WINDOW_YAW = 0.6;
 
 const PLANET_CENTER = new THREE.Vector3(0, 0, 0);
-const ORBIT_UP = new THREE.Vector3(0, 1, 0);
 
 export interface PlanetViewOptions {
   onLockChange?: (locked: boolean) => void;
+  /** Which surface map set to open on. See `TextureQuality` in `space.ts`. */
+  quality?: TextureQuality;
+  /** Opening altitude. Defaults to `ALTITUDE_RANGE.initial`. */
+  altitude?: number;
+  /** The on-screen movement stick for touch devices; see `createFpvControls`. */
+  joystick?: HTMLElement | null;
 }
 
 export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewOptions = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // A retina tablet is the worst case for this scene: nearly every pixel is full-screen
+  // shader work plus a bloom composer, and 2x device pixels on an iPad is four times the
+  // fragment cost of 1x. Coarse-pointer devices get 1.5, which is indistinguishable at
+  // arm's length and roughly halves that. `planet-inspect.ts` does the same.
+  renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio, window.matchMedia('(pointer: coarse)').matches ? 1.5 : 2)
+  );
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   // Deliberately under 1: the pod is meant to be a dark room lit by strip lights and the
   // planet, and it reads as washed-out neon long before it reads as too dim.
@@ -69,6 +126,8 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
   const stationRig = new THREE.Group();
   scene.add(stationRig);
   stationRig.add(buildPod());
+
+  let altitude = options.altitude ?? ALTITUDE_RANGE.initial;
 
   // Standing back from the window, so it frames the planet rather than filling the screen.
   camera.position.set(0, EYE_HEIGHT, 1.2);
@@ -97,13 +156,14 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
   stationRig.add(planetShine.target);
 
   // Takes the renderer so the planet's textures can pick up its max anisotropy.
-  const space = buildSpace(renderer);
+  const space = buildSpace(renderer, { quality: options.quality });
   scene.add(space.group);
 
   const controls = createFpvControls(camera, canvas, {
     bounds: ROOM_BOUNDS,
     eyeHeight: EYE_HEIGHT,
-    onLockChange: options.onLockChange
+    onLockChange: options.onLockChange,
+    joystick: options.joystick
   });
 
   // --- post-processing -----------------------------------------------------------------
@@ -121,13 +181,23 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
 
   function updateOrbit(elapsed: number) {
     const angle = ORBIT_START + (elapsed / ORBIT_PERIOD) * Math.PI * 2;
-    stationRig.position.set(Math.cos(angle) * ORBIT_RADIUS, 0, Math.sin(angle) * ORBIT_RADIUS);
+    const radius = PLANET_RADIUS + altitude;
+    stationRig.position
+      .copy(ORBIT_NOON)
+      .multiplyScalar(Math.cos(angle) * radius)
+      .addScaledVector(ORBIT_DAWN, Math.sin(angle) * radius);
 
     // `Matrix4.lookAt` puts +Z *away* from the target, so -Z — and with it the window wall
-    // built on -Z in `pod.ts` — ends up facing the planet.
-    orbitMatrix.lookAt(stationRig.position, PLANET_CENTER, ORBIT_UP);
+    // built on -Z in `pod.ts` — ends up facing the planet. The orbit normal is the up hint
+    // rather than world up: it is perpendicular to the line to the planet by construction,
+    // so `lookAt` can never degenerate, which world up would do over the poles of an orbit
+    // this steeply inclined.
+    orbitMatrix.lookAt(stationRig.position, PLANET_CENTER, ORBIT_NORMAL);
     stationRig.quaternion.setFromRotationMatrix(orbitMatrix);
-    stationRig.rotateX(WINDOW_PITCH);
+    // Yaw first, then pitch: turning about the local vertical and *then* lifting the nose is
+    // what keeps the horizon level. Doing it the other way round banks the pod instead.
+    stationRig.rotateZ(-WINDOW_YAW);
+    stationRig.rotateX(pitchFor(altitude));
   }
 
   function resize() {
@@ -175,5 +245,17 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
     clock.stop();
   }
 
-  return { start, stop };
+  return {
+    start,
+    stop,
+    setTextureQuality: (quality: TextureQuality) => space.setQuality(quality),
+    /**
+     * Moves the orbit. Takes effect on the next frame — `updateOrbit()` re-derives both the
+     * radius and the window pitch from it every tick, so dragging the slider is continuous
+     * and needs no easing of its own.
+     */
+    setAltitude: (value: number) => {
+      altitude = THREE.MathUtils.clamp(value, ALTITUDE_RANGE.min, ALTITUDE_RANGE.max);
+    }
+  };
 }

@@ -2,15 +2,39 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 
 /**
- * A first-person walk-around controller: mouse to look, WASD/arrows to move in the
- * horizontal plane, eye height pinned to the floor. There is no astronaut body — this is
- * a camera with a walking speed.
+ * A first-person walk-around controller with two input paths, because the site has to work on
+ * a tablet as well as a desktop:
  *
- * `PointerLockControls` writes `camera.position`/`camera.quaternion` and reads
+ * - **Mouse:** click to take the pointer lock, then mouse to look and WASD/arrows to move.
+ * - **Touch:** drag anywhere on the canvas to look, and push the on-screen stick to move.
+ *
+ * The touch path is not a nicety. **iOS Safari has no Pointer Lock API at all** — not
+ * disabled, absent — so `PointerLockControls.lock()` throws there and mouse-look never
+ * happens. Both paths write the same `camera.quaternion` and both feed the same velocity
+ * smoothing, so a device with a trackpad *and* a touchscreen can use either at any moment.
+ *
+ * Eye height is pinned to the floor and there is no astronaut body — this is a camera with a
+ * walking speed. `PointerLockControls` writes `camera.position`/`camera.quaternion` and reads
  * `camera.matrix`, all of which are *local* to the camera's parent. That's what lets the
- * camera hang off the orbiting station rig in `planet-view.ts` and still be driven in
- * plain room coordinates here — `bounds` is in room space, not world space.
+ * camera hang off the orbiting station rig in `planet-view.ts` and still be driven in plain
+ * room coordinates here — `bounds` is in room space, not world space.
  */
+
+/** Radians of rotation per pixel dragged. Pointer-lock mouse look uses 0.002 per pixel. */
+const TOUCH_LOOK_SPEED = 0.0035;
+
+/** Stop just short of straight up and straight down, where yaw becomes meaningless. */
+const PITCH_LIMIT = Math.PI / 2 - 0.02;
+
+/** Fraction of the stick's travel that still counts as centred, so a resting thumb can't drift. */
+const STICK_DEADZONE = 0.12;
+
+/**
+ * Whether this browser has the Pointer Lock API. iOS has never implemented it, and calling
+ * `lock()` there is a TypeError rather than a no-op, so every use of it is guarded.
+ */
+const POINTER_LOCK_SUPPORTED =
+  typeof document !== 'undefined' && 'requestPointerLock' in document.documentElement;
 
 export interface FpvOptions {
   /** Walkable volume, in the same space as `camera.position` (i.e. room-local). */
@@ -19,6 +43,11 @@ export interface FpvOptions {
   /** Top walking speed, units/second. */
   speed?: number;
   onLockChange?: (locked: boolean) => void;
+  /**
+   * The on-screen movement stick, shown by CSS only on coarse-pointer devices. Its first
+   * element child is moved about as the knob. Omit it and touch users can look but not walk.
+   */
+  joystick?: HTMLElement | null;
 }
 
 export interface FpvControls {
@@ -38,10 +67,20 @@ export function createFpvControls(
   domElement: HTMLElement,
   options: FpvOptions
 ): FpvControls {
-  const { bounds, eyeHeight, speed = 2.4, onLockChange } = options;
+  const { bounds, eyeHeight, speed = 2.4, onLockChange, joystick = null } = options;
 
   const controls = new PointerLockControls(camera, domElement);
   const keys = new Set<string>();
+  const knob = joystick?.firstElementChild as HTMLElement | null;
+  // Reused by the touch look handler. YXZ so yaw and pitch stay independent and there is
+  // never any roll, which is the same order PointerLockControls uses.
+  const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+  /** Stick output in room-plane terms: x strafes, y walks forward, each -1..1. */
+  const stick = new THREE.Vector2();
+  let lookPointer: number | null = null;
+  let stickPointer: number | null = null;
+  let lastX = 0;
+  let lastY = 0;
   // Room-plane velocity: x is strafe, y is forward. Smoothed towards the input direction
   // rather than snapped, so starting and stopping has a little weight to it.
   const velocity = new THREE.Vector2();
@@ -58,7 +97,77 @@ export function createFpvControls(
   }
 
   function onClick() {
-    if (enabled) controls.lock();
+    // Touch has no lock to take — it looks after itself in the pointer handlers below.
+    if (enabled && POINTER_LOCK_SUPPORTED) controls.lock();
+  }
+
+  // --- touch: drag to look ---------------------------------------------------------------
+
+  function onPointerDown(event: PointerEvent) {
+    // Mouse goes through the pointer lock instead; this is for fingers and pens.
+    if (!enabled || event.pointerType === 'mouse' || lookPointer !== null) return;
+    lookPointer = event.pointerId;
+    lastX = event.clientX;
+    lastY = event.clientY;
+    // Capture, so a drag that wanders off the canvas keeps steering rather than sticking.
+    domElement.setPointerCapture(event.pointerId);
+  }
+
+  function onPointerMove(event: PointerEvent) {
+    if (event.pointerId !== lookPointer) return;
+    const dx = event.clientX - lastX;
+    const dy = event.clientY - lastY;
+    lastX = event.clientX;
+    lastY = event.clientY;
+
+    // Read the current orientation back rather than keeping a private copy: pointer-lock
+    // mouse look writes the same quaternion, so the two paths can be interleaved freely.
+    euler.setFromQuaternion(camera.quaternion);
+    euler.y -= dx * TOUCH_LOOK_SPEED;
+    euler.x = THREE.MathUtils.clamp(euler.x - dy * TOUCH_LOOK_SPEED, -PITCH_LIMIT, PITCH_LIMIT);
+    camera.quaternion.setFromEuler(euler);
+  }
+
+  function onPointerUp(event: PointerEvent) {
+    if (event.pointerId === lookPointer) lookPointer = null;
+  }
+
+  // --- touch: the movement stick ----------------------------------------------------------
+
+  function moveKnob(x: number, y: number) {
+    if (knob) knob.style.transform = `translate(${x}px, ${y}px)`;
+  }
+
+  function onStickDown(event: PointerEvent) {
+    if (!enabled || !joystick || stickPointer !== null) return;
+    stickPointer = event.pointerId;
+    joystick.setPointerCapture(event.pointerId);
+    onStickMove(event);
+  }
+
+  function onStickMove(event: PointerEvent) {
+    if (event.pointerId !== stickPointer || !joystick) return;
+    const rect = joystick.getBoundingClientRect();
+    const radius = rect.width / 2;
+    let dx = (event.clientX - (rect.left + radius)) / radius;
+    let dy = (event.clientY - (rect.top + radius)) / radius;
+
+    const reach = Math.hypot(dx, dy);
+    if (reach > 1) {
+      dx /= reach;
+      dy /= reach;
+    }
+    // Screen y grows downwards; walking forward is -y.
+    const live = Math.hypot(dx, dy) > STICK_DEADZONE;
+    stick.set(live ? dx : 0, live ? -dy : 0);
+    moveKnob(dx * radius * 0.55, dy * radius * 0.55);
+  }
+
+  function releaseStick(event: PointerEvent) {
+    if (event.pointerId !== stickPointer) return;
+    stickPointer = null;
+    stick.set(0, 0);
+    moveKnob(0, 0);
   }
 
   function onLock() {
@@ -73,17 +182,28 @@ export function createFpvControls(
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   domElement.addEventListener('click', onClick);
+  domElement.addEventListener('pointerdown', onPointerDown);
+  domElement.addEventListener('pointermove', onPointerMove);
+  domElement.addEventListener('pointerup', onPointerUp);
+  domElement.addEventListener('pointercancel', onPointerUp);
+  joystick?.addEventListener('pointerdown', onStickDown);
+  joystick?.addEventListener('pointermove', onStickMove);
+  joystick?.addEventListener('pointerup', releaseStick);
+  joystick?.addEventListener('pointercancel', releaseStick);
   controls.addEventListener('lock', onLock);
   controls.addEventListener('unlock', onUnlock);
 
   function update(dt: number) {
-    const forward = held(FORWARD_KEYS) - held(BACK_KEYS);
-    const strafe = held(RIGHT_KEYS) - held(LEFT_KEYS);
+    const forward = held(FORWARD_KEYS) - held(BACK_KEYS) + stick.y;
+    const strafe = held(RIGHT_KEYS) - held(LEFT_KEYS) + stick.x;
 
-    // Normalised so walking diagonally isn't faster than walking straight.
+    // Clamped rather than normalised: keys are 0 or 1, so a diagonal still comes back to full
+    // speed and no faster, but a half-pushed stick walks at half speed instead of snapping to
+    // a run.
     const length = Math.hypot(strafe, forward);
-    const targetX = length > 0 ? (strafe / length) * speed : 0;
-    const targetY = length > 0 ? (forward / length) * speed : 0;
+    const scale = length > 1 ? 1 / length : 1;
+    const targetX = strafe * scale * speed;
+    const targetY = forward * scale * speed;
 
     // Exponential smoothing, framed in terms of dt so it behaves the same at any frame rate.
     const k = 1 - Math.exp(-12 * dt);
@@ -104,7 +224,11 @@ export function createFpvControls(
     if (!enabled) {
       keys.clear();
       velocity.set(0, 0);
-      controls.unlock();
+      stick.set(0, 0);
+      moveKnob(0, 0);
+      lookPointer = null;
+      stickPointer = null;
+      if (POINTER_LOCK_SUPPORTED) controls.unlock();
     }
   }
 
@@ -112,6 +236,14 @@ export function createFpvControls(
     window.removeEventListener('keydown', onKeyDown);
     window.removeEventListener('keyup', onKeyUp);
     domElement.removeEventListener('click', onClick);
+    domElement.removeEventListener('pointerdown', onPointerDown);
+    domElement.removeEventListener('pointermove', onPointerMove);
+    domElement.removeEventListener('pointerup', onPointerUp);
+    domElement.removeEventListener('pointercancel', onPointerUp);
+    joystick?.removeEventListener('pointerdown', onStickDown);
+    joystick?.removeEventListener('pointermove', onStickMove);
+    joystick?.removeEventListener('pointerup', releaseStick);
+    joystick?.removeEventListener('pointercancel', releaseStick);
     controls.removeEventListener('lock', onLock);
     controls.removeEventListener('unlock', onUnlock);
     controls.dispose();
