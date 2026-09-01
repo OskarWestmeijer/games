@@ -200,7 +200,7 @@ const NOISE_GLSL = /* glsl */ `
 
 `;
 
-const SURFACE_VERT = /* glsl */ `
+export const SURFACE_VERT = /* glsl */ `
   varying vec3 vNormalW;
   varying vec3 vWorldPos;
   varying vec3 vPosL;
@@ -216,7 +216,17 @@ const SURFACE_VERT = /* glsl */ `
   }
 `;
 
-const PLANET_FRAG = /* glsl */ `
+/**
+ * Everything needed to show *this* Earth, shared by every material that does.
+ *
+ * The planet in the window and the hub globe are the same world seen twice, and the only way
+ * to keep them honest about that is to light them with one piece of code. Concatenate this in
+ * front of a `main()` and call `sampleEarth()`; the uniforms it needs are the ones
+ * `createEarthMaterial` supplies.
+ *
+ * Requires the varyings from `SURFACE_VERT`.
+ */
+export const EARTH_SHADER_PRELUDE = /* glsl */ `
   uniform vec3 uSunDir;
   uniform float uTime;
   uniform sampler2D uDayMap;
@@ -247,18 +257,22 @@ const PLANET_FRAG = /* glsl */ `
     return c;
   }
 
-  void main() {
-    vec3 n = normalize(vNormalW);
-    vec3 sp = normalize(vPosL);
-    vec3 viewDir = normalize(cameraPosition - vWorldPos);
+  struct EarthSample {
+    /** Surface, clouds, terminator and city lights — everything but the limb haze. */
+    vec3 color;
+    /** Cloud coverage, 0..1, for anything that has to layer over the weather. */
+    float cloud;
+    /** The sunlit term, 0..1. Anything lit by scattered sunlight has to be scaled by it. */
+    float day;
+  };
 
+  EarthSample sampleEarth(vec2 uv, vec3 n, vec3 sp) {
     // --- surface ------------------------------------------------------------------
     // The maps are shown exactly as they are: a plain vUv lookup, no domain warp, no colour
     // grade, no procedural detail multiplied over the top. This world used to be Earth-*like*
     // — the lookup was warped so the coastlines were real coastlines in invented places — and
     // is now simply Earth. Everything that used to sit between the file and the screen was a
     // way of making a photograph look wrong, so none of it survives.
-    vec2 uv = vUv;
     vec3 dayTex = texture2D(uDayMap, uv).rgb;
 
     // Fallback while the maps are still downloading — planet view is the first thing the
@@ -292,9 +306,24 @@ const PLANET_FRAG = /* glsl */ `
                                               vec3(0.35, 0.40, 0.25))) * uHasMaps;
     color += vec3(1.00, 0.78, 0.45) * lights * (0.10 + 1.15 * night) * (1.0 - cloud);
 
+    return EarthSample(color, cloud, day);
+  }
+`;
+
+const PLANET_FRAG = /* glsl */ `
+  ${EARTH_SHADER_PRELUDE}
+
+  void main() {
+    vec3 n = normalize(vNormalW);
+    vec3 sp = normalize(vPosL);
+    vec3 viewDir = normalize(cameraPosition - vWorldPos);
+
+    EarthSample earth = sampleEarth(vUv, n, sp);
+    vec3 color = earth.color;
+
     // --- limb haze -------------------------------------------------------------------
     // Atmosphere thickening towards the edge of the disc. Note the remap: from the bottom of
-    // the pod's altitude range we are looking *along* the surface, so grazing never drops
+    // the station's altitude range we are looking *along* the surface, so grazing never drops
     // below ~0.62 anywhere in view — feeding it to pow() directly hazes the entire visible
     // strip into a pale smear rather than just the horizon. Climbing only makes the remap
     // more correct, since grazing then reaches 0 at the nadir.
@@ -303,7 +332,7 @@ const PLANET_FRAG = /* glsl */ `
     // a 0.15 floor on the night side, which laid a blue wash over the dark limb and over the
     // city lights near it — nothing is lighting that air, so now there is no haze there.
     float grazing = 1.0 - abs(dot(n, viewDir));
-    float haze = pow(smoothstep(0.62, 1.0, grazing), 2.5) * 0.72 * day;
+    float haze = pow(smoothstep(0.62, 1.0, grazing), 2.5) * 0.72 * earth.day;
     color = mix(color, vec3(0.45, 0.68, 1.00), haze);
 
     gl_FragColor = vec4(color, 1.0);
@@ -678,11 +707,19 @@ function loadMaps(quality: TextureQuality, maxAnisotropy: number): Promise<Plane
   return pending;
 }
 
+/**
+ * Radians per second of axial spin — a slow drift that keeps the surface alive under the
+ * station's windows. Exported because `flight.ts` needs it: an orbit whose period matches
+ * this is the one where the ground stops sliding underneath, which is what "synchronous"
+ * means on the navigation console.
+ */
+export const PLANET_SPIN_RATE = 0.004;
+
 export interface SpaceOptions {
   /**
-   * Radians per second of axial spin. The default is a slow drift that keeps the surface
-   * alive under the pod's window; the inspector passes 0, since a planet you are trying to
-   * look closely at should hold still and be lit by moving the sun instead.
+   * Radians per second of axial spin. Defaults to `PLANET_SPIN_RATE`; the inspector passes 0,
+   * since a planet you are trying to look closely at should hold still and be lit by moving
+   * the sun instead.
    */
   spinRate?: number;
   /** Which map set to start on. Defaults to `8k`; changed later with `setQuality()`. */
@@ -701,6 +738,14 @@ export interface Space {
    * the frame you don't want to be in front of someone.
    */
   ready: Promise<void>;
+  /**
+   * This space's sun, as the live vector the shaders read — not a copy.
+   *
+   * Handed out so that anything else showing the same Earth (the hub globe) is lit by the
+   * same sun and puts its terminator in the same place, including after `setSunDirection`.
+   * Mutate it through `setSunDirection` rather than directly.
+   */
+  sunDirection: THREE.Vector3;
   update(elapsed: number, dt: number): void;
   /** Re-aims this space's sun. The vector is normalised for you. */
   setSunDirection(dir: THREE.Vector3): void;
@@ -708,25 +753,56 @@ export interface Space {
   setQuality(quality: TextureQuality): Promise<void>;
 }
 
-export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions = {}): Space {
-  const { spinRate = 0.004, quality: initialQuality = '8k' } = options;
-  const group = new THREE.Group();
+export interface EarthMaterial {
+  material: THREE.ShaderMaterial;
+  /** Resolves once the opening map set is on the uniforms, or has failed. Never rejects. */
+  ready: Promise<void>;
+  setQuality(quality: TextureQuality): Promise<void>;
+  update(elapsed: number, dt: number): void;
+}
 
-  // One vector per space instance, referenced by the planet's uniform and both shells', so
-  // a single copy() re-lights all three — and two spaces in the same page don't share a sun.
-  const sunDir = SUN_DIR.clone();
+export interface EarthMaterialOptions {
+  quality?: TextureQuality;
+  /** Defaults to the planet's own. Pass one built on `EARTH_SHADER_PRELUDE`. */
+  fragmentShader?: string;
+  /** Merged in after the shared set, for whatever the caller's own `main()` needs. */
+  uniforms?: Record<string, THREE.IUniform>;
+  /** Merged into the `ShaderMaterial` constructor — `side`, `transparent`, and so on. */
+  material?: THREE.ShaderMaterialParameters;
+}
 
-  const planetMaterial = new THREE.ShaderMaterial({
+/**
+ * A material that shows this Earth: the NASA maps, the terminator, the clouds and the city
+ * lights, lit by the sun vector it is handed.
+ *
+ * Both the planet in `buildSpace` and the hub globe in `station/globe.ts` are built from
+ * this. That is the whole point of it — the globe is supposed to be the *same* world as the
+ * one out of the window, and two materials that merely resemble each other would drift apart
+ * the first time either was touched. It also means the globe costs no extra download: the
+ * map cache is page-wide, so it gets whatever the planet already has in hand.
+ *
+ * `renderer` is taken only for `capabilities.getMaxAnisotropy()`.
+ */
+export function createEarthMaterial(
+  renderer: THREE.WebGLRenderer,
+  sunDir: THREE.Vector3,
+  options: EarthMaterialOptions = {}
+): EarthMaterial {
+  const { quality: initialQuality = '8k', fragmentShader = PLANET_FRAG } = options;
+
+  const material = new THREE.ShaderMaterial({
     uniforms: {
       uSunDir: { value: sunDir },
       uTime: { value: 0 },
       uDayMap: { value: placeholderTexture() },
       uNightMap: { value: placeholderTexture() },
       uCloudMap: { value: placeholderTexture() },
-      uHasMaps: { value: 0 }
+      uHasMaps: { value: 0 },
+      ...(options.uniforms ?? {})
     },
     vertexShader: SURFACE_VERT,
-    fragmentShader: PLANET_FRAG
+    fragmentShader,
+    ...(options.material ?? {})
   });
 
   // Faded in once the maps arrive, rather than popped, so the swap from the procedural
@@ -742,9 +818,9 @@ export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions 
         // A switch made while this one was still downloading wins; whatever is on the
         // uniforms now is newer than what this promise is holding.
         if (quality !== requested) return;
-        planetMaterial.uniforms.uDayMap.value = maps.day;
-        planetMaterial.uniforms.uNightMap.value = maps.night;
-        planetMaterial.uniforms.uCloudMap.value = maps.clouds;
+        material.uniforms.uDayMap.value = maps.day;
+        material.uniforms.uNightMap.value = maps.night;
+        material.uniforms.uCloudMap.value = maps.clouds;
         mapsTarget = 1;
       })
       .catch((error) => {
@@ -754,9 +830,33 @@ export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions 
       });
   }
 
-  const ready = applyMaps(quality);
+  return {
+    material,
+    ready: applyMaps(quality),
+    setQuality(next: TextureQuality) {
+      if (next === quality) return Promise.resolve();
+      quality = next;
+      return applyMaps(next);
+    },
+    update(elapsed: number, dt: number) {
+      material.uniforms.uTime.value = elapsed;
+      const has = material.uniforms.uHasMaps;
+      has.value += (mapsTarget - has.value) * Math.min(1, dt * 2.5);
+    }
+  };
+}
 
-  const planet = new THREE.Mesh(new THREE.SphereGeometry(PLANET_RADIUS, 160, 120), planetMaterial);
+export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions = {}): Space {
+  const { spinRate = PLANET_SPIN_RATE, quality: initialQuality = '8k' } = options;
+  const group = new THREE.Group();
+
+  // One vector per space instance, referenced by the planet's uniform and both shells', so
+  // a single copy() re-lights all three — and two spaces in the same page don't share a sun.
+  const sunDir = SUN_DIR.clone();
+
+  const surface = createEarthMaterial(renderer, sunDir, { quality: initialQuality });
+
+  const planet = new THREE.Mesh(new THREE.SphereGeometry(PLANET_RADIUS, 160, 120), surface.material);
   group.add(planet);
 
   // The inner rim brightens the limb over the disc; the outer band is the glow bleeding off
@@ -799,11 +899,10 @@ export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions 
 
   return {
     group,
-    ready,
+    ready: surface.ready,
+    sunDirection: sunDir,
     update(elapsed: number, dt: number) {
-      planetMaterial.uniforms.uTime.value = elapsed;
-      const has = planetMaterial.uniforms.uHasMaps;
-      has.value += (mapsTarget - has.value) * Math.min(1, dt * 2.5);
+      surface.update(elapsed, dt);
       // A slow axial spin, independent of the station's orbit, so the surface moves too.
       planet.rotation.y = elapsed * spinRate;
 
@@ -820,9 +919,7 @@ export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions 
       sunDir.copy(dir).normalize();
     },
     setQuality(next: TextureQuality) {
-      if (next === quality) return Promise.resolve();
-      quality = next;
-      return applyMaps(next);
+      return surface.setQuality(next);
     }
   };
 }

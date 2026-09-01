@@ -44,10 +44,11 @@ const CHAIR = { x: -1.5, z: -0.6, yaw: 0.5 };
  *
  * It must sit outside every footprint below once those are inflated by the player radius in
  * `fpv-controls.ts`; a player spawned *inside* an obstacle is ejected in a direction nobody
- * chose. `yaw` is applied to the camera about the room's vertical, so 0 looks straight at the
- * window in the -Z wall.
+ * chose. `z` was -0.1, which is inside the chair's box once inflated — the first frame shoved
+ * the eye 15 cm forward before anyone had touched a key. +0.15 clears it. `yaw` is applied to
+ * the camera about the room's vertical, so 0 looks straight at the window in the -Z wall.
  */
-export const DESK_SPAWN = { x: -1.9, z: -0.1, yaw: 0 };
+export const DESK_SPAWN = { x: -1.9, z: 0.15, yaw: 0 };
 
 /**
  * The monitor's screen, in metres. The panel tilts back 8° so it faces slightly up towards a

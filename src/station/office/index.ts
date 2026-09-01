@@ -4,22 +4,23 @@ import { buildWorkstation } from './desk';
 import { buildRadio } from './radio';
 
 /**
- * The pod: the shell from `room.ts` with the workstation from `desk.ts` in it, and the radio
- * from `radio.ts` on the desk.
+ * The office/bedroom: the shell from `room.ts` with the workstation from `desk.ts` in it, and
+ * the radio from `radio.ts` on the desk. The station's first module, and still the one you
+ * arrive in.
  *
- * This file is the seam the rest of the app sees. `planet-view.ts` imports `buildPod`,
- * `ROOM`, `EYE_HEIGHT` and `ROOM_BOUNDS` from `./pod` exactly as it did when the whole room
- * was one file, so the split cost nothing at the call site — and the room can now grow a
- * module at a time (handrails, a hatch, stowage) without any of them knowing about each other.
+ * Its window, frame and proportions are solved against a specific eye position at the desk,
+ * which is why it keeps a hand-built shell rather than going through `station/shell.ts` like
+ * every other module. It sits on bearing 0° — station -Z, the same -Z the window has always
+ * been on — so it needs no rotation and the framing carries over untouched.
  */
 
-export { ROOM, EYE_HEIGHT, ROOM_BOUNDS, WINDOW } from './room';
+export { ROOM, EYE_HEIGHT, WINDOW } from './room';
 export { DESK, DESK_SPAWN } from './desk';
 
-export interface Pod {
+export interface Office {
   group: THREE.Group;
   /**
-   * The radio's aiming volume. The pod knows what its furniture *is*; `planet-view.ts`
+   * The radio's aiming volume. The office knows what its furniture *is*; `planet-view.ts`
    * decides what looking at it does.
    */
   radioTarget: THREE.Object3D;
@@ -29,7 +30,7 @@ export interface Pod {
   obstacles: THREE.Box2[];
 }
 
-export function buildPod(): Pod {
+export function buildOffice(): Office {
   const group = new THREE.Group();
   group.add(buildRoom());
 

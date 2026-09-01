@@ -25,9 +25,7 @@ const inspectView = document.querySelector<HTMLDivElement>('#inspect-view')!;
 const inspectCanvas = document.querySelector<HTMLCanvasElement>('#inspect-canvas')!;
 const sunSlider = document.querySelector<HTMLInputElement>('#sun-azimuth')!;
 const qualitySelect = document.querySelector<HTMLSelectElement>('#texture-quality')!;
-const altitudeSlider = document.querySelector<HTMLInputElement>('#orbit-altitude')!;
 const moveStick = document.querySelector<HTMLDivElement>('#move-stick')!;
-const altitudeValue = document.querySelector<HTMLSpanElement>('#altitude-value')!;
 
 /**
  * Manifest URLs are publicDir-relative with no leading slash (see `ModelEntry` in
@@ -135,34 +133,22 @@ let planetModule: Promise<PlanetModule> | null = null;
 const loadPlanetModule = () => (planetModule ??= import('./planet-view'));
 
 /**
- * The sliders' bounds come from the view module, not from the markup — the altitude floor is
- * a real constraint (the pod has to stay outside the atmosphere shell), not a UI preference.
- * They can only be configured once that module has loaded, which is fine: both sliders live
- * inside HUDs that are hidden until their view is open.
+ * The sun slider's opening value comes from the view module rather than the markup, so the
+ * knob starts where the sun actually is.
+ *
+ * Planet view has no slider left to configure. Altitude, attitude, orbit mode and the clock
+ * are on the navigation console you walk to — deleting UI rather than adding it, and the
+ * reason the station has a navigation room at all. The inspector keeps its sun slider: it is
+ * a study tool, not a place, and there is nobody in it to walk anywhere.
  */
 let worldUiReady = false;
 
 async function initWorldUi() {
   if (worldUiReady) return;
   worldUiReady = true;
-  const [{ ALTITUDE_RANGE }, { DEFAULT_SUN_AZIMUTH }] = await Promise.all([
-    loadPlanetModule(),
-    import('./planet-inspect')
-  ]);
-
-  altitudeSlider.min = String(ALTITUDE_RANGE.min);
-  altitudeSlider.max = String(ALTITUDE_RANGE.max);
-  altitudeSlider.step = '5';
-  altitudeSlider.value = String(ALTITUDE_RANGE.initial);
-  altitudeValue.textContent = altitudeSlider.value;
-
+  const { DEFAULT_SUN_AZIMUTH } = await import('./planet-inspect');
   sunSlider.value = String(Math.round(DEFAULT_SUN_AZIMUTH));
 }
-
-altitudeSlider.addEventListener('input', () => {
-  altitudeValue.textContent = altitudeSlider.value;
-  planet?.setAltitude(Number(altitudeSlider.value));
-});
 
 sunSlider.addEventListener('input', () => inspect?.setSunAzimuth(Number(sunSlider.value)));
 
@@ -210,7 +196,6 @@ async function ensurePlanet(): Promise<PlanetView> {
   planet ??= createPlanetView(planetCanvas, {
     onLockChange: (locked) => document.body.classList.toggle('pointer-locked', locked),
     quality: quality(),
-    altitude: Number(altitudeSlider.value),
     joystick: moveStick,
     interactPrompt
   });

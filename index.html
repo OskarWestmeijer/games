@@ -46,10 +46,12 @@
           <span class="fine-only">Press <kbd>E</kbd> to <span data-interact-label></span></span>
           <span class="coarse-only">Tap to <span data-interact-label></span></span>
         </button>
+        <!--
+          No station controls here. Altitude, attitude, orbit mode and the clock live on the
+          navigation console you walk to — see `station/console.ts`. All that is left is how
+          to move.
+        -->
         <div id="planet-controls" class="hud">
-          <label for="orbit-altitude">Altitude</label>
-          <input id="orbit-altitude" type="range" />
-          <span id="altitude-value" class="hud-value"></span>
           <span class="hud-note fine-only">Click to look around · WASD to move · Esc to release</span>
           <span class="hud-note coarse-only">Drag to look · stick to move</span>
         </div>

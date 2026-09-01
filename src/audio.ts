@@ -37,6 +37,12 @@ const MUSIC_VOL = 0.35;
 /** Seconds. Doubles as the crossfade length and as how far before the end the next one starts. */
 const FADE = 4;
 
+/**
+ * Seconds. The radio going off is a deliberate "make it stop" gesture, not a scene transition
+ * — it should read as an immediate mute, not a lingering fade-out to match the fade-in.
+ */
+const FADE_OUT = 0.6;
+
 /** Seconds between playhead checks. Sixty times a second would be pointless for a 4s window. */
 const CHECK_INTERVAL = 0.25;
 
@@ -61,6 +67,14 @@ export interface PodAudio {
    * than restarting the playlist.
    */
   setEnabled(enabled: boolean): void;
+  /**
+   * Retries `play()` on whatever should be audible right now. The radio starts on by default,
+   * which means `setOn(true)` fires before any user gesture has happened — autoplay is blocked,
+   * `play()` rejects and is swallowed, and the elements sit there paused with their volume
+   * still ramping. Call this from the first click/keydown/tap the page sees to pick it back up.
+   * A no-op once the browser is already letting audio play.
+   */
+  resume(): void;
   /**
    * Advances the playlist. Called from the render loop rather than a `setInterval`: the old
    * implementation polled every 500 ms for the lifetime of the page even with the view parked,
@@ -166,18 +180,19 @@ export function createPodAudio(options: AudioOptions = {}): PodAudio {
 
   function apply(): void {
     if (!loaded) return;
+    const dur = audible() ? FADE : FADE_OUT;
     for (const el of bed) {
       if (audible()) play(el);
-      fadeTo(el, audible() ? bedVolume : 0, FADE);
+      fadeTo(el, audible() ? bedVolume : 0, dur);
     }
     if (music) {
       if (audible()) play(music);
-      fadeTo(music, audible() ? musicVolume : 0, FADE);
+      fadeTo(music, audible() ? musicVolume : 0, dur);
     }
     if (!audible()) {
       // Pause only once the ramp has finished, or the fade is a cut. Captured by value: a
       // re-enable inside the window starts a fresh fade, and the guard below sees it.
-      after(FADE * 1000 + 250, () => {
+      after(dur * 1000 + 250, () => {
         if (audible()) return;
         for (const el of bed) el.pause();
         music?.pause();
@@ -221,6 +236,12 @@ export function createPodAudio(options: AudioOptions = {}): PodAudio {
       if (next === enabled) return;
       enabled = next;
       apply();
+    },
+
+    resume() {
+      if (!audible()) return;
+      for (const el of bed) if (el.paused) play(el);
+      if (music?.paused) play(music);
     },
 
     update(dt: number) {

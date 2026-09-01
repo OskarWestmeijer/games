@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DOOR } from '../shell';
 
 /**
  * The station interior's shell: the box, the window and the ceiling lights. Metres, with the
@@ -32,19 +33,6 @@ export const WINDOW = { width: 6.2, height: 2.7, centerY: 1.62, cornerRadius: 0.
  */
 const FRAME_WIDTH = 0.1;
 export const FRAME_DEPTH = 0.14;
-
-/** How far from the walls the player is held. Doubles as the "you have a body" fudge. */
-const WALL_CLEARANCE = 0.45;
-
-/** The volume the player is confined to, in room-local coordinates. */
-export const ROOM_BOUNDS = new THREE.Box3(
-  new THREE.Vector3(
-    -ROOM.width / 2 + WALL_CLEARANCE,
-    0,
-    -ROOM.depth / 2 + WALL_CLEARANCE
-  ),
-  new THREE.Vector3(ROOM.width / 2 - WALL_CLEARANCE, ROOM.height, ROOM.depth / 2 - WALL_CLEARANCE)
-);
 
 /**
  * Traces a rounded rectangle into `target`, which can be either a `Shape` (an outline) or
@@ -126,8 +114,26 @@ export function buildRoom(): THREE.Group {
   ceiling.position.y = H;
   pod.add(ceiling);
 
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(W, H), shell);
-  back.position.set(0, H / 2, D / 2);
+  // The +Z wall is the one the corridor arrives at, so it is a wall with a doorway in it —
+  // same Shape-with-a-hole construction as the window below, at a much duller scale.
+  const backShape = new THREE.Shape();
+  backShape.moveTo(-W / 2, 0);
+  backShape.lineTo(W / 2, 0);
+  backShape.lineTo(W / 2, H);
+  backShape.lineTo(-W / 2, H);
+  backShape.closePath();
+
+  const doorway = new THREE.Path();
+  const dw = DOOR.width / 2;
+  doorway.moveTo(-dw, 0);
+  doorway.lineTo(dw, 0);
+  doorway.lineTo(dw, DOOR.height);
+  doorway.lineTo(-dw, DOOR.height);
+  doorway.closePath();
+  backShape.holes.push(doorway);
+
+  const back = new THREE.Mesh(new THREE.ShapeGeometry(backShape), shell);
+  back.position.set(0, 0, D / 2);
   back.rotation.y = Math.PI;
   pod.add(back);
 

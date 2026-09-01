@@ -14,6 +14,8 @@ provenance, exactly like `#planet-credit`; nothing in it is imposed on anyone.
 | file | layer | title | author | source | licence |
 | --- | --- | --- | --- | --- | --- |
 | `001_Synthwave_4k.mp3` | music | Calm Ambient 1 (Synthwave 4k) | The Cynic Project | [OpenGameArt](https://opengameart.org/content/calm-ambient-1-synthwave-4k) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `002_Synthwave_15k.mp3` | music | Calm Ambient 2 (Synthwave 15k) | The Cynic Project | [OpenGameArt](https://opengameart.org/content/calm-ambient-2-synthwave-15k) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| `003_lifeWave_2k.mp3` | music | Calm Ambient 3 (Lifewave 2k) | The Cynic Project | [OpenGameArt](https://opengameart.org/content/calm-ambient-3-lifewave-2k) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
 
 Fill a row in per file: the `.mp3` as committed, `bed` or `music`, the original title, the
 author as they credit themselves, a link to the page the file came from, and a link to the

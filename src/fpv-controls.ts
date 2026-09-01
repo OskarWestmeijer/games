@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
+import { clampToRegions, type Region } from './regions';
 
 /**
  * A first-person walk-around controller with two input paths, because the site has to work on
@@ -17,7 +18,7 @@ import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockCont
  * walking speed. `PointerLockControls` writes `camera.position`/`camera.quaternion` and reads
  * `camera.matrix`, all of which are *local* to the camera's parent. That's what lets the
  * camera hang off the orbiting station rig in `planet-view.ts` and still be driven in plain
- * room coordinates here — `bounds` is in room space, not world space.
+ * station coordinates here — `regions` is in station space, not world space.
  */
 
 /** Radians of rotation per pixel dragged. Pointer-lock mouse look uses 0.002 per pixel. */
@@ -44,8 +45,12 @@ const POINTER_LOCK_SUPPORTED =
   typeof document !== 'undefined' && 'requestPointerLock' in document.documentElement;
 
 export interface FpvOptions {
-  /** Walkable volume, in the same space as `camera.position` (i.e. room-local). */
-  bounds: THREE.Box3;
+  /**
+   * The walkable floor, as a union of convex XZ polygons in the same space as
+   * `camera.position`. See `regions.ts` — this was one `Box3` when there was one room, and a
+   * station with arms off a hub is not a box.
+   */
+  regions: Region[];
   /**
    * Footprints in the walkable plane the player is pushed back out of — furniture. Optional,
    * and empty by default: an empty room needs none, and neither will EVA.
@@ -87,7 +92,7 @@ export function createFpvControls(
   domElement: HTMLElement,
   options: FpvOptions
 ): FpvControls {
-  const { bounds, obstacles = [], eyeHeight, speed = 2.4, onLockChange, joystick = null } = options;
+  const { regions, obstacles = [], eyeHeight, speed = 2.4, onLockChange, joystick = null } = options;
 
   const controls = new PointerLockControls(camera, domElement);
   const keys = new Set<string>();
@@ -104,6 +109,8 @@ export function createFpvControls(
   // Room-plane velocity: x is strafe, y is forward. Smoothed towards the input direction
   // rather than snapped, so starting and stopping has a little weight to it.
   const velocity = new THREE.Vector2();
+  /** Scratch for the floor clamp, so `update` allocates nothing per frame. */
+  const _floor = new THREE.Vector2();
   let enabled = false;
 
   const held = (codes: string[]) => (codes.some((code) => keys.has(code)) ? 1 : 0);
@@ -264,8 +271,13 @@ export function createFpvControls(
     controls.moveRight(velocity.x * dt);
     controls.moveForward(velocity.y * dt);
 
-    camera.position.x = THREE.MathUtils.clamp(camera.position.x, bounds.min.x, bounds.max.x);
-    camera.position.z = THREE.MathUtils.clamp(camera.position.z, bounds.min.z, bounds.max.z);
+    // Held inside the union of the walkable regions. Unlike the furniture below this is a
+    // *clamp*, not a push-out: a position outside every region is moved onto the nearest one
+    // whatever the step size, so no walking speed can pass through a wall.
+    _floor.set(camera.position.x, camera.position.z);
+    clampToRegions(_floor, regions);
+    camera.position.x = _floor.x;
+    camera.position.z = _floor.y;
     // Twice, because the footprints can touch: one pass is enough to push you out of the desk
     // and straight into the chair beside it.
     pushOutOfObstacles();
