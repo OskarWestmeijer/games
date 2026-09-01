@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 
 /**
- * The picture on the monitor: a miniature of the homepage you arrived from.
+ * The picture on the monitor: a miniature of oskar-westmeijer.com, so there is something
+ * recognisable on the one screen in the room rather than a blank panel.
  *
  * It is drawn once into a 2D canvas rather than being a loaded image, so it costs one texture
- * upload and nothing per frame, and it stays in step with `home.css` because the colours below
- * are the same daisyUI *corporate* tokens, converted from their `oklch()` originals.
+ * upload and nothing per frame. The colours below are that site's daisyUI *corporate* palette,
+ * converted from their `oklch()` originals.
  *
  * It does not need to be legible — at the size the panel occupies in the window it reads as a
- * shape, not as text. It needs to be *recognisable*, so that a player who has just come from
- * the page knows without being told that this screen is the way back to it.
+ * shape, not as text. It needs to be *recognisable* as a web page, which is what the layout
+ * below is doing.
  */
 
 /** The daisyUI corporate palette, in the sRGB hex the canvas context wants. */

@@ -24,7 +24,7 @@ export interface InteractionTarget {
   /** Metres. Past this the target is ignored even when it is dead centre in the view. */
   reach: number;
   /**
-   * What the prompt says can be done, e.g. "sit back down". A function when the verb depends
+   * What the prompt says can be done, e.g. "switch the radio on". A function when the verb depends
    * on the target's own state — a switch reads "switch the radio on" or "off" without ever
    * ceasing to be the same target, and a plain string would leave the prompt showing whichever
    * half it happened to be on when you first looked at it.

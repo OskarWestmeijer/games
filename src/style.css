@@ -21,12 +21,9 @@ body {
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
-/* Everything below is written for a full-screen canvas and is wrong for a document: a page
-   that cannot scroll, whose text cannot be selected, in a container pinned to the viewport
-   height. `main.ts` sets `world-mode` for the three 3D views and clears it for the homepage,
-   which is a page like any other. Scoped from the start because the homepage is where this is
-   really going — there, `:root` and `body` belong to somebody else entirely. */
-body.world-mode {
+/* Every view here is a full-screen canvas, never a document: nothing scrolls, nothing is
+   selectable text, and #app is pinned to the viewport height. */
+body {
   overflow: hidden;
   /* iOS: stop rubber-band scrolling and the long-press selection callout over the scene. */
   overscroll-behavior: none;
@@ -40,11 +37,6 @@ body.world-mode {
   width: 100vw;
   /* dvh, because iOS Safari's 100vh includes the space behind its own chrome and would push
      the HUD off the bottom of the screen. vh first as the fallback. */
-  min-height: 100vh;
-  min-height: 100dvh;
-}
-
-body.world-mode #app {
   height: 100vh;
   height: 100dvh;
 }
@@ -92,29 +84,10 @@ body.world-mode #app {
 
 /* Author `display: flex` above otherwise beats the UA stylesheet's [hidden] rule. */
 #mode-switcher[hidden],
-#home-view[hidden],
 #asset-view[hidden],
 #planet-view[hidden],
 #inspect-view[hidden] {
   display: none;
-}
-
-/* The world is built and warmed up *before* anyone asks for it, and a renderer sizes itself
-   from its canvas — a `hidden` container measures 0x0 and warms nothing. So it is rendered
-   into an eight-pixel corner behind the page instead: everything expensive about the first
-   frame (shader compilation, texture decode and upload, geometry) is resolution-independent,
-   and doing it full-screen would add a whole-viewport shader pass and a bloom chain to a page
-   somebody is still reading. Not smaller than 8px: `UnrealBloomPass` halves its way down five
-   mip levels, and 2px is one rounding away from a zero-sized render target. */
-#planet-view.warming {
-  position: fixed;
-  left: 0;
-  bottom: 0;
-  width: 8px;
-  height: 8px;
-  opacity: 0;
-  pointer-events: none;
-  z-index: -1;
 }
 
 #planet-canvas {

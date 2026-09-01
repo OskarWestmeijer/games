@@ -15,8 +15,8 @@ import { makeScreenTexture } from './screen';
  *   below the limb — near enough to notice, low enough not to be in the way.
  * - **The chair is offset from the monitor, not square to it.** It is an obstacle like the desk
  *   is, and left where you would actually sit it fences off the one spot you need to stand in
- *   to read the screen — which is the way out of the room. Pushed back and to the right, it
- *   reads as one somebody has just got out of and leaves the approach open.
+ *   to read the screen. Pushed back and to the right, it reads as one somebody has just got
+ *   out of and leaves the approach open.
  *
  * The materials are the first warm ones in the room — see "Real outside, warm inside" in
  * CLAUDE.md. Everything the shell is made of is grey-blue; this is not.
@@ -57,12 +57,6 @@ const PANEL = { width: 0.66, height: 0.42, tilt: -0.14, centerY: 1.06 };
 
 export interface Workstation {
   group: THREE.Group;
-  /**
-   * What `interaction.ts` aims at. Not the panel itself but an invisible box a little larger
-   * than it: `THREE.Raycaster` ignores `visible`, so this costs one more mesh and nothing
-   * else, and it makes "looking at the monitor" forgiving enough to hit on a tablet.
-   */
-  target: THREE.Object3D;
   /** Footprints in room-local XZ the player is pushed out of. Height is not considered. */
   obstacles: THREE.Box2[];
 }
@@ -139,11 +133,6 @@ export function buildWorkstation(): Workstation {
   screen.position.z = 0.016;
   head.add(screen);
 
-  // The aiming target: bigger than the panel, and never drawn.
-  const target = box(PANEL.width + 0.16, PANEL.height + 0.16, 0.12, plastic, 0, 0, 0);
-  target.visible = false;
-  head.add(target);
-
   // A little spill, so the panel reads as switched on rather than as a pale rectangle.
   const glow = new THREE.PointLight(0xdfe8ff, 0.35, 1.4, 2);
   glow.position.set(0, 0, 0.25);
@@ -193,7 +182,6 @@ export function buildWorkstation(): Workstation {
 
   return {
     group,
-    target,
     obstacles: [
       footprint(DESK.x, DESK.z, DESK.width, DESK.depth),
       footprint(CHAIR.x, CHAIR.z, 0.66, 0.66)

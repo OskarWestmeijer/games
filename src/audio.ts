@@ -2,11 +2,9 @@
  * The pod's sound: a station room-tone bed with sparse ambient music over it.
  *
  * **Nothing plays until somebody asks for it.** There is no autoplay and no HUD mute button —
- * the radio on the desk is the switch (`pod/radio.ts`), reached through `interaction.ts` the
- * same way the monitor is. That is what "off by default" means here, and it is taken
- * literally: no `src` is assigned and no byte is fetched until `setOn(true)`. An easter egg
- * does not get to spend somebody's data uninvited — the same reasoning as `PRELOAD_OK` in
- * `main.ts`, applied to a few megabytes of audio rather than a few of surface map.
+ * the radio on the desk is the switch (`pod/radio.ts`), reached through `interaction.ts`. That
+ * is what "off by default" means here, and it is taken literally: no `src` is assigned and no
+ * byte is fetched until `setOn(true)`.
  *
  * **Files are discovered with `import.meta.glob`, not a Vite plugin.** The retired game used a
  * `virtual:audio-manifest` plugin that scanned `public/audio/` and handed back bare filenames

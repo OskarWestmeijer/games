@@ -93,19 +93,11 @@ const WINDOW_YAW = 0.6;
 const PLANET_CENTER = new THREE.Vector3(0, 0, 0);
 
 /**
- * How close the eye has to be to the monitor before the prompt offers it, in metres. The desk
- * can be walked right up to (see `CHAIR` in `pod/desk.ts` — it is parked out of the approach
- * for exactly this reason), which puts the panel about a metre away; the slack above that is
- * so you do not have to be standing on top of it, and it is still short enough that the room's
- * far side is nowhere near.
- */
-const SCREEN_REACH = 2.4;
-
-/**
- * The radio is a quarter of a metre wide against the monitor's two thirds, and it sits on the
- * near edge of the desk rather than behind it — so it is both harder to aim at and closer when
- * you are. Shorter than `SCREEN_REACH` on purpose: you lean in to a switch, and keeping the
- * two reaches apart is what stops a sweep across the desk flickering between the prompts.
+ * How wide the radio's aiming box is against the monitor's, and how close the eye has to be
+ * before the prompt offers it, in metres. It sits on the near edge of the desk rather than
+ * behind it, so it is both harder to aim at and closer when you are — a shorter reach than a
+ * larger target further back would need, and the two staying apart is what stops a sweep
+ * across the desk flickering between prompts.
  */
 const RADIO_REACH = 1.7;
 
@@ -119,8 +111,6 @@ export interface PlanetViewOptions {
   joystick?: HTMLElement | null;
   /** The "press E to…" element; see `createInteractions`. Injected, never queried for. */
   interactPrompt?: HTMLElement | null;
-  /** Called when the player sits back down at the desk. Wired to leaving the view entirely. */
-  onExit?: () => void;
 }
 
 export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewOptions = {}) {
@@ -208,8 +198,6 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
   const interactions = createInteractions(
     camera,
     [
-      // Radio first: targets are tested in order and the first hit wins, and this is the
-      // smaller and nearer of the two. The monitor is large enough to find either way.
       // Dropped entirely when `src/audio/` is empty — the unit stays on the desk as a prop,
       // but a prompt offering to switch on something that cannot make a sound is a lie.
       ...(audio.available
@@ -221,13 +209,7 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
               activate: toggleRadio
             }
           ]
-        : []),
-      {
-        object: pod.screenTarget,
-        reach: SCREEN_REACH,
-        label: 'sit back down',
-        activate: () => options.onExit?.()
-      }
+        : [])
     ],
     { prompt: options.interactPrompt }
   );
@@ -324,28 +306,6 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
   }
 
   /**
-   * Does everything the first frame would otherwise do, while nobody is looking: waits for the
-   * surface maps, compiles every program, uploads every texture and draws one complete frame
-   * through the composer. After this, `start()` is a state flip rather than a stall.
-   *
-   * The canvas has to have a size when this runs — the renderer measures it, and a 0x0 one
-   * warms nothing — but it does **not** have to be full size. Everything expensive here is
-   * resolution-independent, so `main.ts` warms in an 8px corner rather than paying for a
-   * full-screen shader pass and a bloom chain on a page someone is still reading. The
-   * composer's render targets are then reallocated by the first real `resize()`, which is an
-   * allocation and not a compile: one dropped frame on entry, not a freeze.
-   *
-   * Order matters. Compiling before the maps resolve compiles against the 1x1 placeholder
-   * textures and leaves the real upload for later, which is the thing being avoided.
-   */
-  async function warm() {
-    await space.ready;
-    resize();
-    await renderer.compileAsync(scene, camera);
-    composer.render();
-  }
-
-  /**
    * Not used by this repo — the page keeps every view it has built, so there is nothing to
    * tear down. It exists for the port: a Svelte component unmounts, and without this the
    * renderer, its context and the resize listener leak on every mount.
@@ -363,13 +323,7 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
   return {
     start,
     stop,
-    warm,
     dispose,
-    /**
-     * Arrive already looking around, rather than landing in the room and having to click it
-     * first. Only works while the caller still holds a user gesture — see `FpvControls.lock`.
-     */
-    capturePointer: () => controls.lock(),
     setTextureQuality: (quality: TextureQuality) => space.setQuality(quality),
     /**
      * Moves the orbit. Takes effect on the next frame — `updateOrbit()` re-derives both the

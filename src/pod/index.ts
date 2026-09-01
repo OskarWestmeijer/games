@@ -19,11 +19,9 @@ export { DESK, DESK_SPAWN } from './desk';
 export interface Pod {
   group: THREE.Group;
   /**
-   * The monitor's aiming volume. The pod knows what its furniture *is*; `planet-view.ts`
+   * The radio's aiming volume. The pod knows what its furniture *is*; `planet-view.ts`
    * decides what looking at it does.
    */
-  screenTarget: THREE.Object3D;
-  /** The radio's aiming volume, same arrangement. */
   radioTarget: THREE.Object3D;
   /** The radio's indicator, driven from whatever `planet-view.ts` wired the radio up to. */
   setRadioLit(lit: boolean): void;
@@ -44,7 +42,6 @@ export function buildPod(): Pod {
 
   return {
     group,
-    screenTarget: workstation.target,
     radioTarget: radio.target,
     setRadioLit: radio.setLit,
     obstacles: workstation.obstacles
