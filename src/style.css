@@ -19,6 +19,14 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Everything below is written for a full-screen canvas and is wrong for a document: a page
+   that cannot scroll, whose text cannot be selected, in a container pinned to the viewport
+   height. `main.ts` sets `world-mode` for the three 3D views and clears it for the homepage,
+   which is a page like any other. Scoped from the start because the homepage is where this is
+   really going — there, `:root` and `body` belong to somebody else entirely. */
+body.world-mode {
   overflow: hidden;
   /* iOS: stop rubber-band scrolling and the long-press selection callout over the scene. */
   overscroll-behavior: none;
@@ -29,11 +37,16 @@ body {
 
 #app {
   display: flex;
+  width: 100vw;
   /* dvh, because iOS Safari's 100vh includes the space behind its own chrome and would push
      the HUD off the bottom of the screen. vh first as the fallback. */
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+body.world-mode #app {
   height: 100vh;
   height: 100dvh;
-  width: 100vw;
 }
 
 #mode-switcher {
@@ -78,10 +91,30 @@ body {
 }
 
 /* Author `display: flex` above otherwise beats the UA stylesheet's [hidden] rule. */
+#mode-switcher[hidden],
+#home-view[hidden],
 #asset-view[hidden],
 #planet-view[hidden],
 #inspect-view[hidden] {
   display: none;
+}
+
+/* The world is built and warmed up *before* anyone asks for it, and a renderer sizes itself
+   from its canvas — a `hidden` container measures 0x0 and warms nothing. So it is rendered
+   into an eight-pixel corner behind the page instead: everything expensive about the first
+   frame (shader compilation, texture decode and upload, geometry) is resolution-independent,
+   and doing it full-screen would add a whole-viewport shader pass and a bloom chain to a page
+   somebody is still reading. Not smaller than 8px: `UnrealBloomPass` halves its way down five
+   mip levels, and 2px is one rounding away from a zero-sized render target. */
+#planet-view.warming {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 8px;
+  height: 8px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
 }
 
 #planet-canvas {
@@ -129,6 +162,11 @@ body {
 }
 
 @media (any-pointer: coarse) {
+  /* No pointer lock to key off, so the crosshair is simply always there. */
+  #crosshair {
+    opacity: 1;
+  }
+
   #move-stick {
     display: flex;
   }
@@ -226,6 +264,61 @@ body {
 
 .planet-credit a:hover {
   color: var(--accent);
+}
+
+/* --- looking at things ---------------------------------------------------------------------
+   "Look at the monitor and press E" has no referent without a mark to look *with*, so the
+   crosshair is not decoration. It shows while the pointer is locked, and always on a
+   touchscreen, where there is no lock to take. */
+
+#crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: rgba(232, 230, 225, 0.65);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+body.pointer-locked #crosshair {
+  opacity: 1;
+}
+
+/* A real <button>, so the touch path is a tap on the prompt itself — there is no E key on an
+   iPad. It sits above the canvas, and `fpv-controls` binds its pointer handlers to the canvas,
+   so a tap here never also starts a look-drag. */
+#interact-prompt {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, 1.75rem);
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(12, 14, 18, 0.72);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+#interact-prompt[hidden] {
+  display: none;
+}
+
+#interact-prompt kbd {
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  font: inherit;
+  font-size: 0.7rem;
 }
 
 /* While the pointer is locked the player is "in" the scene — get the UI out of the way.

@@ -3,22 +3,106 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>3D Asset Viewer</title>
+    <title>Oskar Westmeijer</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="mode-switcher">
+    <div id="mode-switcher" hidden>
       <select id="mode-select">
+        <option value="home">Homepage</option>
         <option value="planet">Planet View</option>
         <option value="inspect">Planet Inspector</option>
         <option value="asset">Asset View</option>
       </select>
       <select id="texture-quality" title="Resolution of the planet's surface maps">
         <option value="4k">Surface 4K · 1.2 MB</option>
-        <option value="8k">Surface 8K · 2.9 MB</option>
+        <option value="8k" selected>Surface 8K · 2.9 MB</option>
       </select>
     </div>
     <div id="app">
+      <!-- A static stand-in for oskar-westmeijer.com, so the easter egg can be built and the
+           cold-load sequence exercised without touching the real (SvelteKit) site. Markup and
+           palette follow that site's `+layout.svelte` / `+page.svelte`; see CLAUDE.md. -->
+      <div id="home-view" class="view">
+        <header class="hp-header">
+          <nav class="hp-nav">
+            <a class="hp-brand" href="#">Oskar Westmeijer</a>
+            <div class="hp-links">
+              <a class="hp-link current" href="#">About</a>
+              <a
+                class="hp-link"
+                href="https://oskar-westmeijer.com/projects"
+                target="_blank"
+                rel="noopener"
+                >Projects</a
+              >
+              <span class="hp-divider" aria-hidden="true"></span>
+              <a
+                href="https://github.com/OskarWestmeijer"
+                aria-label="Oskar Westmeijer GitHub profile"
+                target="_blank"
+                rel="noopener"
+                ><img class="hp-icon" alt="" src="./src/homepage/github.svg"
+              /></a>
+              <a
+                href="https://www.linkedin.com/in/oskar-westmeijer-488449252/"
+                aria-label="Oskar Westmeijer LinkedIn profile"
+                target="_blank"
+                rel="noopener"
+                ><img class="hp-icon" alt="" src="./src/homepage/linkedin.svg"
+              /></a>
+            </div>
+          </nav>
+        </header>
+        <main class="hp-main">
+          <section class="hp-about">
+            <div class="hp-intro">
+              <img
+                class="hp-portrait"
+                src="./src/homepage/portrait.webp"
+                alt="Portrait of Oskar Westmeijer"
+                width="176"
+                height="176"
+              />
+              <div>
+                <h1 class="hp-name">Oskar Westmeijer</h1>
+                <p class="hp-role"></p>
+              </div>
+            </div>
+            <div class="hp-rule" aria-hidden="true"></div>
+            <div class="hp-bio"></div>
+            <div class="hp-footer">
+              <a
+                class="hp-cta"
+                href="https://oskar-westmeijer.com/projects"
+                target="_blank"
+                rel="noopener"
+                >View Projects <span aria-hidden="true">→</span></a
+              >
+              <div class="hp-langs">
+                <button type="button" data-lang="en">EN</button>
+                <button type="button" data-lang="de">DE</button>
+                <button type="button" data-lang="fi">FI</button>
+              </div>
+            </div>
+
+            <!-- The easter egg, at the end of the reading path rather than floating over the
+                 page: whoever finishes the bio arrives here, and it reads as part of the
+                 document instead of as a widget stuck on top of one. Three states, all driven
+                 from `main.ts`: booting (disabled, with the shimmer and the dots), ready
+                 (`.ready`, lit up), and a dead end if WebGL goes away. The orbiting dot is
+                 the same idea as the room behind it. -->
+            <aside class="hp-egg">
+              <p class="hp-egg-hint">You've been sitting a while.</p>
+              <button id="get-up" disabled>
+                <span id="get-up-orbit" aria-hidden="true"><i></i></span>
+                <span id="get-up-label">Warming up the view</span>
+                <span id="get-up-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              </button>
+            </aside>
+          </section>
+        </main>
+      </div>
       <div id="asset-view" class="view" hidden>
         <aside id="gallery">
           <h1>Assets</h1>
@@ -39,8 +123,13 @@
           <div id="empty-state" hidden>No .glb files found in ai-assets/.</div>
         </main>
       </div>
-      <div id="planet-view" class="view">
+      <div id="planet-view" class="view" hidden>
         <canvas id="planet-canvas"></canvas>
+        <div id="crosshair" aria-hidden="true"></div>
+        <button id="interact-prompt" hidden>
+          <span class="fine-only">Press <kbd>E</kbd> to <span data-interact-label></span></span>
+          <span class="coarse-only">Tap to <span data-interact-label></span></span>
+        </button>
         <div id="planet-controls" class="hud">
           <label for="orbit-altitude">Altitude</label>
           <input id="orbit-altitude" type="range" />

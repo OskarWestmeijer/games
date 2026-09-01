@@ -30,6 +30,13 @@ const PITCH_LIMIT = Math.PI / 2 - 0.02;
 const STICK_DEADZONE = 0.12;
 
 /**
+ * How far the eye is held off furniture. Smaller than `WALL_CLEARANCE`, which also has to
+ * account for the walls being flat planes you would otherwise press your face against; here
+ * the shapes are solid and standing close to them is the point.
+ */
+const PLAYER_RADIUS = 0.32;
+
+/**
  * Whether this browser has the Pointer Lock API. iOS has never implemented it, and calling
  * `lock()` there is a TypeError rather than a no-op, so every use of it is guarded.
  */
@@ -39,6 +46,11 @@ const POINTER_LOCK_SUPPORTED =
 export interface FpvOptions {
   /** Walkable volume, in the same space as `camera.position` (i.e. room-local). */
   bounds: THREE.Box3;
+  /**
+   * Footprints in the walkable plane the player is pushed back out of — furniture. Optional,
+   * and empty by default: an empty room needs none, and neither will EVA.
+   */
+  obstacles?: THREE.Box2[];
   eyeHeight: number;
   /** Top walking speed, units/second. */
   speed?: number;
@@ -54,6 +66,14 @@ export interface FpvControls {
   update(dt: number): void;
   /** Enables/disables input. Disabling also releases the pointer and drops any held keys. */
   setEnabled(enabled: boolean): void;
+  /**
+   * Takes the pointer lock without waiting for the player to click the canvas — for entering
+   * the room from somewhere that was itself a click, so they arrive already looking around.
+   * A no-op where there is no Pointer Lock API (iOS) or while input is disabled. **The caller
+   * must still hold a user gesture**: the browser refuses the request otherwise, and there is
+   * no way to ask politely.
+   */
+  lock(): void;
   dispose(): void;
 }
 
@@ -67,7 +87,7 @@ export function createFpvControls(
   domElement: HTMLElement,
   options: FpvOptions
 ): FpvControls {
-  const { bounds, eyeHeight, speed = 2.4, onLockChange, joystick = null } = options;
+  const { bounds, obstacles = [], eyeHeight, speed = 2.4, onLockChange, joystick = null } = options;
 
   const controls = new PointerLockControls(camera, domElement);
   const keys = new Set<string>();
@@ -193,6 +213,37 @@ export function createFpvControls(
   controls.addEventListener('lock', onLock);
   controls.addEventListener('unlock', onUnlock);
 
+  /**
+   * Minimum-translation push-out against the furniture. Each footprint is inflated by
+   * `PLAYER_RADIUS`, and an eye found inside one is shoved out along whichever axis it is
+   * least deep in — which for a walk into a flat desk edge is straight back out of it.
+   *
+   * Not swept: a fast enough step could pass clean through a box between two frames. At the
+   * 2.4 m/s walking speed and the 0.1 s dt cap in `planet-view.ts` that is a 24 cm step
+   * against a 70 cm desk, so it cannot happen without changing one of those numbers.
+   */
+  function pushOutOfObstacles() {
+    for (const box of obstacles) {
+      const minX = box.min.x - PLAYER_RADIUS;
+      const maxX = box.max.x + PLAYER_RADIUS;
+      const minZ = box.min.y - PLAYER_RADIUS;
+      const maxZ = box.max.y + PLAYER_RADIUS;
+      const { x, z } = camera.position;
+      if (x <= minX || x >= maxX || z <= minZ || z >= maxZ) continue;
+
+      const left = x - minX;
+      const right = maxX - x;
+      const back = z - minZ;
+      const front = maxZ - z;
+      const least = Math.min(left, right, back, front);
+
+      if (least === left) camera.position.x = minX;
+      else if (least === right) camera.position.x = maxX;
+      else if (least === back) camera.position.z = minZ;
+      else camera.position.z = maxZ;
+    }
+  }
+
   function update(dt: number) {
     const forward = held(FORWARD_KEYS) - held(BACK_KEYS) + stick.y;
     const strafe = held(RIGHT_KEYS) - held(LEFT_KEYS) + stick.x;
@@ -215,7 +266,15 @@ export function createFpvControls(
 
     camera.position.x = THREE.MathUtils.clamp(camera.position.x, bounds.min.x, bounds.max.x);
     camera.position.z = THREE.MathUtils.clamp(camera.position.z, bounds.min.z, bounds.max.z);
+    // Twice, because the footprints can touch: one pass is enough to push you out of the desk
+    // and straight into the chair beside it.
+    pushOutOfObstacles();
+    pushOutOfObstacles();
     camera.position.y = eyeHeight;
+  }
+
+  function lock() {
+    if (enabled && POINTER_LOCK_SUPPORTED) controls.lock();
   }
 
   function setEnabled(next: boolean) {
@@ -249,5 +308,5 @@ export function createFpvControls(
     controls.dispose();
   }
 
-  return { update, setEnabled, dispose };
+  return { update, setEnabled, lock, dispose };
 }

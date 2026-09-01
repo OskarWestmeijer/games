@@ -269,7 +269,12 @@ const PLANET_FRAG = /* glsl */ `
     // --- clouds --------------------------------------------------------------------
     float texCloud = texture2D(uCloudMap, uv + vec2(uTime * 0.0009, 0.0)).r;
     float procCloud = clamp(0.5 + (fbm(sp * 3.4) - 0.5) * 2.4, 0.0, 1.0);
-    float cloud = smoothstep(0.44, 0.86, mix(procCloud, texCloud, uHasMaps)) * 0.7;
+    // Deliberately stingy. The 2048 composite is soft and slightly blotchy, and the old
+    // thresholds (0.44..0.86 at 0.7) turned everything above thin haze into white, which put
+    // the map's own mush over most of the disc. Starting the ramp well up the histogram keeps
+    // only the thicker weather systems, and the lower opacity leaves the ground reading
+    // through them.
+    float cloud = smoothstep(0.62, 0.97, mix(procCloud, texCloud, uHasMaps)) * 0.5;
 
     vec3 albedo = mix(surface, vec3(0.97, 0.98, 1.00), cloud);
 
@@ -602,11 +607,11 @@ function placeholderTexture(): THREE.DataTexture {
  * Which set of surface maps to fly under. The name is the day map's width — that is the one
  * that carries every bit of visible surface detail, and the one the choice is really about.
  *
- * `4k` is the default: 1.2 MB for the three files, and at this orbit it is already sharp
- * enough that the limb is the thing that gives it away. `8k` is 2.9 MB and worth it if you
- * like flying low over the terrain; it costs GPU memory as well as download (an 8192x4096
- * map with mipmaps is ~180 MB of texture per renderer, and the two planet scenes each have
- * their own renderer), so it stays opt-in rather than the default.
+ * `8k` is the default: 2.9 MB for the three files, and it is what flying low over the terrain
+ * is worth doing on. It costs GPU memory as well as download (an 8192x4096 map with mipmaps
+ * is ~180 MB of texture per renderer, and the two planet scenes each have their own
+ * renderer), so `4k` stays as the 1.2 MB fallback for a slow line or a thin GPU — at this
+ * orbit it is already sharp enough that the limb is the thing that gives it away.
  */
 export type TextureQuality = '4k' | '8k';
 
@@ -680,12 +685,22 @@ export interface SpaceOptions {
    * look closely at should hold still and be lit by moving the sun instead.
    */
   spinRate?: number;
-  /** Which map set to start on. Defaults to `4k`; changed later with `setQuality()`. */
+  /** Which map set to start on. Defaults to `8k`; changed later with `setQuality()`. */
   quality?: TextureQuality;
 }
 
 export interface Space {
   group: THREE.Group;
+  /**
+   * Resolves once the opening map set is on the material's uniforms — or once it has failed
+   * and the procedural fallback is what you are going to get. It **never rejects**:
+   * `applyMaps()` already swallows the error so the scene keeps rendering either way.
+   *
+   * This exists so a caller can get the textures in hand *before* showing the scene. Without
+   * it the first render after they arrive is where the GPU upload lands, and that is exactly
+   * the frame you don't want to be in front of someone.
+   */
+  ready: Promise<void>;
   update(elapsed: number, dt: number): void;
   /** Re-aims this space's sun. The vector is normalised for you. */
   setSunDirection(dir: THREE.Vector3): void;
@@ -694,7 +709,7 @@ export interface Space {
 }
 
 export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions = {}): Space {
-  const { spinRate = 0.004, quality: initialQuality = '4k' } = options;
+  const { spinRate = 0.004, quality: initialQuality = '8k' } = options;
   const group = new THREE.Group();
 
   // One vector per space instance, referenced by the planet's uniform and both shells', so
@@ -739,7 +754,7 @@ export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions 
       });
   }
 
-  applyMaps(quality);
+  const ready = applyMaps(quality);
 
   const planet = new THREE.Mesh(new THREE.SphereGeometry(PLANET_RADIUS, 160, 120), planetMaterial);
   group.add(planet);
@@ -784,6 +799,7 @@ export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions 
 
   return {
     group,
+    ready,
     update(elapsed: number, dt: number) {
       planetMaterial.uniforms.uTime.value = elapsed;
       const has = planetMaterial.uniforms.uHasMaps;

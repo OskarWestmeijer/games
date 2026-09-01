@@ -7,15 +7,24 @@
 
 ## What this is
 
-A **GitHub Pages site with three Three.js scenes**, picked from a fixed dropdown in the
-top-right corner (`#mode-switcher`).
+A **GitHub Pages site with three Three.js scenes** behind a fourth, plain-HTML view, picked
+from a fixed dropdown in the top-right corner (`#mode-switcher`).
 
-**Planet view** is what the site opens on: a small fictional scene of a one-room space pod
+**Homepage** is what the site opens on now (`…/#`): a static, hand-written stand-in for
+[oskar-westmeijer.com](https://oskar-westmeijer.com/), with a button at the end of the About
+section saying **"Get up and look around"** that drops you into planet view — muted and shimmering
+with a spinner while the world is still arriving, then lit up in a moving gradient once it is
+ready to enter instantly. See "The easter egg" below — the whole point of this view is that it is a prototype of a change to the *real*
+homepage, and everything about how the world is loaded behind it exists to serve that.
+
+**Planet view** (`…/#pod`) is a small fictional scene of a one-room space pod
 in orbit around an Earth-like planet, with a big window in one wall, and a first-person
 camera you walk around with — click to lock the pointer, WASD/arrows to move, Esc to release
-on a desktop; drag to look and push the on-screen stick to move on a tablet. There's no astronaut body and no game logic — it's a place to stand and look out
-of the window. Nothing in it comes from `ai-assets/`; the room is built from primitives and
-the planet, its atmosphere and the nebula are GLSL shaders.
+on a desktop; drag to look and push the on-screen stick to move on a tablet. There's no
+astronaut body and no game logic — it's a place to stand and look out of the window. There is
+a desk under that window with a chair and a computer at it, and looking at the computer and
+pressing **E** puts you back on the homepage. Nothing in it comes from `ai-assets/`; the room
+is built from primitives and the planet, its atmosphere and the nebula are GLSL shaders.
 
 **Planet inspector** (`…/#inspect`) is the same world with the pod taken away and the camera
 put outside it on an `OrbitControls`: drag to swing round the planet, scroll to zoom from the
@@ -58,7 +67,8 @@ under review, unlicensed, or otherwise not cleared for public release.
 index.html            #mode-switcher (mode + surface-resolution selects), then
                       #asset-view (gallery + #viewport canvas); each planet view carries a
                       .hud control pill (#planet-controls: altitude; #inspect-controls: sun),
-                      #planet-view (#planet-canvas) and #inspect-view (#inspect-canvas
+                      #home-view (the homepage mock + #get-up), #planet-view (#planet-canvas
+                      + #crosshair + #interact-prompt) and #inspect-view (#inspect-canvas
                       + the #sun-azimuth slider), loads /src/main.ts
 vite.config.ts         publicDir -> ai-assets/ (served as-is, copied into dist/ on
                        build); modelManifest() Vite plugin scans ai-assets/ at
@@ -66,7 +76,14 @@ vite.config.ts         publicDir -> ai-assets/ (served as-is, copied into dist/ 
 src/
   main.ts             bootstrap: reads the model manifest, renders the gallery list,
                       wires click-to-load, and owns setMode() — the dropdown, the URL
-                      hash, and starting/stopping each mode's render loop
+                      hash, and starting/stopping each mode's render loop. Also owns the
+                      background preload of the world and the state of #get-up. The only
+                      file that reaches for DOM ids, deliberately (see "The easter egg")
+  home.ts / home.css  the homepage stand-in: the EN/DE/FI copy and its switch, and the
+                      daisyUI *corporate* palette scoped to #home-view. No three.js import,
+                      so both stay in the initial chunk
+  homepage/           the mock's images — portrait.webp (downscaled from the real site's
+                      383 KB JPEG) and the GitHub/LinkedIn SVGs, copied from that repo
   viewer.ts            asset view. createViewer(canvas) — Three.js scene/camera/lights/
                        controls, GLTFLoader-based load(url) that swaps and disposes the
                        previous model, auto-frames the camera to its bounding box
@@ -74,8 +91,23 @@ src/
                        drives the orbit, owns the bloom composer and the render loop
   planet-inspect.ts    planet inspector. createPlanetInspect(canvas) — the same space with
                        an OrbitControls camera outside it, plus the sun-azimuth control
-  pod.ts               the room: walls, the rounded window + frame + glass, ceiling LED
-                       strips. Also exports ROOM / EYE_HEIGHT / ROOM_BOUNDS
+  pod/index.ts         buildPod() — assembles the two below and returns the group, the
+                       monitor's aiming target and the furniture footprints. Re-exports
+                       ROOM / EYE_HEIGHT / ROOM_BOUNDS / WINDOW, so `from './pod'` still
+                       means what it always did
+  pod/room.ts          the shell: walls, the rounded window + frame + glass, ceiling LED
+                       strips, and the dimensions above
+  pod/desk.ts          the workstation: desk, chair, monitor, keyboard, the warm desk lamp,
+                       and the XZ footprints the player is pushed out of
+  pod/screen.ts        makeScreenTexture() — the homepage miniature on the monitor, drawn
+                       once into a 2D canvas
+  pod/radio.ts         buildRadio() — the unit on the right-hand end of the desk that switches
+                       the sound on, its aiming box and its indicator
+  interaction.ts       createInteractions() — one raycast a frame from the centre of the
+                       screen, the prompt element, and E (or a tap on the prompt)
+  audio.ts             createPodAudio() — the room-tone bed and the music playlist, discovered
+                       with import.meta.glob, silent and unfetched until the radio is switched
+                       on. Owned by planet-view.ts, so it starts/stops/disposes with the view
   space.ts             the planet, its two atmosphere shells, the moon, the starfield and
                        the nebula skydome. Owns the shared simplex-noise GLSL, the planet
                        shader that lights the NASA maps, MAP_SETS / the page-wide map cache
@@ -83,7 +115,8 @@ src/
                        moon fly in (SUN_BETA / ORBIT_NORMAL / ORBIT_NOON / ORBIT_DAWN)
   fpv-controls.ts      createFpvControls() — two input paths (pointer-lock mouse look, and
                        touch drag-to-look plus an on-screen stick) feeding walk-on-the-floor
-                       movement clamped to ROOM_BOUNDS
+                       movement clamped to ROOM_BOUNDS and pushed out of `obstacles`
+  audio/               bed/ and music/ as MP3, plus CREDITS.md — see "Ambient audio" below
   textures/            NASA Earth maps (day/night/clouds) as WebP, imported from space.ts
                        — see "Planet textures" below
   vite-env.d.ts        type declarations, incl. the virtual:model-manifest module shape
@@ -93,8 +126,14 @@ src/
 Only one mode renders at a time: `setMode()` hides the other containers and calls
 `viewer.setActive(false)` / `planetView.stop()` / `inspect.stop()` to park their
 `requestAnimationFrame` loops, so the WebGL contexts never compete. `MODE_HASHES` in
-`main.ts` maps each mode to its URL hash in both directions (planet view, the default, gets
-the bare `#`).
+`main.ts` maps each mode to its URL hash in both directions (the homepage, the default, gets
+the bare `#`; planet view is `#pod`). `setMode()` is `async`, because every scene now arrives
+through a dynamic `import()` — see "The easter egg".
+
+`setMode()` also toggles `body.world-mode`, which is what carries the rules written for a
+full-screen canvas: `overflow: hidden`, `user-select: none`, a viewport-height `#app`. None
+of those may be global any more — the homepage is a document that scrolls and whose text you
+can select, and on the real site `:root` and `body` belong to somebody else entirely.
 
 All three scenes are constructed lazily on first use — each is a whole WebGL scene, and the
 gallery additionally fetches a `.glb` that runs to tens of megabytes, so none of them is
@@ -115,6 +154,110 @@ checked into git, so it can never drift out of sync with what's actually in
 `rock with moss 3d model.glb`); `sizeBytes` is the `.glb` file's raw size from `statSync`,
 formatted client-side (`formatBytes()` in `main.ts`) and shown per-item in the gallery
 and in the `#model-name` info line under the viewport.
+
+### The easter egg — homepage → pod → homepage
+
+The homepage view is a **prototype of a change to the real site**, which lives in a separate
+repo (SvelteKit 2 + Svelte 5 runes, `adapter-static`, Tailwind 4 + daisyUI 5 on the hard-coded
+`corporate` light theme, shipped as a Docker/nginx image). The plan there is the same button
+in the same corner, dropping the reader into this pod. Nothing in that repo has been touched;
+everything below exists so that the port is a copy, not a rewrite.
+
+- **The mock is hand-written, not the real source and not an iframe.** `index.html` +
+  `home.css` + `home.ts`, mirroring that site's `+layout.svelte` / `+page.svelte`, with its
+  daisyUI *corporate* custom properties copied verbatim out of the built CSS (`--hp-primary:
+  oklch(45% 0.24 277.023)` and friends). Copying the Svelte source would drag a framework in;
+  an iframe cannot be told when the world behind it is ready.
+- **The world is a lazy chunk, and that is the point.** `main.ts` reaches every scene through
+  `await import(...)`, including `ALTITUDE_RANGE` and `DEFAULT_SUN_AZIMUTH` — plain numbers,
+  but importing them statically drags all of three.js in with them, which is why the sliders
+  are configured in `initWorldUi()` after the module resolves rather than at module scope.
+  The result: a ~10 KB entry chunk instead of the ~660 KB one this used to be, with three.js
+  in a chunk the homepage never fetches. **If that number climbs back up, something has been
+  imported statically that shouldn't be.**
+- **Warm small, show big.** Preloading runs on `load` + `requestIdleCallback`, and it does not
+  merely fetch: it builds the whole scene, `await`s `space.ready` (the promise `buildSpace()`
+  used to throw away), calls `renderer.compileAsync()` and renders one real frame — inside
+  `#planet-view.warming`, an **8-pixel** container behind the page. Everything expensive about
+  a first frame is resolution-independent, and warming full-screen would put a whole-viewport
+  shader pass and a bloom chain on a page somebody is still reading. Not smaller than 8px:
+  `UnrealBloomPass` halves its way down five mip levels.
+- **Never warm a view that is already open.** A renderer that resizes itself down to 8px while
+  it is on screen stays that way — the full-size render only comes back on the next `start()`.
+  Landing straight on `#pod` is exactly that case, and it is why `preloadWorld()` bails when
+  the world is showing, and dispatches a `resize` event if the mode changed while it warmed.
+- **`#get-up` is disabled until the world can be entered instantly.** That is the whole
+  promise of the button, so it comes alive either when the warm-up finishes or — on a direct
+  `#pod` load, where there is nothing to preload — as soon as the view is running, so that
+  sitting back down leaves a live button rather than a dead one. The two looks are not
+  decoration: **booting** is muted, with a shimmer sweeping across it, an orbiting spinner and
+  three cycling dots, and says so ("Warming up the view"); **ready** (`.ready`) is a drifting
+  three-colour gradient with a halo pulsing out of it — the only saturated thing on the page
+  below the header, which is the whole job. Everything is animated through
+  `box-shadow` and `background-position` and nothing through `transform` — a control that
+  drifts a few pixels forever is a harder target for anyone with imprecise pointing, and an
+  element that never holds still can never be clicked by an automated agent at all. All of it
+  stops under `prefers-reduced-motion`.
+- **It sits in the page, not floating over it.** `.hp-egg` is the last block of the About
+  section — a dotted rule, the line "You've been sitting a while.", then the button. Two
+  reasons it is not pinned to a corner: anything fixed bottom-right is read as a chat bubble or
+  a cookie prompt and dismissed without being looked at, and the end of the bio is where the
+  eye ends up anyway. `.hp-about`'s bottom padding is trimmed from the real site's symmetric
+  `py-16` for one reason only — on a 13" laptop it is the difference between the button being
+  on screen when the page opens and being seven pixels under the fold. The hook line does the
+  persuading: it is ordinary, slightly odd, and only makes sense once you have clicked.
+- **Preloading is not unconditional.** No WebGL2 → the button is hidden and three.js is never
+  fetched. `saveData` or a 2G `effectiveType` → nothing is prefetched and the wait moves to
+  the click, where it is at least explained. A coarse pointer or a data-saving connection also
+  opens on the **4K** map set rather than 8K: 2.9 MB and ~180 MB of VRAM is a fair price when
+  you came to look at the planet, and not one to charge in the background of a page someone is
+  reading on a phone.
+- **Leaving: `stop()` before revealing the page.** It disables the controls, which releases the
+  pointer lock, and the browser can deliver a stray `click` to the canvas as that lock drops.
+  With the controls already disabled that click is a no-op; the other way round it re-locks and
+  the player is thrown straight back into the room. The view is never disposed, so re-entry is
+  instant and the orbit resumes where it paused.
+
+**What has to stay true for the port.** Everything under `pod/`, `space.ts`, `planet-view.ts`,
+`fpv-controls.ts` and `interaction.ts` takes its DOM by parameter and never queries for it —
+canvas, joystick, prompt, `onExit`. `main.ts` is the only file that reaches for ids, and it is
+the one file that does not travel. `createPlanetView` also has a `dispose()` it does not need
+here (the page keeps every view it builds) and will need there, because components unmount.
+
+### Looking at things, and walking into them
+
+- **The raycast runs *after* the render, and this is load-bearing.** `Raycaster.setFromCamera`
+  reads `camera.matrixWorld` without updating it, and this camera is a child of a rig that
+  `updateOrbit()` moves every frame — called before the render it would be tested from where
+  the station was last frame, several kilometres away. Rendering has just refreshed every world
+  matrix. A prompt that appears one frame late is invisible; one tested against a stale matrix
+  never appears at all.
+- **The aiming target is an invisible box, not the panel.** `THREE.Raycaster` does not check
+  `visible`, so a slightly larger hidden mesh costs one more object and makes "looking at the
+  monitor" forgiving enough to hit with a thumb.
+- **A crosshair is not decoration here.** "Look at the monitor" has no referent without a mark
+  to look with. It shows under `body.pointer-locked`, and always on a touchscreen.
+- **The prompt is a real `<button>`.** There is no E key on an iPad, so a tap on the prompt
+  activates whatever is targeted. It supplies its own "Press E to" / "Tap to" halves through
+  the existing `.fine-only` / `.coarse-only` media-query idiom; only the verb comes from JS.
+- **A label may be a function, and the prompt is keyed on its text, not on the target.** The
+  radio is one target that says two things ("switch the radio on" / "off"), and `setLive()`
+  originally bailed whenever the target was unchanged — so a switch would have shown whichever
+  half it happened to be on when you first looked at it, forever. Comparing the rendered string
+  costs nothing and is what makes any stateful control possible; roadmap item 4 needs it again.
+- **Targets are tested in array order and the first hit wins**, so the small near thing goes
+  before the big one. The radio's box is 0.4 wide against the monitor's 0.82 and sits on the
+  front edge of the desk rather than behind it; listed second it would lose the odd frame to
+  the monitor as you swept across. Its `reach` is shorter too (1.7 against `SCREEN_REACH`'s
+  2.4) — you lean in to a switch, and separated reaches stop the two prompts flickering.
+- **`ROOM_BOUNDS` cannot express an obstacle**, so `fpv-controls.ts` takes a separate list of
+  XZ `Box2` footprints and pushes the eye out of any it is inside, along the axis of least
+  penetration, twice — one pass can push you out of the desk and straight into the chair.
+  Not swept, which at 2.4 m/s against a 0.7 m desk with a 0.1 s dt cap it does not need to be.
+- **The chair is parked out of the approach on purpose.** It is a solid obstacle, and left
+  where somebody would actually sit it fences off the one spot you have to stand in to read the
+  screen — which is the way out of the room. This was found the hard way: with the chair square
+  in front of the desk, the prompt could not be reached at any sane `SCREEN_REACH`.
 
 ### Asset viewer behaviour
 - Single-model view only: the gallery lists every discovered `.glb`, and clicking one
@@ -181,6 +324,29 @@ Conventions worth knowing before touching it:
   20° of arc further into the day than the point directly below. The side effect is the one
   you actually notice: the plane comes out ≈73° inclined, so the ground track runs
   diagonally from ice cap to ice cap instead of circling the equator.
+- **There is a desk under the window, and it is the way out.** 2.2 x 0.7 at x = -2, offset
+  left rather than centred: the eye starts at (0, 1.6, 1.2) and the window's framing is solved
+  against exactly that point, so a monitor in the middle of the glass would sit right on the
+  horizon `HORIZON_ELEVATION` was tuned to place. The monitor shows a canvas-drawn miniature of
+  the homepage; its material is `MeshBasicMaterial` with **`toneMapped: false`** (ACES at
+  exposure 0.8 turns a white web page into dingy grey) and a `color` under 1.0 (at 1.0 it picks
+  up a bloom halo it has not earned). One short-range warm `PointLight` over the desk is the
+  only warm light in the room — under the four cold ceiling points alone the desk is a dark
+  smudge against a lit planet, and you cannot read the one object the player has to find.
+- **You arrive standing at the desk, in first person already.** `DESK_SPAWN` in `pod/desk.ts`
+  puts the eye half a step back and to the left of the chair, as if you had just pushed it
+  aside and stood up, facing the window: the opening frame is the planet with your own monitor
+  below it — the reveal and the way back out in one look. Entering from the button also takes
+  the pointer lock straight away (`capturePointer()`), so there is no "click the canvas first"
+  step; that only works while the click's user gesture is still live, which is why `setMode()`
+  knows whether it was called from one. A bare `#pod` URL has no gesture to spend and falls
+  back to click-to-look.
+- **Moving the eye does not disturb the framing.** `HORIZON_ELEVATION` is an angle about the
+  optical axis and the planet is 300 units away, so the limb sits where it always did. What
+  changes is how much window is in view: from the old middle-of-the-room spawn the glass
+  subtended ±40° across and about ±20° up, and from the desk it is -26.6° to +64.4° and -29.0°
+  to +29.7° — it fills the view rather than sitting in it, and the horizon lands about two
+  thirds up instead of three quarters.
 - **The window is nearly the whole wall.** 6.2 x 2.7 of a 7 x 3.2 wall (`WINDOW` in
   `pod.ts`), leaving a 0.4 margin at the sides and ~0.25 top and bottom, with a deliberately
   thin frame ring on top of that (`FRAME_WIDTH` 0.1, `FRAME_DEPTH` 0.14) — enough to give
@@ -199,7 +365,7 @@ Conventions worth knowing before touching it:
   inside the fragment shader — surface, clouds, terminator and city lights all come out of
   that one material. The lights added in `planet-view.ts` only light the pod interior.
 - **The surface is the NASA maps, untouched — this is Earth, not an Earth-like world.**
-  `src/textures/` holds them (day/night/clouds) downscaled to 4K/2K/2K WebP, ~1.3 MB total
+  `src/textures/` holds them (day/night/clouds) downscaled to 8K/4K/2K WebP, ~2.9 MB total
   — see "Planet textures" below. The day map is sampled with a plain `vUv` lookup and used
   as-is: no domain warp, no saturation/contrast grade, no bathymetry lift, no procedural
   detail multiplied over it. All of those existed once, to make the map read as somewhere
@@ -208,6 +374,13 @@ Conventions worth knowing before touching it:
   *lighting*: terminator, cloud layer, city lights (the night map's own warm sodium colour)
   and limb haze. Procedural noise survives only in `fallbackColor()`, the stand-in world
   drawn for the moment before the maps finish downloading.
+- **The clouds are deliberately thin.** The 2048 composite is the softest, blotchiest of the
+  three maps, and it used to be thresholded at `smoothstep(0.44, 0.86) * 0.7`, which promoted
+  every wisp of haze to white and spread the map's own mush over most of the disc. It is now
+  `smoothstep(0.62, 0.97) * 0.5`: the ramp starts well up the histogram so only real weather
+  systems register, and the lower opacity lets the ground read through them. If the planet
+  ever looks overcast or smeary, those two numbers are the knob — pushing them back up is
+  what made it look that way before.
 - **Nothing blue is laid over the night side.** The ridged-noise filament network that used
   to glow cyan across the dark hemisphere is gone, and the limb haze is now multiplied by
   the day term instead of keeping a 0.15 night-side floor — it was washing blue over the
@@ -374,8 +547,9 @@ maps are used exactly as they come — the planet shader lights them, it does no
 **Adding a set** is `MAP_SETS` plus two imports plus an `<option>`; nothing else knows the
 names. Be aware of what it costs on the GPU, though, which is the part that isn't in the file
 sizes: an 8192×4096 map with mipmaps is ~180 MB of texture, uploaded *per renderer*, and
-planet view and the inspector have one each. That is why 4k is the default and the choice is
-not persisted — the page always opens on the cheap set.
+planet view and the inspector have one each. 8k is the default anyway — the surface is the
+point of both planet scenes — with 4k kept as the cheap fallback for a slow line or a thin
+GPU. The choice is not persisted; the page always opens on 8k.
 
 **Why NASA specifically.** This repo is public and these files are committed, so the licence
 has to permit redistribution with no strings attached. NASA content "generally are not
@@ -393,6 +567,52 @@ They live in `src/textures/` and are imported from TS, **not** dropped in `ai-as
 emits imported assets to `dist/assets/` with a content hash and rewrites paths relative to
 `base: './'`, and it keeps `ai-assets/` meaning what this document says it means (AI-generated
 3D models) as well as keeping them away from `scanModels()`.
+
+## Ambient audio — provenance and licence
+
+Everything in `src/audio/` must be **CC0 / public domain**, and for exactly the reason the
+planet textures are NASA's rather than Solar System Scope's: this repo is public and these files
+are committed, so the licence has to permit redistribution with no strings. **CC BY is not
+acceptable here** however generous it looks — it would ride an attribution condition, a licence
+link and a "changes were made" notice along with the files forever, forks included.
+`src/audio/CREDITS.md` carries the per-file table; the credit in it is courtesy and provenance,
+not an obligation. Good hunting grounds, all verified CC0, are listed at the bottom of that file.
+
+They live in `src/audio/`, not `ai-assets/`, for the same two reasons the textures do: Vite
+content-hashes imported assets into `dist/assets/` and rewrites their URLs against `base: './'`
+(so the deployed `/games/` sub-path works with nobody reassembling a path by hand), and it keeps
+`ai-assets/` meaning AI-generated 3D models. MP3, because the iPad is a target and it is the one
+format every browser plays without a fallback `<source>`.
+
+Conventions worth knowing before touching it:
+
+- **Discovery is `import.meta.glob`, not a Vite plugin.** The retired game had a
+  `virtual:audio-manifest` plugin scanning `public/audio/` and handing the client bare filenames
+  to prefix with `BASE_URL`. A glob does the same job with no plugin, no `vite-env.d.ts` entry
+  and no hand-built paths. `modelManifest()` still earns its keep because it carries metadata
+  (thumbnails, sizes); a list of URLs does not.
+- **Off by default means not fetched.** No `src` is assigned until `setOn(true)`, so a visitor
+  who never touches the radio downloads no audio at all. Same ethos as `PRELOAD_OK` in
+  `main.ts`: an easter egg does not spend somebody's metered data uninvited.
+- **The radio kills both layers, not just the music.** The old system muted music and left the
+  ambient bed running. That is right when audio is on by default; it is wrong here, where "off"
+  has to mean silence or the switch does not read as a switch.
+- **Nothing is persisted.** Every visit starts silent. Persisting "on" is three lines, but the
+  browser would refuse to autoplay it before a gesture anyway, so the stored state would be a
+  lie half the time.
+- **Everything in `bed/` plays at once and loops; `music/` is a shuffled playlist.** The old
+  system layered every file in `nature/` because a forest is many sources — a pressurised hull
+  is one, so the bed is expected to be a single file. A bed track whose loop seam clicks will
+  click once a minute forever; check it before committing. Music tracks need not loop.
+- **The playlist is advanced from the render loop's `dt`, not a `setInterval`.** The old
+  `scheduleCrossfade()` polled every 500 ms for the life of the page even with the view parked.
+  Driving it from `update(dt)` in `tick()` means it stops exactly when the view does.
+- **Fades use `requestAnimationFrame`, not that same `dt`.** The most important fade is the one
+  on the way out, and by then `stop()` has already cancelled the render loop. Volume is plain
+  linear `HTMLAudioElement.volume` — no WebAudio, so there is no `AudioContext` to unlock.
+- **Keep the folder under ~4 MB.** It downloads on top of the surface maps.
+- Both layers sit well under 1.0 (bed 0.25, music 0.35). The window is the thing in this room;
+  a bed you can consciously hear is a bed that is too loud.
 
 ## Deploy — GitHub Pages
 `.github/workflows/deploy.yml` builds with Vite and publishes `dist/` to GitHub Pages on
@@ -420,22 +640,30 @@ leave the interior a bare box.
 
 The interior is where the effort is owed. Ranked by presence gained per hour of work:
 
-1. **Fit out the room.** It is a bare 7 x 3.2 x 5 box with four light strips; that, not the
-   planet, is why it doesn't feel inhabited. A console under the window, handrails, a hatch,
-   stowage, floor grating. Split `pod.ts` into modules first so it can grow.
-2. **Relight it warm.** Cyan strips at `toneMappingExposure` 0.8 read clinical. A warm interior
-   key against the cold window fill is a few numbers and most of the feeling.
+1. **Fit out the room.** *Started.* `pod.ts` is now `pod/` (`room.ts` + `desk.ts` + `screen.ts`,
+   assembled by `index.ts`), and there is a desk, chair and computer under the window. Still
+   wanted: handrails, a hatch, stowage, floor grating — each is a new module beside `desk.ts`,
+   returning its own footprints for `obstacles`.
+2. **Relight it warm.** *Started.* The desk has a warm lamp over it and the first non-grey-blue
+   materials in the room. The four cyan ceiling points at `toneMappingExposure` 0.8 still read
+   clinical everywhere else; a warm interior key against the cold window fill is a few numbers
+   and most of the remaining feeling.
 3. **Use `ai-assets/`.** The blueberry bush and chanterelle already committed there become a
    hydroponics tray and a mushroom log. A growing thing aboard a station is exactly the detail
    that says someone lives here, and it connects the repo's two halves.
-4. **Diegetic controls.** Altitude, sun and texture quality move off the HUD onto a console
-   panel you walk up to — deletes UI instead of adding it. Follows (1); it needs a console.
-5. **Sound.** The old game's two-layer audio system is intact in git at
-   `git show 29d1246^:src/audio.ts` — 119 lines, ambient bed plus optional music, discovered by
-   a Vite manifest plugin identical in shape to today's `modelManifest()`. More presence per
-   byte than anything visual, and mostly already written.
-6. **EVA.** `fpv-controls.ts` is already positioned for it: `bounds` and `eyeHeight` are
-   injected, and anything parented to `stationRig` floats along with the station for free.
+4. **Diegetic controls.** *Started, in one place.* The radio (item 5) is the pattern: a switch
+   on the desk with an invisible aiming box and a stateful label, and **no HUD element at all**
+   — a mute button was considered and rejected for it. Altitude, sun and texture quality should
+   follow it off the HUD onto a console panel you walk up to, which deletes UI instead of
+   adding it. `interaction.ts` is the mechanism and now supports labels that change.
+5. **Sound.** *Started.* `audio.ts` is the old game's two-layer design rebuilt — a room-tone bed
+   under a crossfaded music playlist — but off by default, switched on from `pod/radio.ts`, and
+   discovered with `import.meta.glob` rather than the old `virtual:audio-manifest` plugin. See
+   "Ambient audio" below. What is missing is the files: `src/audio/bed/` and `src/audio/music/`
+   ship empty, and the code treats that as a supported state. The retired implementation is
+   still in git at `git show 29d1246^:src/audio.ts` if the old crossfade is ever wanted back.
+6. **EVA.** `fpv-controls.ts` is already positioned for it: `bounds`, `obstacles` and
+   `eyeHeight` are injected, and anything parented to `stationRig` floats along for free.
    Going outside is a second controller mode — free the Y axis, swap the `Box3` for a tether
    sphere — plus a hatch and an exterior hull to look back at. Keep room-clamping out of
    anything new and it stays cheap.

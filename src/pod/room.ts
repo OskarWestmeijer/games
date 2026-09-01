@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 
 /**
- * The station interior: a single room with one big window. Metres, with the origin on the
- * floor at the centre of the room. The window is in the **-Z** wall, matching the camera's
- * own default forward direction — `planet-view.ts` orients the whole rig so that -Z faces
- * the planet.
+ * The station interior's shell: the box, the window and the ceiling lights. Metres, with the
+ * origin on the floor at the centre of the room. The window is in the **-Z** wall, matching
+ * the camera's own default forward direction — `planet-view.ts` orients the whole rig so that
+ * -Z faces the planet.
+ *
+ * What goes *in* the room lives beside this file (`desk.ts`); `index.ts` assembles the two.
  */
 
 export const ROOM = { width: 7, height: 3.2, depth: 5 };
@@ -15,12 +17,13 @@ export const EYE_HEIGHT = 1.6;
 /**
  * The window opening, centred horizontally in the -Z wall. Deliberately close to the size of
  * the wall itself — 6.2 x 2.7 in a 7 x 3.2 wall — so what is left of the wall reads as a rim
- * around a viewport rather than a wall with a porthole in it. From the start position that is
- * ±40° horizontally and -19.8° to +20.3° vertically, a third again as much sky as the 5 x 2
- * opening it replaces. The margins it leaves (0.4 at the sides, ~0.25 top and bottom) are
- * what `FRAME_WIDTH` has to fit inside.
+ * around a viewport rather than a wall with a porthole in it. From `DESK_SPAWN`, 2.4 m back
+ * from the glass and off to one side, that is -26.6° to +64.4° horizontally and -29.0° to
+ * +29.7° vertically — the opening fills most of the view rather than sitting in it. The
+ * margins it leaves (0.4 at the sides, ~0.25 top and bottom) are what `FRAME_WIDTH` has to
+ * fit inside.
  */
-const WINDOW = { width: 6.2, height: 2.7, centerY: 1.62, cornerRadius: 0.5 };
+export const WINDOW = { width: 6.2, height: 2.7, centerY: 1.62, cornerRadius: 0.5 };
 
 /**
  * How far the frame ring sticks out past the opening, and how far it stands proud of the
@@ -28,7 +31,7 @@ const WINDOW = { width: 6.2, height: 2.7, centerY: 1.62, cornerRadius: 0.5 };
  * and anything chunkier eats the view it is framing.
  */
 const FRAME_WIDTH = 0.1;
-const FRAME_DEPTH = 0.14;
+export const FRAME_DEPTH = 0.14;
 
 /** How far from the walls the player is held. Doubles as the "you have a body" fudge. */
 const WALL_CLEARANCE = 0.45;
@@ -91,11 +94,11 @@ function windowHole(): THREE.Path {
 }
 
 /**
- * Builds the room. Walls are `DoubleSide` on purpose: the player can never leave the room,
+ * Builds the shell. Walls are `DoubleSide` on purpose: the player can never leave the room,
  * so there is nothing to gain from getting every plane's winding right and a dark, silently
  * missing wall to lose if one of them is wrong.
  */
-export function buildPod(): THREE.Group {
+export function buildRoom(): THREE.Group {
   const pod = new THREE.Group();
 
   const { width: W, height: H, depth: D } = ROOM;

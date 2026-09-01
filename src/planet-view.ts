@@ -3,7 +3,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { buildPod, EYE_HEIGHT, ROOM, ROOM_BOUNDS } from './pod';
+import { buildPod, DESK_SPAWN, EYE_HEIGHT, ROOM, ROOM_BOUNDS } from './pod';
+import { createInteractions } from './interaction';
 import {
   buildSpace,
   ATMOSPHERE_RADIUS,
@@ -14,6 +15,7 @@ import {
 } from './space';
 import type { TextureQuality } from './space';
 import { createFpvControls } from './fpv-controls';
+import { createPodAudio } from './audio';
 
 /**
  * "Planet view": a one-room space pod in orbit, with a first-person camera inside it and a
@@ -58,9 +60,8 @@ const ORBIT_START = 4.6;
 
 /**
  * Where the horizon sits in the window, in radians above the optical axis — 9.4°, which from
- * the start position (eye at y=1.6, z=1.2; window plane at z=-2.5, opening 2.7 tall centred
- * at 1.62, so the glass spans -19.8° to +20.3° vertically) puts it about three quarters of
- * the way up: surface below it, a band of stars above.
+ * `DESK_SPAWN` (2.4 m back from the glass, which there spans -29.0° to +29.7° vertically)
+ * puts it about two thirds of the way up: surface below it, a band of stars above.
  *
  * This is the framing constant now, rather than the pitch itself. The limb sits at
  * `α - pitch` relative to the optical axis, where `α = asin(R / (R + altitude))`, so pinning
@@ -91,6 +92,23 @@ const WINDOW_YAW = 0.6;
 
 const PLANET_CENTER = new THREE.Vector3(0, 0, 0);
 
+/**
+ * How close the eye has to be to the monitor before the prompt offers it, in metres. The desk
+ * can be walked right up to (see `CHAIR` in `pod/desk.ts` — it is parked out of the approach
+ * for exactly this reason), which puts the panel about a metre away; the slack above that is
+ * so you do not have to be standing on top of it, and it is still short enough that the room's
+ * far side is nowhere near.
+ */
+const SCREEN_REACH = 2.4;
+
+/**
+ * The radio is a quarter of a metre wide against the monitor's two thirds, and it sits on the
+ * near edge of the desk rather than behind it — so it is both harder to aim at and closer when
+ * you are. Shorter than `SCREEN_REACH` on purpose: you lean in to a switch, and keeping the
+ * two reaches apart is what stops a sweep across the desk flickering between the prompts.
+ */
+const RADIO_REACH = 1.7;
+
 export interface PlanetViewOptions {
   onLockChange?: (locked: boolean) => void;
   /** Which surface map set to open on. See `TextureQuality` in `space.ts`. */
@@ -99,6 +117,10 @@ export interface PlanetViewOptions {
   altitude?: number;
   /** The on-screen movement stick for touch devices; see `createFpvControls`. */
   joystick?: HTMLElement | null;
+  /** The "press E to…" element; see `createInteractions`. Injected, never queried for. */
+  interactPrompt?: HTMLElement | null;
+  /** Called when the player sits back down at the desk. Wired to leaving the view entirely. */
+  onExit?: () => void;
 }
 
 export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewOptions = {}) {
@@ -125,12 +147,20 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
 
   const stationRig = new THREE.Group();
   scene.add(stationRig);
-  stationRig.add(buildPod());
+  const pod = buildPod();
+  stationRig.add(pod.group);
 
   let altitude = options.altitude ?? ALTITUDE_RANGE.initial;
 
-  // Standing back from the window, so it frames the planet rather than filling the screen.
-  camera.position.set(0, EYE_HEIGHT, 1.2);
+  // At the desk, as if you had just got up from the chair — see `DESK_SPAWN` in `pod/desk.ts`.
+  // Moving the eye a couple of metres does not disturb `HORIZON_ELEVATION`: that is an angle
+  // about the optical axis and the planet is 300 units away, so the limb sits where it always
+  // did. What changes is how much of the window is in view, which grows as you approach the
+  // glass — the opening frame is wider here than it was from the middle of the room.
+  camera.position.set(DESK_SPAWN.x, EYE_HEIGHT, DESK_SPAWN.z);
+  // YXZ, matching `PointerLockControls`: any other order turns an initial yaw into roll.
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = DESK_SPAWN.yaw;
   stationRig.add(camera);
 
   // --- interior lighting ---------------------------------------------------------------
@@ -161,10 +191,46 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
 
   const controls = createFpvControls(camera, canvas, {
     bounds: ROOM_BOUNDS,
+    obstacles: pod.obstacles,
     eyeHeight: EYE_HEIGHT,
     onLockChange: options.onLockChange,
     joystick: options.joystick
   });
+
+  // Silent, and not even fetched, until the radio on the desk is switched on. See `audio.ts`.
+  const audio = createPodAudio();
+
+  function toggleRadio() {
+    audio.setOn(!audio.isOn());
+    pod.setRadioLit(audio.isOn());
+  }
+
+  const interactions = createInteractions(
+    camera,
+    [
+      // Radio first: targets are tested in order and the first hit wins, and this is the
+      // smaller and nearer of the two. The monitor is large enough to find either way.
+      // Dropped entirely when `src/audio/` is empty — the unit stays on the desk as a prop,
+      // but a prompt offering to switch on something that cannot make a sound is a lie.
+      ...(audio.available
+        ? [
+            {
+              object: pod.radioTarget,
+              reach: RADIO_REACH,
+              label: () => (audio.isOn() ? 'switch the radio off' : 'switch the radio on'),
+              activate: toggleRadio
+            }
+          ]
+        : []),
+      {
+        object: pod.screenTarget,
+        reach: SCREEN_REACH,
+        label: 'sit back down',
+        activate: () => options.onExit?.()
+      }
+    ],
+    { prompt: options.interactPrompt }
+  );
 
   // --- post-processing -----------------------------------------------------------------
   // The LED strips and the atmosphere are authored above 1.0 on purpose; bloom is what
@@ -224,6 +290,12 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
     updateOrbit(elapsed);
     space.update(elapsed, dt);
     composer.render();
+    audio.update(dt);
+    // After the render, deliberately. The interaction raycast reads `camera.matrixWorld`
+    // without updating it, and this camera hangs off a rig that `updateOrbit()` has just
+    // moved — before the render it would be tested from where the station was last frame,
+    // several kilometres away. See the note on `Interactions.update`.
+    interactions.update(dt);
   }
 
   window.addEventListener('resize', resize);
@@ -233,6 +305,10 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
     running = true;
     resize(); // the canvas had no size while the view was hidden
     controls.setEnabled(true);
+    interactions.setEnabled(true);
+    // Fades back in only if the radio was left on; it remembers where the track had got to,
+    // so coming back in is a continuation rather than the playlist starting over.
+    audio.setEnabled(true);
     clock.start();
     tick();
   }
@@ -242,12 +318,58 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
     running = false;
     cancelAnimationFrame(rafId);
     controls.setEnabled(false);
+    interactions.setEnabled(false);
+    audio.setEnabled(false);
     clock.stop();
+  }
+
+  /**
+   * Does everything the first frame would otherwise do, while nobody is looking: waits for the
+   * surface maps, compiles every program, uploads every texture and draws one complete frame
+   * through the composer. After this, `start()` is a state flip rather than a stall.
+   *
+   * The canvas has to have a size when this runs — the renderer measures it, and a 0x0 one
+   * warms nothing — but it does **not** have to be full size. Everything expensive here is
+   * resolution-independent, so `main.ts` warms in an 8px corner rather than paying for a
+   * full-screen shader pass and a bloom chain on a page someone is still reading. The
+   * composer's render targets are then reallocated by the first real `resize()`, which is an
+   * allocation and not a compile: one dropped frame on entry, not a freeze.
+   *
+   * Order matters. Compiling before the maps resolve compiles against the 1x1 placeholder
+   * textures and leaves the real upload for later, which is the thing being avoided.
+   */
+  async function warm() {
+    await space.ready;
+    resize();
+    await renderer.compileAsync(scene, camera);
+    composer.render();
+  }
+
+  /**
+   * Not used by this repo — the page keeps every view it has built, so there is nothing to
+   * tear down. It exists for the port: a Svelte component unmounts, and without this the
+   * renderer, its context and the resize listener leak on every mount.
+   */
+  function dispose() {
+    stop();
+    window.removeEventListener('resize', resize);
+    interactions.dispose();
+    controls.dispose();
+    audio.dispose();
+    composer.dispose();
+    renderer.dispose();
   }
 
   return {
     start,
     stop,
+    warm,
+    dispose,
+    /**
+     * Arrive already looking around, rather than landing in the room and having to click it
+     * first. Only works while the caller still holds a user gesture — see `FpvControls.lock`.
+     */
+    capturePointer: () => controls.lock(),
     setTextureQuality: (quality: TextureQuality) => space.setQuality(quality),
     /**
      * Moves the orbit. Takes effect on the next frame — `updateOrbit()` re-derives both the
