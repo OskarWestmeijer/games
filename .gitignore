@@ -3,7 +3,7 @@ dist
 *.local
 .DS_Store
 .idea
-
+dev/shots
 # Not-for-publication assets: kept locally only, never pushed to GitHub
 # (unlike the rest of ai-assets/, which IS committed — see CLAUDE.md)
 ai-assets/not-public/

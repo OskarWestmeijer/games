@@ -29,7 +29,10 @@ import { BRIDGE, CONSOLE } from './layout';
 /** How close the eye has to be before the console offers anything. */
 export const CONSOLE_REACH = 1.9;
 
-const KEY_SIZE = new THREE.Vector3(0.26, 0.16, 0.3);
+// Flat caps, not blocks. At 0.16 tall they stood up off the desk like bars of chocolate and
+// were the loudest thing on the bridge; the aiming box below is what makes them easy to hit,
+// so the visible part is free to be the thin key it should be.
+const KEY_SIZE = new THREE.Vector3(0.26, 0.045, 0.3);
 
 const deskMaterial = new THREE.MeshStandardMaterial({ color: 0x2f3540, roughness: 0.55, metalness: 0.45 });
 const keyMaterial = new THREE.MeshStandardMaterial({ color: 0x1b1f26, roughness: 0.5, metalness: 0.2 });
@@ -68,7 +71,7 @@ export function buildConsole(): Console {
    */
   function key(x: number): THREE.Object3D {
     const cap = new THREE.Mesh(new THREE.BoxGeometry(KEY_SIZE.x, KEY_SIZE.y, KEY_SIZE.z), keyMaterial);
-    cap.position.set(x, CONSOLE.top + 0.06, 0);
+    cap.position.set(x, CONSOLE.top + 0.045, 0);
     group.add(cap);
 
     const aim = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.34, 0.52), keyMaterial);

@@ -80,17 +80,29 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
   // At the desk on the lower floor, as if you had just got up from the chair. Moving the eye a
   // few metres does not disturb the framing: the horizon is an angle about the optical axis and
   // the planet is 300 units away, so the limb sits where it always did. What changes is how
-  // much of the window is in view — and, going up to the bridge, where in it the limb lands.
-  // See the note on `WINDOW` in `station/layout.ts`.
+  // much of the glass is in view — and, going up to the bridge, where in it the limb lands.
+  // See "The two storeys want different horizons" in CLAUDE.md.
   camera.position.set(station.spawn.x, station.spawn.y + EYE_HEIGHT, station.spawn.z);
   // YXZ, matching `PointerLockControls`: any other order turns an initial yaw into roll.
   camera.rotation.order = 'YXZ';
   camera.rotation.y = station.spawn.yaw;
   stationRig.add(camera);
 
-  // The only light not owned by the station. Everything else is staged in `station/index.ts`
+  // The only lights not owned by the station. Everything else is staged in `station/index.ts`
   // and `station/bridge.ts`.
-  stationRig.add(new THREE.AmbientLight(0x1a2430, 0.55));
+  //
+  // A hemisphere on top of the ambient, because point lights alone cannot fill a room this
+  // size: they fall off as 1/r², and from a roof at 6.5 m the floor got about 2% of the lamp,
+  // which is why the whole aft half used to render as a black void. The hemisphere is the cheap
+  // fill that makes the hull's own surfaces readable; the lamps are then free to be pools
+  // rather than the only source. Warm above, near-black below — the floor should not glow.
+  stationRig.add(new THREE.AmbientLight(0x2b2622, 0.7));
+  //
+  // The ground half is *not* near-black, and that is deliberate rather than sloppy: a hemisphere
+  // light shades by which way a normal points, and the inside of a roof points **down**. Set the
+  // ground colour dark for realism and the entire ceiling of the hall renders black, with the
+  // LED strips floating in a void. Here it stands in for the bounce off a pale floor.
+  stationRig.add(new THREE.HemisphereLight(0xffd0a4, 0x4a4048, 0.75));
 
   const controls = createFpvControls(camera, canvas, {
     decks: station.decks,
@@ -106,6 +118,9 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
   // an empty folder is a supported state.
   const audio = createPodAudio();
   station.setRadioLit(audio.isOn());
+
+  /** Set by the dev inspection handle below; parks the walk clamp so a shot can be framed. */
+  let freecam = false;
 
   // Autoplay is blocked until the page has seen a user gesture, and the bed starts before one
   // — so pick playback back up on the first click/tap/key the view gets.
@@ -203,6 +218,58 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
     camera.updateProjectionMatrix();
   }
 
+  /**
+   * Dev-only inspection handle, for `dev/shots.mjs`.
+   *
+   * The station's shape is judgeable only by eye — the walk harness proves you can get
+   * everywhere and fit under the roof, and says nothing whatever about whether it looks like
+   * the thing it was modelled on. So a headless browser drives this scene and screenshots it,
+   * and that needs a camera the deck clamp will not immediately undo: `freecam` is what parks
+   * `controls.update()` for the duration.
+   *
+   * `import.meta.env.DEV` is a compile-time constant, so Rollup folds this whole block away in
+   * a production build and `__station` never exists on the deployed site.
+   */
+  if (import.meta.env.DEV) {
+    let mapsReady = false;
+    space.ready.then(() => {
+      mapsReady = true;
+    });
+    const lookMatrix = new THREE.Matrix4();
+    (window as unknown as Record<string, unknown>).__station = {
+      camera,
+      scene,
+      stationRig,
+      station,
+      flight,
+      space,
+      get mapsReady() {
+        return mapsReady;
+      },
+      /**
+       * Put the eye at `pos` and aim it at `look`, both in **station** coordinates — the same
+       * frame `DECKS` and the furniture are authored in, which is the only frame worth naming
+       * a viewpoint in. Built with a local `Matrix4.lookAt` rather than `camera.lookAt`,
+       * because that one works in world space and takes world up: with the rig thousands of
+       * units away and steeply inclined it would both aim wrong and roll the horizon.
+       */
+      pose(pos: [number, number, number], look: [number, number, number]) {
+        freecam = true;
+        camera.position.set(pos[0], pos[1], pos[2]);
+        lookMatrix.lookAt(
+          new THREE.Vector3(pos[0], pos[1], pos[2]),
+          new THREE.Vector3(look[0], look[1], look[2]),
+          new THREE.Vector3(0, 1, 0)
+        );
+        camera.quaternion.setFromRotationMatrix(lookMatrix);
+      },
+      /** Hand the camera back to the player. */
+      walk() {
+        freecam = false;
+      }
+    };
+  }
+
   const clock = new THREE.Clock(false);
   let rafId = 0;
   let running = false;
@@ -213,7 +280,7 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
     // player across the station on the next frame.
     const dt = Math.min(clock.getDelta(), 0.1);
 
-    controls.update(dt);
+    if (!freecam) controls.update(dt);
     flight.update(dt);
     updateOrbit();
     station.globe.update(flight.state, stationRig.quaternion, dt);

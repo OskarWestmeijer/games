@@ -16,15 +16,15 @@ import * as THREE from 'three';
 export const MATERIALS = {
   /** Hull: walls and ceilings. */
   shell: new THREE.MeshStandardMaterial({
-    color: 0x232833,
-    roughness: 0.78,
-    metalness: 0.15,
+    color: 0x3d3a35,
+    roughness: 0.72,
+    metalness: 0.22,
     side: THREE.DoubleSide
   }),
   floor: new THREE.MeshStandardMaterial({
-    color: 0x151920,
-    roughness: 0.62,
-    metalness: 0.2,
+    color: 0x262229,
+    roughness: 0.58,
+    metalness: 0.24,
     side: THREE.DoubleSide
   }),
   /**
@@ -44,6 +44,13 @@ export const MATERIALS = {
     depthWrite: false,
     side: THREE.DoubleSide
   }),
-  // Over 1.0 on purpose, so `UnrealBloomPass` (threshold 1.0) picks it up and nothing else does.
-  led: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.45, 1.25, 1.8) })
+  /**
+   * Over 1.0 on purpose, so `UnrealBloomPass` (threshold 1.0) picks it up and nothing else does.
+   *
+   * **Warm, not cyan.** It was `(0.45, 1.25, 1.8)`, and since the strips are most of what you
+   * can see of the interior that made the whole inside of the station read cold blue — against
+   * a cold blue planet, which left nothing for the contrast in "real outside, warm inside" to
+   * work with. Same magnitude, so it blooms exactly as hard as it did.
+   */
+  led: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.8, 1.24, 0.72) })
 };

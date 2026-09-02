@@ -1,89 +1,65 @@
 import * as THREE from 'three';
 import { MATERIALS } from './shell';
 import {
-  HALL,
   NOSE_Z,
-  WINDOW,
-  aftPolygon,
-  halfWidthAt,
-  hallEdges,
-  hullOutline,
-  noseRibs,
-  nosePolygon
-} from './layout';
+  Z_TIP,
+  buildHullSurface,
+  floorHalfWidthAt,
+  floorOutline,
+  ringAt,
+  ringPoint,
+  roofAt,
+  stations
+} from './hull';
 import type { Region } from '../regions';
 
 /**
- * The hall's shell: the tapered hull, the glazed nose, and the strip lights.
+ * The hall: the hull surface, the floor it stands on, the canopy's frames and the lit rim.
  *
- * Metres, origin on the lower floor at the middle of the room, prow on **-Z** — matching the
- * camera's default forward direction, which is what `planet-view.ts` aims at the planet.
+ * The form itself is `hull.ts` — this file only builds it. What is left here is the four things
+ * that make a lofted surface read as a room rather than as a bag:
  *
- * **The front third is a glass cage.** Both curving sides, the roof and the floor over that
- * stretch are glass, on top of the window in the prow itself. The office sits inside it, so the
- * desk has planet above, below and to both sides — which is the whole reason the hull slims
- * down there. Aft of `NOSE_Z` the hull goes square and opaque, and that is where the bridge is.
+ * - **The floor**, an oval plate meeting the hull exactly where the rings end.
+ * - **The frames**, the structure over the glazing. These are the single most recognisable thing
+ *   in the reference sheet, and they are cheap. Without them a continuous sheet of glass has no
+ *   scale and no depth — you cannot tell a 4 m canopy from a 40 m one, which now matters a great
+ *   deal more, because the canopy is 13 m long and wraps the hull from floor line to floor line.
+ * - **The lit rim**, a glowing line where the glass meets the floor down both sides. This is
+ *   what replaces the glass floor of an earlier pass: it draws the edge of the deck against the
+ *   planet, which is the thing the glass floor was really doing.
+ * - **The roof strips**, aft only.
  *
- * The window construction — a wall-sized `Shape` with a rounded rectangle punched out of it, a
- * ring extruded back into the room for the frame, and a near-invisible sheet of glass in the
- * hole — is carried over from the pod's own window wall, which is the one bit of this geometry
- * that was ever tuned. Only the numbers changed.
+ * Nothing is mounted in the glazing but the rim. It is glass on every face above the floor, so
+ * there is nowhere to put a lamp and nothing that should compete with what is outside it — the
+ * hall is lit from the floor line, and from the furniture's own lamps.
  */
 
 /**
- * How far the frame ring stands past the opening, and how far it stands proud of the wall.
- * Thin on purpose: the frame gives the hole an edge and catches a highlight, and anything
- * chunkier eats the view it is framing. It has to fit the 0.7 margin the opening leaves.
+ * How thick the frames are. 0.075 was a 15 cm tube, which at this scale read as tree branches
+ * laid over the glass; the reference's members are slim, dark, and mostly seen in silhouette.
+ * The hoops are a shade heavier than the longerons because they are the primary structure, and
+ * reading that hierarchy is most of what makes the canopy look built rather than drawn on.
  */
-const FRAME_WIDTH = 0.12;
-const FRAME_DEPTH = 0.16;
+const HOOP_RADIUS = 0.06;
+const LONGERON_RADIUS = 0.045;
 
 /**
- * Traces a rounded rectangle into `target`, which can be either a `Shape` (an outline) or a
- * `Path` (a hole) — `Shape` extends `Path`, so the same routine builds both halves of the
- * window: the hole punched through the wall and the frame ring around it.
+ * Where the longerons stop: **exactly** the tip, where the profile reaches zero and `ringPoint`
+ * collapses every ring parameter onto the same point. So they converge to an apex, the way a
+ * nose cone's stringers do, instead of ending in mid-air with rounded caps showing — which they
+ * did at -9.0 and again at -9.45, and it was the first thing the eye went to from the desk.
  */
-function traceRoundedRect(
-  target: THREE.Path,
-  width: number,
-  height: number,
-  radius: number,
-  centerY: number
-): void {
-  const x0 = -width / 2;
-  const x1 = width / 2;
-  const y0 = centerY - height / 2;
-  const y1 = centerY + height / 2;
-  const r = Math.min(radius, width / 2, height / 2);
+const FRAME_TIP_Z = Z_TIP;
 
-  target.moveTo(x0 + r, y0);
-  target.lineTo(x1 - r, y0);
-  target.quadraticCurveTo(x1, y0, x1, y0 + r);
-  target.lineTo(x1, y1 - r);
-  target.quadraticCurveTo(x1, y1, x1 - r, y1);
-  target.lineTo(x0 + r, y1);
-  target.quadraticCurveTo(x0, y1, x0, y1 - r);
-  target.lineTo(x0, y0 + r);
-  target.quadraticCurveTo(x0, y0, x0 + r, y0);
-}
+/**
+ * The hoops, as fractions of the glazed length from the seam forward. Explicit rather than
+ * evenly stepped so the last one lands short of the tip and leaves the converging longerons a
+ * clear run into it.
+ */
+const HOOP_FRACTIONS = [0, 0.17, 0.35, 0.53, 0.7, 0.84];
 
-function windowShape(inset = 0): THREE.Shape {
-  const shape = new THREE.Shape();
-  traceRoundedRect(
-    shape,
-    WINDOW.width + inset * 2,
-    WINDOW.height + inset * 2,
-    WINDOW.cornerRadius + inset,
-    WINDOW.centerY
-  );
-  return shape;
-}
-
-function windowHole(): THREE.Path {
-  const path = new THREE.Path();
-  traceRoundedRect(path, WINDOW.width, WINDOW.height, WINDOW.cornerRadius, WINDOW.centerY);
-  return path;
-}
+/** The longerons, as ring parameters. Symmetric about the crown, clear of the floor edges. */
+const LONGERON_TS = [0.13, 0.315, 0.5, 0.685, 0.87];
 
 function shapeFromRegion(region: Region): THREE.Shape {
   const shape = new THREE.Shape();
@@ -106,146 +82,91 @@ function plate(region: Region, y: number, material: THREE.Material): THREE.Mesh 
 }
 
 /**
- * Positions a wall-sized plane on an edge. `PlaneGeometry` and `ShapeGeometry` both lie in XY
- * facing +Z, so the wall's local X has to be turned to run along the edge: after
- * `rotation.y = θ` local +X points at `(cos θ, 0, -sin θ)`, giving `θ = atan2(-dz, dx)`.
- *
- * Walls are `DoubleSide` and the facing is never solved for. The player cannot leave, so
- * winding correctness buys nothing and a silently missing wall costs a lot.
+ * Pulls a run of points in towards the section's own axis, so a rib sits proud on the *inside*
+ * of the glass rather than reading as wire embedded in it.
  */
-function placeOnEdge(object: THREE.Object3D, a: THREE.Vector2, b: THREE.Vector2, y: number): void {
-  const dx = b.x - a.x;
-  const dz = b.y - a.y;
-  object.position.set((a.x + b.x) / 2, y, (a.y + b.y) / 2);
-  object.rotation.y = Math.atan2(-dz, dx);
+function inset(points: THREE.Vector3[], by: number): THREE.Vector3[] {
+  return points.map((p) => {
+    const axis = roofAt(p.z) / 2;
+    const r = Math.hypot(p.x, p.y - axis);
+    const k = r > 1e-3 ? (r - by) / r : 1;
+    return new THREE.Vector3(p.x * k, axis + (p.y - axis) * k, p.z);
+  });
+}
+
+/** A tube swept along a list of points. Used for every rib and for the rim. */
+function tube(points: THREE.Vector3[], radius: number, material: THREE.Material): THREE.Mesh {
+  const curve = new THREE.CatmullRomCurve3(points);
+  return new THREE.Mesh(
+    new THREE.TubeGeometry(curve, Math.max(12, points.length * 2), radius, 6, false),
+    material
+  );
 }
 
 export function buildHall(): THREE.Group {
   const hall = new THREE.Group();
-  const H = HALL.height;
 
-  const outline = hullOutline();
-  const edges = hallEdges();
-  const glazed = new Set(edges.glazed);
+  // --- the hull ------------------------------------------------------------------------------
+  hall.add(buildHullSurface());
 
-  // --- floor and roof, opaque aft and glass forward ----------------------------------------
-  const aft = aftPolygon();
-  const nose = nosePolygon();
+  // --- the floor -----------------------------------------------------------------------------
+  // One opaque oval, out to where the rings meet the floor plane. Solid all the way forward:
+  // the glass floor of the previous pass is gone, and the lit rim below takes its job.
+  hall.add(plate(floorOutline(), 0, MATERIALS.floor));
 
-  hall.add(plate(aft, 0, MATERIALS.floor));
-  hall.add(plate(aft, H, MATERIALS.shell));
-  // A hair below the deck and a hair above the roof, so neither ever z-fights its opaque half.
-  hall.add(plate(nose, -0.01, MATERIALS.glass));
-  hall.add(plate(nose, H + 0.01, MATERIALS.glass));
-
-  // --- walls --------------------------------------------------------------------------------
-  for (let i = 0; i < outline.length; i++) {
-    const a = outline[i];
-    const b = outline[(i + 1) % outline.length];
-    const length = Math.hypot(b.x - a.x, b.y - a.y);
-
-    if (i === edges.front) {
-      // A wall-sized shape with the window punched out of it as a hole.
-      const wallShape = new THREE.Shape();
-      wallShape.moveTo(-length / 2, 0);
-      wallShape.lineTo(length / 2, 0);
-      wallShape.lineTo(length / 2, H);
-      wallShape.lineTo(-length / 2, H);
-      wallShape.closePath();
-      wallShape.holes.push(windowHole());
-
-      const front = new THREE.Mesh(new THREE.ShapeGeometry(wallShape), MATERIALS.shell);
-      placeOnEdge(front, a, b, 0);
-      hall.add(front);
-
-      // The frame is a ring — a slightly larger rounded rect with the opening as its hole —
-      // extruded back into the room, so the window reads as a hole with depth rather than a
-      // picture painted on a flat wall.
-      const frameShape = windowShape(FRAME_WIDTH);
-      frameShape.holes.push(windowHole());
-      const frame = new THREE.Mesh(
-        new THREE.ExtrudeGeometry(frameShape, {
-          depth: FRAME_DEPTH,
-          bevelEnabled: true,
-          bevelSize: 0.02,
-          bevelThickness: 0.02,
-          bevelSegments: 2,
-          curveSegments: 16
-        }),
-        MATERIALS.frame
-      );
-      placeOnEdge(frame, a, b, 0);
-      hall.add(frame);
-
-      const glass = new THREE.Mesh(new THREE.ShapeGeometry(windowShape(), 16), MATERIALS.glass);
-      placeOnEdge(glass, a, b, 0);
-      glass.position.z += 0.03;
-      hall.add(glass);
-      continue;
-    }
-
-    const wall = new THREE.Mesh(
-      new THREE.PlaneGeometry(length, H),
-      glazed.has(i) ? MATERIALS.glass : MATERIALS.shell
-    );
-    placeOnEdge(wall, a, b, H / 2);
-    hall.add(wall);
-  }
-
-  // --- mullions ------------------------------------------------------------------------------
-  // A rib floor-to-roof at every seam between nose panels, on both sides. Without them the
-  // faceted glass reads as a modelling artefact; with them it reads as glazing, and they are
-  // what actually makes the taper legible from inside.
-  for (const z of noseRibs()) {
-    for (const side of [-1, 1]) {
-      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.09, H, 0.09), MATERIALS.frame);
-      rib.position.set(side * halfWidthAt(z), H / 2, z);
-      hall.add(rib);
-    }
-  }
-
-  // The ring where the glass cage meets the hull. It is the seam between two materials on four
-  // surfaces at once, and left bare it reads as a gap rather than as a joint.
-  const seamWidth = HALL.width;
-  for (const [y, h] of [
-    [0.05, 0.1],
-    [H - 0.05, 0.1]
-  ]) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(seamWidth, h, 0.12), MATERIALS.frame);
-    bar.position.set(0, y, NOSE_Z);
-    hall.add(bar);
-  }
-  for (const side of [-1, 1]) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, H, 0.12), MATERIALS.frame);
-    post.position.set((side * HALL.width) / 2, H / 2, NOSE_Z);
-    hall.add(post);
-  }
-
-  // --- LED strips ----------------------------------------------------------------------------
-  // Plain unlit material with channel values above 1.0: the bloom pass in `planet-view.ts` is
-  // what turns these into glowing lines, and it only picks up what is over its threshold. The
-  // `PointLight`s that actually illuminate the hall live in `station/index.ts`.
+  // --- frames --------------------------------------------------------------------------------
+  // **Hoops and longerons**, which is what the reference sheet draws and what a pressure canopy
+  // actually is: rings taking the hoop stress, and a few members running fore-and-aft between
+  // them. The panes that fall out are big and quadrilateral, and there are not many of them.
   //
-  // Aft only. The nose is glass on every face and has nowhere to mount a strip — and nothing
-  // bright belongs in there anyway, since the whole point of it is what is outside.
-  const strip = (w: number, h: number, d: number, x: number, y: number, z: number) => {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), MATERIALS.led);
-    bar.position.set(x, y, z);
-    hall.add(bar);
-  };
+  // This replaced a *diagonal lattice* — two families of ribs spiralling round the nose in
+  // opposite directions and crossing into lozenges. It was defensible over a 7 m nose. Stretched
+  // over 13 m of hull it stopped reading as structure at all: every rib crossed every other one
+  // at a different place along the length, and from the lounge the window was a tangle of black
+  // curves with a planet somewhere behind it. Fore-and-aft members are legible from any standing
+  // position because they all vanish to the same point — which is also the point of the ship.
+  const span = NOSE_Z - FRAME_TIP_Z;
 
-  const aftLength = HALL.depth / 2 - NOSE_Z;
-  for (const side of [-1, 1]) {
-    strip(
-      0.06,
-      0.06,
-      aftLength - 0.6,
-      (side * HALL.width) / 2 - side * 0.14,
-      H - 0.14,
-      NOSE_Z + aftLength / 2
-    );
+  for (const fraction of HOOP_FRACTIONS) {
+    hall.add(tube(inset(ringAt(NOSE_Z - span * fraction, 24), HOOP_RADIUS), HOOP_RADIUS, MATERIALS.strut));
   }
-  strip(HALL.width - 0.9, 0.06, 0.06, 0, H - 0.12, NOSE_Z + 0.35);
+
+  const frameStations = stations().filter((z) => z <= NOSE_Z + 0.01 && z >= FRAME_TIP_Z);
+  for (const t of LONGERON_TS) {
+    const line = frameStations.map((z) => ringPoint(z, t));
+    hall.add(tube(inset(line, LONGERON_RADIUS), LONGERON_RADIUS, MATERIALS.strut));
+  }
+
+  // --- the lit rim ----------------------------------------------------------------------------
+  // A glowing line where the glass meets the floor, down both sides. Authored over 1.0 in
+  // `MATERIALS.led`, so the bloom pass turns it into light rather than a bright stripe. Thirteen
+  // metres of it now, which makes it the longest thing in the room and most of what lights the
+  // forward half — see the lamps beside it in `index.ts`.
+  //
+  // Unlike the longerons it must **stop short of the tip**: it is offset inboard of the hull by
+  // a fixed 0.09, so carried all the way in the two sides would cross over each other in the
+  // last half metre and each end up on the wrong one.
+  for (const side of [-1, 1]) {
+    const rim = stations()
+      .filter((z) => z <= NOSE_Z && floorHalfWidthAt(z) > 0.3)
+      .map((z) => new THREE.Vector3(side * (floorHalfWidthAt(z) - 0.09), 0.07, z));
+    if (rim.length > 2) hall.add(tube(rim, 0.045, MATERIALS.led));
+  }
+
+  // --- roof strips ----------------------------------------------------------------------------
+  // Aft only, following the crown of the hull down each shoulder. The glazing gets none: it is
+  // glass on every face and there is nothing to mount them to. They stop where the bulb starts
+  // closing in earnest, rather than at a fixed distance from the tail, so they never run down
+  // into the pinch and cross each other.
+  const aftStations = stations().filter((z) => z >= NOSE_Z && roofAt(z) > 5.5);
+  for (const fraction of [0.34, 0.66]) {
+    const line = aftStations.map((z) => {
+      const ring = ringAt(z, 24);
+      const i = Math.round(fraction * (ring.length - 1));
+      return ring[i].clone().multiplyScalar(0.985);
+    });
+    if (line.length > 2) hall.add(tube(line, 0.045, MATERIALS.led));
+  }
 
   return hall;
 }

@@ -61,6 +61,29 @@ export function insetRegion(region: Region, amount: number): Region {
   });
 }
 
+/**
+ * Cuts a convex region with a half-plane, keeping the side where `nx*x + nz*z <= d`.
+ *
+ * Convexity is preserved, which is the whole point: the bridge's deck is the hull's outline with
+ * the stair well taken out of one corner, and expressing that as two clipped copies of the same
+ * convex outline keeps both halves usable by `clampToRegions` with no decomposition to get wrong.
+ */
+export function clipRegion(region: Region, nx: number, nz: number, d: number): Region {
+  const out: Region = [];
+  for (let i = 0; i < region.length; i++) {
+    const a = region[i];
+    const b = region[(i + 1) % region.length];
+    const da = nx * a.x + nz * a.y - d;
+    const db = nx * b.x + nz * b.y - d;
+    if (da <= 0) out.push(a);
+    if ((da < 0 && db > 0) || (da > 0 && db < 0)) {
+      const t = da / (da - db);
+      out.push(new THREE.Vector2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t));
+    }
+  }
+  return out;
+}
+
 /** Rotates a region about the origin. Only ever called with multiples of 90°, which is why
  * axis-aligned things in `layout.ts` stay axis-aligned after placement. */
 export function rotateRegion(region: Region, radians: number): Region {
@@ -216,18 +239,32 @@ export function deckAt(x: number, z: number, decks: Deck[]): Deck | null {
  * centre, so the seams between them are exact however coarse the cut: there is no per-segment
  * height to disagree about.
  *
- * Neighbouring segments are widened by `overlap` radians at each end so the clamp has shared
+ * Neighbouring segments are widened by `overlap` **metres** at each end so the clamp has shared
  * floor to move you across rather than a seam to catch you on — the same reason the flat decks
- * overlap each other.
+ * overlap each other. Metres and not radians: the station's flight hugs a shallow wall on a 20 m
+ * radius, where the 0.035 rad this used to default to is 0.7 m of overlap — most of a whole
+ * segment, spilling the sector well past both of its ends.
+ *
+ * **A radius may be a function of `t`**, the fraction along the sweep, and for the walkable band
+ * of a flight climbing a curved hull it has to be. The hull leans inward above the waist, so how
+ * far out the player's *head* may be depends on how high up the flight they are — a single
+ * radius has to take the worst case, which at the top of the station's flight is nearly a metre
+ * off the wall. Applied at the foot as well, that leaves a strip of the *floor* outside the band
+ * and directly under the lowest treads: you walk along the wall, the deck below the stair claims
+ * you, and you are standing inside the steps. Let the band follow the lean and there is no strip
+ * at the bottom at all, and the one further up is honest headroom under a flight 2 m overhead.
  *
  * **The sweep must be under half a turn and must not straddle the ±180° branch cut of
- * `atan2`.** Both hold for the station's stair (a quarter turn about the +X quadrant) and
- * neither is worth the unwrapping code until something needs it.
+ * `atan2`.** Both hold for the station's stair and neither is worth the unwrapping code until
+ * something needs it.
  */
+/** A radius that may vary along the flight. `t` runs 0 at the foot to 1 at the top. */
+export type ArcRadius = number | ((t: number) => number);
+
 export interface ArcSpec {
   center: THREE.Vector2;
-  innerRadius: number;
-  outerRadius: number;
+  innerRadius: ArcRadius;
+  outerRadius: ArcRadius;
   /** Radians. The sweep runs `fromAngle` → `toAngle` and may run either way round. */
   fromAngle: number;
   toAngle: number;
@@ -236,7 +273,7 @@ export interface ArcSpec {
   levels: [number, number];
   /** How many convex quads to cut the sector into. */
   segments?: number;
-  /** Radians of shared floor between neighbouring segments. */
+  /** Metres of shared floor between neighbouring segments. */
   overlap?: number;
   /**
    * Radians of extra sector past `toAngle`, at the full `toY`. This is how the top of the
@@ -257,12 +294,27 @@ export function arcDecks(spec: ArcSpec): Deck[] {
     toY,
     levels,
     segments = 10,
-    overlap = 0.035,
+    overlap = 0.12,
     topExtension = 0
   } = spec;
 
   const sweep = toAngle - fromAngle;
   const direction = Math.sign(sweep);
+
+  /** A radius at one angle. Constant radii ignore the angle; varying ones are clamped to the
+   *  flight's own 0..1, so the overlaps at both ends read as the width they sit next to. */
+  function radiusAt(radius: ArcRadius, angle: number): number {
+    if (typeof radius === 'number') return radius;
+    return radius(Math.max(0, Math.min(1, (angle - fromAngle) / sweep)));
+  }
+
+  // The overlap is given in metres and applied as an angle, so it needs a radius to convert
+  // through. The middle of the band at the middle of the flight is representative to well
+  // within the precision this is doing anything with.
+  const midAngle = fromAngle + sweep / 2;
+  const midRadius =
+    (radiusAt(innerRadius, midAngle) + radiusAt(outerRadius, midAngle)) / 2;
+  const overlapAngle = overlap / Math.max(0.01, midRadius);
 
   /** How far along the flight a point is, 0 at the foot and 1 at the top. */
   function progress(x: number, z: number): number {
@@ -277,10 +329,12 @@ export function arcDecks(spec: ArcSpec): Deck[] {
   const decks: Deck[] = [];
   const end = toAngle + direction * topExtension;
   for (let i = 0; i < segments; i++) {
-    const a0 = fromAngle + ((end - fromAngle) * i) / segments - direction * overlap;
-    const a1 = fromAngle + ((end - fromAngle) * (i + 1)) / segments + direction * overlap;
-    const corner = (r: number, a: number) =>
-      new THREE.Vector2(center.x + Math.cos(a) * r, center.y + Math.sin(a) * r);
+    const a0 = fromAngle + ((end - fromAngle) * i) / segments - direction * overlapAngle;
+    const a1 = fromAngle + ((end - fromAngle) * (i + 1)) / segments + direction * overlapAngle;
+    const corner = (r: ArcRadius, a: number) => {
+      const radius = radiusAt(r, a);
+      return new THREE.Vector2(center.x + Math.cos(a) * radius, center.y + Math.sin(a) * radius);
+    };
     decks.push({
       region: [corner(innerRadius, a0), corner(outerRadius, a0), corner(outerRadius, a1), corner(innerRadius, a1)],
       levels,

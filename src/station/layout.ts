@@ -1,37 +1,32 @@
 import * as THREE from 'three';
-import { arcDecks, flatDeck, rectRegion, type Deck, type Region } from '../regions';
+import { arcDecks, flatDeck, regularRegion, type Deck } from '../regions';
+import { NOSE_Z, Z_TAIL, floorOutline, halfWidthAt, outlineAt, roofAt, wallArc } from './hull';
 
 /**
  * The bauplan, as data.
  *
- * **One hall, two storeys, slimming to a glazed nose.** Wide and square at the back where the
- * bridge is, curving in over the front third to a narrow prow that is glass on every face —
- * front, both sides, roof and floor. The office is in that nose, so the desk sits inside a
- * glass cage with the planet all round it; the bridge is at the back, up a curved flight of
- * stairs, looking forward down the length of the hall and out through the nose.
+ * **One lofted hull, two storeys.** A teardrop: a closed round bulb aft where the bridge is,
+ * tapering forward to a point, and glazed over its whole forward two thirds. The shape itself
+ * lives in `hull.ts`; this file says what is *in* it and where you may stand.
  *
- * Bearing 0° is still station **-Z** — the face the nose points and the face `updateOrbit()`
- * aims at the planet.
+ * - the **lounge** forward, in the glass: a raised dais with a U of couch open to the window,
+ *   a low table in the middle of it, and the radio that switches the music on,
+ * - a **staircase** running up the starboard wall, hard against it,
+ * - the **bridge** aft: console at its front edge facing forward down the hall, globe behind it.
  *
- *                              -Z   glazed nose (front third: sides, roof, floor and window)
- *                          ╱‾‾‾‾‾‾‾‾‾╲
- *                        ╱  [desk]     ╲
- *                       │   chair       │
- *                       │                │
- *                       ├────────────────┤  ← taper starts, hull goes square
- *                       │           ⌒    │
- *                       │        ⌒stair  │     the flight curves up through a quarter
- *                       │     ⌒          │     turn and comes out at the deck's front
- *                       │  ┌─────────────┤
- *                       │  │ BRIDGE y=3.6│
- *                       │  │ ▬▬▬ console │
- *                       │  │ ◉ globe     │
- *                       └──┴─────────────┘
- *                              +Z
+ * There used to be an office in the nose — a desk, a chair and a monitor showing a miniature of
+ * oskar-westmeijer.com — with the lounge sitting amidships behind it. The desk is gone and the
+ * lounge has taken the window, which is the arrangement the reference sheet draws: the best seat
+ * in the station is the one facing out of it.
+ *
+ * Bearing 0 degrees is still station **-Z** — the way the nose points and the face
+ * `updateOrbit()` aims at the planet.
  *
  * Everything is authored in **station space**, which is also rig space and also the space the
  * camera walks in.
  */
+
+export { NOSE_Z, Z_TAIL, Z_TIP } from './hull';
 
 /** Camera height above whatever floor it is standing on. There is no body; this is the eyes. */
 export const EYE_HEIGHT = 1.6;
@@ -39,209 +34,204 @@ export const EYE_HEIGHT = 1.6;
 /** How far the eye is held off a wall. Doubles as the "you have a body" fudge. */
 const WALL_CLEARANCE = 0.45;
 
-/** The room, at its widest. Front (nose) at z = -8.5, back at +8.5. */
-export const HALL = { width: 12, depth: 17, height: 7.2 };
-
 /**
- * Where the hull stops being square and starts curving in, and how much width it loses by the
- * prow. The taper is **quadratic in the distance forward**, not linear: that leaves the sides
- * straight where they meet the square back and turns them in hardest at the very front, which
- * is what reads as a curve rather than as a chamfer. It also means the curve bows *outward* of
- * the straight chord between its ends, so a trapezoid drawn on that chord is always inside the
- * hull — which is what lets the walkable nose stay one convex region.
+ * The mezzanine: its top surface, how thick the slab is, and where its front edge falls.
  *
- * `NOSE_Z` is one third of the way back, so "the front third" is one number for the taper, the
- * glazing and the office all at once.
+ * **It came down and forward.** At 3.6 in an 8.6 m hull the deck left five metres of empty air
+ * over the lounge and a bridge you could not fill; at 2.75 in a 6.8 m hull the lower deck is a
+ * room with a 2.5 m ceiling under the slab, and the bridge gets the taller half of the section.
+ * The front edge moved from 30% of the length back to 36%, which is most of a metre more deck —
+ * the one dimension the bridge was actually short of.
  */
-export const NOSE_Z = -HALL.depth / 2 + HALL.depth / 3;
-const NOSE_TAPER = 1.5;
-
-/** Half the hull's width at a given z. 6.0 everywhere aft of the nose, 4.5 at the prow. */
-export function halfWidthAt(z: number): number {
-  if (z >= NOSE_Z) return HALL.width / 2;
-  const u = (NOSE_Z - z) / (NOSE_Z + HALL.depth / 2);
-  return HALL.width / 2 - NOSE_TAPER * u * u;
-}
-
-/** How finely the curved sides are cut into wall panels. */
-const NOSE_SEGMENTS = 7;
-
-/**
- * The hull as a closed polygon, wound so that edge `i` runs from point `i` to point `i + 1`.
- * `hallEdges()` names which edges are which, because both the walls and the glazing are
- * driven off the same list.
- */
-export function hullOutline(): Region {
-  const back = HALL.depth / 2;
-  const front = -HALL.depth / 2;
-  const points: Region = [];
-
-  points.push(new THREE.Vector2(-halfWidthAt(front), front));
-  points.push(new THREE.Vector2(halfWidthAt(front), front));
-  for (let i = 1; i <= NOSE_SEGMENTS; i++) {
-    const z = front + ((NOSE_Z - front) * i) / NOSE_SEGMENTS;
-    points.push(new THREE.Vector2(halfWidthAt(z), z));
-  }
-  points.push(new THREE.Vector2(HALL.width / 2, back));
-  points.push(new THREE.Vector2(-HALL.width / 2, back));
-  for (let i = NOSE_SEGMENTS; i >= 1; i--) {
-    const z = front + ((NOSE_Z - front) * i) / NOSE_SEGMENTS;
-    points.push(new THREE.Vector2(-halfWidthAt(z), z));
-  }
-  return points;
-}
-
-/**
- * The two halves of the floor plan, split at `NOSE_Z`. The roof and the floor are each built as
- * one opaque plate aft and one glass plate forward, which is what glazes the nose top and
- * bottom without punching holes in anything.
- */
-export function aftPolygon(): Region {
-  return rectRegion(-HALL.width / 2, NOSE_Z, HALL.width / 2, HALL.depth / 2);
-}
-
-export function nosePolygon(): Region {
-  const front = -HALL.depth / 2;
-  const points: Region = [];
-  points.push(new THREE.Vector2(-halfWidthAt(front), front));
-  points.push(new THREE.Vector2(halfWidthAt(front), front));
-  for (let i = 1; i <= NOSE_SEGMENTS; i++) {
-    const z = front + ((NOSE_Z - front) * i) / NOSE_SEGMENTS;
-    points.push(new THREE.Vector2(halfWidthAt(z), z));
-  }
-  for (let i = NOSE_SEGMENTS; i >= 1; i--) {
-    const z = front + ((NOSE_Z - front) * i) / NOSE_SEGMENTS;
-    points.push(new THREE.Vector2(-halfWidthAt(z), z));
-  }
-  return points;
-}
-
-/** The z of each seam between nose wall panels, for the mullion ribs. */
-export function noseRibs(): number[] {
-  const front = -HALL.depth / 2;
-  const zs: number[] = [];
-  for (let i = 1; i < NOSE_SEGMENTS; i++) zs.push(front + ((NOSE_Z - front) * i) / NOSE_SEGMENTS);
-  return zs;
-}
-
-/** Which edge of `hullOutline()` is what. The front wall is edge 0 and carries the window. */
-export function hallEdges() {
-  const n = NOSE_SEGMENTS;
-  const glazed: number[] = [];
-  for (let i = 1; i <= n; i++) glazed.push(i);
-  for (let i = n + 4; i <= 2 * n + 3; i++) glazed.push(i);
-  return { front: 0, glazed, rightWall: n + 1, back: n + 2, leftWall: n + 3 };
-}
-
-/**
- * The window in the prow. 7.6 x 6.4 in a wall that is only 9.0 wide and 7.2 tall, so it leaves
- * 0.7 at the sides and 0.2 / 0.6 top and bottom — and it runs the full height of the hall, so
- * both storeys look out of it.
- *
- * The horizon lands at `horizon` degrees above the optical axis (`pitchFor` in `flight.ts`) and
- * the pitch is solved for it every frame, so it holds its framing at any altitude. What it does
- * *not* hold is its framing at any eye height:
- *
- * - **From the desk** — eye 1.6, ~2.8 m off the glass — the default 9.4° detent ("high") puts
- *   the limb mid-window, which is where it has always been.
- * - **From the bridge** — eye 5.2, ~13 m off it — the same 9.4° puts it above the window head.
- *   The console's own horizon key ("level", "low") brings it back down.
- *
- * That is a property of a two-storey room rather than a bug: the two decks want different
- * framing, and there is already a control for it.
- */
-export const WINDOW = { width: 7.6, height: 6.4, centerY: 3.4, cornerRadius: 0.8 };
-
-/** The mezzanine: its top surface, how thick the slab is, and how much floor it covers. */
 export const BRIDGE = {
-  y: 3.6,
-  thickness: 0.3,
-  frontZ: 3.6,
-  backZ: HALL.depth / 2
+  y: 2.75,
+  thickness: 0.24,
+  frontZ: 1.8
 };
 
 /**
- * The stair well: the bite taken out of the deck's front edge where the flight comes up. The
- * top tread lands flush on its back edge, so no landing is needed.
+ * The staircase.
+ *
+ * **It hugs the starboard wall, and it is the hull that says where it goes.** `wallArc` fits a
+ * circle to the hull's own floor outline between the two ends, so the flight is an arc of the
+ * wall it stands against rather than a helix that happens to be near one — nothing here is a
+ * position, only a length and two clearances. Move the hull and the stairs move with it.
+ *
+ * That circle comes out huge: about 21 m of radius against a 10 m beam, because the flank of a
+ * teardrop is nearly straight amidships. **That is the correct answer**, and the shape an
+ * earlier version got wrong: a 3.4 m helix standing in the open middle of the floor, which
+ * walled off the centre of the hall, put its outer rail 0.48 m through the hull the first time
+ * it was drawn, and needed a well bitten out of the mezzanine to come up through.
+ *
+ * Running fore-and-aft pays for itself three times: a 4.65 m flight at 30.6 degrees instead of
+ * 5.3 m at 34, an outer flank that *is* the hull and so carries no railing, and a top tread
+ * level with the mezzanine's front edge — so there is **no stair well** at all.
+ *
+ * Its whole run is inside the glazing (`NOSE_Z` is its top). That is deliberate: an open flight
+ * of treads with no risers hides very little, and a staircase in silhouette against the Earth is
+ * worth more than the sliver of glass it costs.
  */
-export const STAIR_WELL = { minX: 4.2, maxX: HALL.width / 2, backZ: 4.2 };
+const STAIR_FOOT_Z = -3.0;
 
 /**
- * The staircase: a quarter turn, rising from the hall floor on the starboard side and coming
- * out facing aft at the deck's front edge.
- *
- * It is an arc rather than a straight run because the hull is no longer a box — a straight
- * flight bolted to a curving hull reads as scaffolding. The centre is placed so the outermost
- * tread stops short of the hull (`center.x + outerRadius` = 5.3, against a walkable edge of
- * 5.55), and the radius is set by the pitch: 3.5 m of centreline radius over a quarter turn is
- * 5.5 m of going for 3.6 m of rise, or about 33° — steep-ish, and the price of keeping the
- * flight out of the middle of the floor.
+ * How wide the flight is drawn, and how far the walkable band is held off its inner edge, clear
+ * of the railing. The flight is generous because the hull leans in over the top of it: the band
+ * is 1.39 m across at the foot and only 0.68 at the head, and narrowing the flight narrows the
+ * head of it first.
  */
+const STAIR_WIDTH = 1.8;
+const STAIR_INNER_GAP = 0.12;
+
+const STAIR_WALL = wallArc(STAIR_FOOT_Z, BRIDGE.frontZ, 1);
+
 export const STAIR = {
-  center: new THREE.Vector2(1.4, 4.2),
-  centerRadius: 3.5,
-  halfWidth: 0.5,
-  /**
-   * Foot pointing dead ahead (-Z) from the centre, top pointing to starboard (+X), so the
-   * flight turns to port as it climbs and delivers you facing aft at the deck edge.
-   *
-   * Written as -90°..0° rather than the equivalent 270°..360° so the sweep never straddles the
-   * ±180° branch cut of `atan2`, which `arcDecks` deliberately does not unwrap.
-   */
-  fromAngle: THREE.MathUtils.degToRad(-90),
-  toAngle: 0,
+  center: STAIR_WALL.center,
+  fromAngle: STAIR_WALL.fromAngle,
+  toAngle: STAIR_WALL.toAngle,
   /** How far the walkable surface runs past the last tread, flat, onto the deck. */
-  topExtension: THREE.MathUtils.degToRad(17),
-  treads: 12
+  topExtension: 0.6 / STAIR_WALL.radius,
+  treads: 11
 };
 
-export const STAIR_INNER = STAIR.centerRadius - STAIR.halfWidth;
-export const STAIR_OUTER = STAIR.centerRadius + STAIR.halfWidth;
+/** The radius at which the flight meets the hull — at floor level. Above it, the wall bulges. */
+export const STAIR_OUTER = STAIR_WALL.radius;
+export const STAIR_INNER = STAIR_OUTER - STAIR_WIDTH;
+export const STAIR_CENTER_RADIUS = (STAIR_INNER + STAIR_OUTER) / 2;
+
+/** A point on the flight's arc, at radius `r` and fraction `t` from foot to top. */
+export function onStairArc(r: number, t: number): THREE.Vector2 {
+  const a = STAIR.fromAngle + (STAIR.toAngle - STAIR.fromAngle) * t;
+  return new THREE.Vector2(STAIR.center.x + Math.cos(a) * r, STAIR.center.y + Math.sin(a) * r);
+}
 
 /**
- * Where the office furniture sits. Kept as a placement offset rather than re-authoring the desk
- * in station space, so `office/desk.ts` and `office/radio.ts` need no edits at all.
+ * How far out the walkable band may reach at a fraction `t` along the flight — solved from the
+ * hull, and **a function of `t` rather than one number, which is the whole point.**
  *
- * The desk lands at z = -7.85, its front edge 0.14 clear of the window frame — which stands
- * `FRAME_DEPTH` proud of a wall at -8.5. The spawn comes out at z = -5.7, about 2.8 m off the
- * glass and well inside the glazed nose.
+ * The flight climbs into the part of the hull that leans in, so the limit tightens as you go up:
+ * at the foot the eye may be 3.95 out, at the head only 3.86 with the wall itself at 4.86.
+ * Taking the worst of those and applying it the length of the flight — which is what this did
+ * when it returned a single radius — leaves the *floor* deck reaching further outboard than the
+ * stair does at the bottom, in exactly the place where the treads are ankle high. Walk along the
+ * wall there and the floor claims you while the steps are around your knees, which is what "I
+ * fall through the stairs" looks like from inside.
+ *
+ * Let it follow the lean and that strip closes: at the foot the band reaches 0.2 m *past* the
+ * floor's own limit, and the strip that does open further up is honest headroom under a flight
+ * two metres overhead.
+ *
+ * Four corrections, because the radius runs within a few degrees of X and the first recovers
+ * about 97% of the error.
  */
-export const OFFICE_PLACEMENT = { x: 0, z: -5.85 };
+export function stairWalkOuter(t: number): number {
+  let radius = STAIR_OUTER;
+  for (let i = 0; i < 4; i++) {
+    const p = onStairArc(radius, t);
+    radius += halfWidthAt(p.y, BRIDGE.y * t + EYE_HEIGHT) - WALL_CLEARANCE - p.x;
+  }
+  return radius;
+}
 
 /**
- * The navigation console: on the bridge, forward and central. The stair well is off in the
- * starboard corner, so the console keeps the middle of the deck and the sightline down the
- * hall. Long axis along X, facing -Z — you work it looking over the office and out through the
- * nose, with the globe at your back.
+ * Where the flight's inner edge meets the mezzanine's front edge. The bridge's front railing
+ * runs out to here and stops, leaving the head of the stairs open.
  */
-export const CONSOLE = { x: 0, z: 4.6, width: 3.0, depth: 0.8, top: 1.05 };
+export const STAIR_TOP_X = onStairArc(STAIR_INNER, 1).x;
+
+/**
+ * The lounge, forward, in the glass — the one piece of furniture left on the lower deck.
+ *
+ * A **U** rather than a ring, and the opening faces the window: `openAngle` of the circle is left
+ * out, centred on -Z, so the couch wraps the aft three quarters and you sit or stand in the gap
+ * with nothing between you and the planet. That is the reference sheet's arrangement, and it is
+ * also what makes the dais worth walking onto.
+ *
+ * **The dais is floor now, not furniture.** It used to be one footprint you walked around,
+ * because a closed couch ring left a hand's width of tread outside it and an unreachable pocket
+ * inside. Opening the U reverses that: the pocket is the best standing spot in the station, so
+ * the dais is a `Deck` at 0.18 — one step, well under `MAX_STEP` — and the couch is the thing
+ * you are pushed out of.
+ *
+ * The radius is bounded by the hull. At 2.3 about z = -4.2 the forward edge lands at z = -6.5,
+ * where the floor is 2.64 from the centreline; much bigger or much further forward and the dais
+ * runs out through the glass.
+ */
+export const LOUNGE = {
+  x: 0,
+  z: -4.2,
+  daisRadius: 2.3,
+  daisHeight: 0.18,
+  couchInner: 1.35,
+  couchOuter: 2.05,
+  seatHeight: 0.42,
+  backHeight: 0.86,
+  /** How much of the circle is left out, centred on -Z. */
+  openAngle: THREE.MathUtils.degToRad(100),
+  tableRadius: 0.5,
+  tableHeight: 0.38
+};
+
+/**
+ * Where the player is standing when they arrive: on the floor a step behind the dais, facing the
+ * window over the back of the couch. The opening frame is the lounge, the table and the whole
+ * glazed nose with the planet in it — the shot the reference sheet labels "view from lounge",
+ * and the reason the couch was moved forward in the first place.
+ *
+ * It used to be at a desk in the nose. There is no desk. It has to stay outside the couch's
+ * footprints once those are inflated by the player radius, which the aft-most of them reaches
+ * z = -1.83 to do.
+ */
+export const SPAWN = { x: 0.8, z: -1.1, yaw: -0.1, level: 0 };
+
+/**
+ * The navigation console: on the bridge, forward and central. The stairs arrive at the deck's
+ * starboard end, so the console keeps the middle of it and the sightline down the hall.
+ */
+export const CONSOLE = { x: 0, z: 2.8, width: 2.6, depth: 0.75, top: 1.05 };
 
 /** Where the globe floats: behind the console, at the back of the bridge deck. */
 export const GLOBE = {
   x: CONSOLE.x,
-  z: 7.2,
-  y: BRIDGE.y + 1.7,
-  radius: 0.85,
-  plinthRadius: 0.9
+  z: 5.6,
+  y: BRIDGE.y + 1.5,
+  radius: 0.72,
+  plinthRadius: 0.78
 };
+
+/**
+ * The slab's own outline.
+ *
+ * Taken at **deck height** so it runs right out to meet the hull and leaves no gap to see
+ * through — the walkable region below is a different, much smaller shape, and that difference is
+ * deliberate (see the note on `DECKS`). It is a plain outline: the staircase arrives at the front
+ * edge from below rather than through the deck, so there is no well to bite out.
+ */
+export function bridgeSlabPolygon(): THREE.Vector2[] {
+  return outlineAt(BRIDGE.y, BRIDGE.frontZ, Z_TAIL, 0);
+}
 
 /**
  * The walkable floor.
  *
- * **The order is load-bearing.** `deckAt` is first-match, and the stair shares its XZ with the
- * hall floor it curves over — listed the other way round you would walk *under* the treads at
- * ground level instead of up them. The flank of the flight is then held by the step guard in
- * `fpv-controls.ts` rather than by a region boundary, which is why the railings matter: they
- * are what makes that invisible wall visible.
+ * **The order is load-bearing.** `deckAt` is first-match. The stair shares its XZ with the hall
+ * floor it climbs over — listed the other way round you would walk *under* the treads at ground
+ * level instead of up them — and the dais shares its XZ with the floor it stands on. The flanks
+ * of the flight are held by the step guard in `fpv-controls.ts` rather than by a region boundary,
+ * which is why its inner railing matters: it is what makes that invisible wall visible. The outer
+ * flank needs nothing, because it is the hull.
  *
- * Level 0 is the hall floor, level 1 the bridge. The stair belongs to both, and crossing its
- * midpoint swaps which set is clamped against.
+ * **Each deck's outline is taken at the height of the player's head, not their feet.** On the
+ * lower floor the two agree closely enough — the hull's widest point is a little above eye height
+ * — so the floor's own outline serves. On the bridge they do not: at z = 4 the hull is 4.86 wide
+ * at the deck and 4.28 at 4.35 m, and by z = 6.5 it is 3.2 against 2.1. A deck laid out on the
+ * slab's own edge would walk you head-first into the roof well before you ran out of floor, and
+ * aft, where the bulb closes, *badly* before.
  */
 export const DECKS: Deck[] = [
   ...arcDecks({
     center: STAIR.center,
-    innerRadius: STAIR_INNER,
-    outerRadius: STAIR_OUTER,
+    innerRadius: STAIR_INNER + STAIR_INNER_GAP,
+    outerRadius: stairWalkOuter,
     fromAngle: STAIR.fromAngle,
     toAngle: STAIR.toAngle,
     fromY: 0,
@@ -250,32 +240,14 @@ export const DECKS: Deck[] = [
     segments: 10,
     topExtension: STAIR.topExtension
   }),
-  // The hall floor, aft of the nose. Runs all the way under the bridge — the soffit is at 3.3,
-  // so the sheltered back of the room is walkable and is meant to be.
-  flatDeck(rectRegion(-5.5, NOSE_Z - 0.4, 5.5, HALL.depth / 2 - WALL_CLEARANCE), 0, 0),
-  // The nose. A trapezoid on the chord of the curving hull, which the quadratic taper keeps
-  // strictly inside the hull — see `halfWidthAt`.
-  flatDeck(
-    [
-      new THREE.Vector2(-(HALL.width / 2 - WALL_CLEARANCE), NOSE_Z + 0.4),
-      new THREE.Vector2(HALL.width / 2 - WALL_CLEARANCE, NOSE_Z + 0.4),
-      new THREE.Vector2(
-        halfWidthAt(-HALL.depth / 2) - NOSE_TAPER * 0.3 - WALL_CLEARANCE,
-        -HALL.depth / 2 + WALL_CLEARANCE
-      ),
-      new THREE.Vector2(
-        -(halfWidthAt(-HALL.depth / 2) - NOSE_TAPER * 0.3 - WALL_CLEARANCE),
-        -HALL.depth / 2 + WALL_CLEARANCE
-      )
-    ],
-    0,
-    0
-  ),
-  // The bridge, in two convex pieces around the stair well in its starboard corner. The
-  // forward piece stops short of the flight, and the starboard piece starts aft of the well —
-  // the only place either touches the arc is where the arc is already at deck height.
-  flatDeck(rectRegion(-5.5, BRIDGE.frontZ + WALL_CLEARANCE, 4.2, BRIDGE.backZ - WALL_CLEARANCE), BRIDGE.y, 1),
-  flatDeck(rectRegion(3.6, STAIR_WELL.backZ + WALL_CLEARANCE, 5.5, BRIDGE.backZ - WALL_CLEARANCE), BRIDGE.y, 1)
+  // The dais. A regular polygon rather than a circle, because a region *is* a polygon — sixteen
+  // sides is smooth enough that nobody feels the corners at 0.18 m off the floor.
+  flatDeck(regularRegion(LOUNGE.x, LOUNGE.z, LOUNGE.daisRadius, 16), LOUNGE.daisHeight, 0),
+  // The whole lower floor, as one convex region. It can be one because the hull's profile is
+  // concave — see the note in `hull.ts`. It runs under the bridge too: the soffit is at 2.51, so
+  // the sheltered back of the room is walkable and is meant to be.
+  flatDeck(floorOutline(WALL_CLEARANCE), 0, 0),
+  flatDeck(outlineAt(BRIDGE.y + EYE_HEIGHT, BRIDGE.frontZ, Z_TAIL, WALL_CLEARANCE), BRIDGE.y, 1)
 ];
 
 /** An axis-aligned footprint about a centre. `Box2` carries z in `.y`. */
@@ -285,3 +257,6 @@ export function footprint(x: number, z: number, w: number, d: number): THREE.Box
     new THREE.Vector2(x + w / 2, z + d / 2)
   );
 }
+
+/** Re-exported so the rest of the station can place things against a hull that is not a box. */
+export { halfWidthAt, roofAt, floorOutline, outlineAt };

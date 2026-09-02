@@ -3,27 +3,43 @@ import { MATERIALS } from './shell';
 import {
   BRIDGE,
   GLOBE,
-  HALL,
   STAIR,
+  STAIR_CENTER_RADIUS,
   STAIR_INNER,
   STAIR_OUTER,
-  STAIR_WELL,
-  footprint
+  STAIR_TOP_X,
+  bridgeSlabPolygon,
+  footprint,
+  halfWidthAt,
+  onStairArc
 } from './layout';
 
 /**
- * The bridge: the mezzanine across the back of the hall, the curved flight up to it, and the
- * emitter the globe stands on.
+ * The bridge: the mezzanine aft, the curved flight up to it, and the emitter the globe stands on.
  *
  * It is a deck rather than a room — no walls of its own, no ceiling, open to the hall on its
- * front edge. That is the point: from the desk in the nose you can see the console and the
- * globe above and beyond you, and from the console you look forward down the whole hall and out
- * through the glass. A second storey that closed itself off would just be two rooms stacked.
+ * front edge. From the office in the nose you can see the console and the globe above and beyond
+ * you; from the console you look forward down the whole hall and out through the glass.
  *
- * **The stair turns.** A quarter arc, rising on the starboard side and coming out facing aft at
- * the deck's front edge, through a well bitten out of the slab's starboard corner. It is curved
- * because the hull is: a straight flight bolted into a hall that tapers reads as scaffolding.
- * The walkable surface is the smooth ramp in `layout.ts`; everything here is what you see.
+ * **The hull does most of the railing's job.** The deck runs out to meet the hull on both sides,
+ * and there a curved wall already stops you — so the only railing up here is along the straight
+ * front edge, stopping short at the head of the stairs. That also sidesteps the trap a railing
+ * along a curved hull would fall into, since the hull leans in and the rail would be outside it
+ * long before the slab was.
+ *
+ * **The stair runs along the starboard wall and arrives at the front edge.** Its shape is the
+ * hull's own: `layout.ts` fits an arc to the wall it stands against, so it curves exactly as
+ * much as the wall does and no more. Two things follow from that, and both are why this is
+ * cheaper than the helix it replaced — its outer flank is the hull, so it carries one railing
+ * instead of two, and its top tread is level with the mezzanine's front edge, so there is no
+ * well and the slab is a plain outline.
+ *
+ * **The wall bulges above the floor.** The arc is fitted at floor level, but the hull's widest
+ * point is around y = 2, so a flight of treads all cut to the arc would touch the wall at the
+ * bottom and stand 0.27 m off it in the middle. Every tread and the outer stringer are run out
+ * to `halfWidthAt` at their *own* height instead — which is the whole of "hugs the wall".
+ *
+ * The walkable surface is the ramp in `layout.ts`; everything here is what you see.
  */
 
 /** Railings. A top rail and one mid rail, on posts. */
@@ -69,19 +85,27 @@ function box(
   return mesh;
 }
 
-/** A point on the stair's arc, at radius `r` and fraction `t` along the flight. */
-function onArc(r: number, t: number): THREE.Vector2 {
-  const a = STAIR.fromAngle + (STAIR.toAngle - STAIR.fromAngle) * t;
-  return new THREE.Vector2(
-    STAIR.center.x + Math.cos(a) * r,
-    STAIR.center.y + Math.sin(a) * r
-  );
+/**
+ * The radius at which the flight meets the hull at height `y`, a fraction `t` along the run.
+ *
+ * `STAIR_OUTER` is where the arc meets the wall *at floor level*; the hull leans out above that
+ * and back in again higher still, so a tread's own reach depends on how far up the flight it is.
+ * Two or three corrections converge, because the radius runs within a few degrees of X and the
+ * first step therefore recovers ~97% of the error.
+ */
+function wallRadiusAt(t: number, y: number): number {
+  let radius = STAIR_OUTER;
+  for (let i = 0; i < 3; i++) {
+    const p = onStairArc(radius, t);
+    radius += halfWidthAt(p.y, y) - p.x;
+  }
+  return radius;
 }
 
 /**
  * A straight run of railing along one axis: a top rail, a mid rail and posts. The other two
- * coordinates are fixed. Every straight railing in the hall is axis-aligned, and a general one
- * would be more code for no case.
+ * coordinates are fixed. Every straight railing aboard is axis-aligned, and a general one would
+ * be more code for no case.
  */
 function railing(axis: 'x' | 'z', from: number, to: number, fixed: number, baseY: number): THREE.Group {
   const run = new THREE.Group();
@@ -135,7 +159,7 @@ function arcRailing(
   const points: THREE.Vector3[] = [];
   for (let i = 0; i <= steps; i++) {
     const t = fromT + ((1 - fromT) * i) / steps;
-    const p = onArc(radius, t);
+    const p = onStairArc(radius, t);
     points.push(new THREE.Vector3(p.x, fromY + (toY - fromY) * t, p.y));
   }
 
@@ -151,12 +175,8 @@ function arcRailing(
         new THREE.CylinderGeometry(RAIL.radius, RAIL.radius, a.distanceTo(b), 8),
         MATERIALS.frame
       );
-      // The cylinder is built along its own Y; aim it at the next post.
       bar.position.set((a.x + b.x) / 2, (a.y + b.y) / 2 + y, (a.z + b.z) / 2);
-      bar.quaternion.setFromUnitVectors(
-        new THREE.Vector3(0, 1, 0),
-        b.clone().sub(a).normalize()
-      );
+      bar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
       run.add(bar);
     }
   }
@@ -165,21 +185,16 @@ function arcRailing(
 
 export function buildBridge(): Bridge {
   const group = new THREE.Group();
-  const half = HALL.width / 2;
-  const deckCenterZ = (BRIDGE.frontZ + BRIDGE.backZ) / 2;
+  const railY = BRIDGE.y + RAIL.height;
 
   // --- the slab -----------------------------------------------------------------------------
-  // Extruded rather than a box, because it has a bite taken out of its starboard corner for the
-  // stair well. `ExtrudeGeometry` lies in XY and extrudes towards +Z; rotating by +π/2 about X
-  // sends shape-Y to world +Z and the extrusion to world -Y, so the slab hangs *down* from
-  // `BRIDGE.y` and gets its soffit and the well's inner faces for free.
+  // `ExtrudeGeometry` lies in XY and extrudes towards +Z; rotating by +π/2 about X sends shape-Y
+  // to world +Z and the extrusion to world -Y, so the slab hangs *down* from `BRIDGE.y` and gets
+  // its soffit and the well's inner faces for free.
+  const outline = bridgeSlabPolygon();
   const deckShape = new THREE.Shape();
-  deckShape.moveTo(-half, BRIDGE.frontZ);
-  deckShape.lineTo(STAIR_WELL.minX, BRIDGE.frontZ);
-  deckShape.lineTo(STAIR_WELL.minX, STAIR_WELL.backZ);
-  deckShape.lineTo(STAIR_WELL.maxX, STAIR_WELL.backZ);
-  deckShape.lineTo(STAIR_WELL.maxX, BRIDGE.backZ);
-  deckShape.lineTo(-half, BRIDGE.backZ);
+  deckShape.moveTo(outline[0].x, outline[0].y);
+  for (let i = 1; i < outline.length; i++) deckShape.lineTo(outline[i].x, outline[i].y);
   deckShape.closePath();
 
   const slab = new THREE.Mesh(
@@ -190,60 +205,75 @@ export function buildBridge(): Bridge {
   slab.position.y = BRIDGE.y;
   group.add(slab);
 
+  // --- railings -----------------------------------------------------------------------------
+  // One run, along the front edge, from the port side to the head of the stairs. Its port end is
+  // clamped to the hull at *railing* height, not at deck height; the slab reaches further out
+  // than this on both sides, and that leftover strip is a coaming with the hull behind it.
+  const frontLimit = halfWidthAt(BRIDGE.frontZ, railY) - 0.25;
+  group.add(railing('x', -frontLimit, STAIR_TOP_X, BRIDGE.frontZ, BRIDGE.y));
+
   // The strip along the slab's front edge. This is the line that says "there is a floor up
-  // there" from anywhere on the ground, and the only lighting the underside gets that is
-  // visible from across the room.
+  // there" from anywhere on the ground, and the only lighting the underside gets that is visible
+  // from across the room. It runs the *whole* edge, past the head of the stairs to the hull,
+  // because it is the edge it draws, not the railing.
+  const ledFrom = -frontLimit;
+  const ledTo = halfWidthAt(BRIDGE.frontZ, BRIDGE.y) - 0.1;
   group.add(
     box(
-      STAIR_WELL.minX + half - 0.4,
+      ledTo - ledFrom,
       0.06,
       0.06,
       MATERIALS.led,
-      (STAIR_WELL.minX - half) / 2,
+      (ledFrom + ledTo) / 2,
       BRIDGE.y - BRIDGE.thickness - 0.05,
       BRIDGE.frontZ
     )
   );
 
-  // --- railings -----------------------------------------------------------------------------
-  // Along the deck's front edge as far as the well, then round the two exposed sides of the
-  // well itself. The well's edge is also where the step guard in `fpv-controls.ts` stops you
-  // walking into the drop, so the railing is what makes that limit visible.
-  group.add(railing('x', -half + 0.2, STAIR_WELL.minX, BRIDGE.frontZ, BRIDGE.y));
-  group.add(railing('z', BRIDGE.frontZ, STAIR_WELL.backZ, STAIR_WELL.minX, BRIDGE.y));
-
   // --- the staircase --------------------------------------------------------------------------
-  // Treads only, on two curved stringers. There are no risers: at 33° the gap between treads is
-  // barely visible from the floor, and a closed flight would wall off the starboard side.
+  // Treads only, on two curved stringers. There are no risers: at 31° the gap between treads is
+  // barely visible from the floor, and — since the flight now stands inside the glazing — a
+  // closed one would be a 5 m wall across the starboard window instead of a row of slats.
   //
   // The walkable surface is the ramp in `layout.ts`, not these steps, so mid-tread the eye rides
-  // half a rise — 15 cm — below the tread it is nominally on, and half a rise above it at each
+  // half a rise — 12 cm — below the tread it is nominally on, and half a rise above it at each
   // nosing. That is the usual approximation and it is invisible with no body to look at, where
-  // stepping the eye instead would put a 30 cm jolt in it twelve times a flight.
+  // stepping the eye instead would put a 25 cm jolt in it eleven times a flight.
   const rise = BRIDGE.y / STAIR.treads;
   const sweep = STAIR.toAngle - STAIR.fromAngle;
-  const going = (STAIR.centerRadius * Math.abs(sweep)) / STAIR.treads;
-  const width = STAIR_OUTER - STAIR_INNER;
+  const going = (STAIR_CENTER_RADIUS * Math.abs(sweep)) / STAIR.treads;
 
   for (let i = 0; i < STAIR.treads; i++) {
     const t = (i + 0.5) / STAIR.treads;
     const angle = STAIR.fromAngle + sweep * t;
-    const p = onArc(STAIR.centerRadius, t);
-    const tread = box(width, 0.06, going, deckMaterial, p.x, rise * (i + 1) - 0.03, p.y);
+    const top = rise * (i + 1);
+    // Run out to the hull at this tread's own height, not to the arc. The wall is up to 0.27 m
+    // further out in the middle of the flight than it is at the floor, and a tread that stopped
+    // short of it would leave a slot you could see the planet through.
+    const outer = wallRadiusAt(t, top);
+    const p = onStairArc((STAIR_INNER + outer) / 2, t);
+    const tread = box(outer - STAIR_INNER, 0.06, going, deckMaterial, p.x, top - 0.03, p.y);
     // Local +X points along `(cos φ, 0, -sin φ)` after `rotation.y = φ`, and the tread's width
     // has to run radially — outwards is `(cos a, 0, sin a)`, so `φ = -a`.
     tread.rotation.y = -angle;
     group.add(tread);
   }
 
-  // Stringers: a chain of short boxes under the nosings at each radius, following the arc up.
-  for (const radius of [STAIR_INNER + 0.05, STAIR_OUTER - 0.05]) {
+  // Two stringers under the treads: one inboard, carrying the railing, and one against the wall,
+  // which has to follow the same bulge the treads do.
+  const stringers: Array<(t: number, y: number) => number> = [
+    () => STAIR_INNER + 0.05,
+    (t, y) => wallRadiusAt(t, y) - 0.05
+  ];
+  for (const radiusAt of stringers) {
     const steps = STAIR.treads;
     for (let i = 0; i < steps; i++) {
-      const a = onArc(radius, i / steps);
-      const b = onArc(radius, (i + 1) / steps);
+      const ta = i / steps;
+      const tb = (i + 1) / steps;
       const ya = (BRIDGE.y * i) / steps;
       const yb = (BRIDGE.y * (i + 1)) / steps;
+      const a = onStairArc(radiusAt(ta, ya), ta);
+      const b = onStairArc(radiusAt(tb, yb), tb);
       const from = new THREE.Vector3(a.x, ya - 0.18, a.y);
       const to = new THREE.Vector3(b.x, yb - 0.18, b.y);
       const segment = new THREE.Mesh(
@@ -256,18 +286,16 @@ export function buildBridge(): Bridge {
     }
   }
 
-  // **Both** flanks. A curved flight standing free in the middle of a floor is exposed on the
-  // inside and the outside alike, and the railings are not decoration here: the step guard in
-  // `fpv-controls.ts` will let you board the flight only where it is under `MAX_STEP` off the
-  // ground and will refuse to let you step off sideways once you are above that, so without a
-  // rail on each side there is an invisible wall along the whole length of the stairs with
-  // nothing to explain it.
+  // **One** railing, on the inboard flank. The outboard flank is the hull, which is the whole
+  // point of putting the flight against it — the old freestanding helix was exposed on both
+  // sides and needed a rail on each.
   //
-  // They start a little way up (`RAIL_START`), which leaves the bottom of the flight open on
-  // both sides — the same stretch the guard actually lets you walk on from the floor.
-  const RAIL_START = 0.08;
-  group.add(arcRailing(STAIR_INNER - 0.06, STAIR.treads, 0, BRIDGE.y, RAIL_START));
-  group.add(arcRailing(STAIR_OUTER + 0.06, STAIR.treads, 0, BRIDGE.y, RAIL_START));
+  // It is not trim. The step guard in `fpv-controls.ts` lets you board the flight only where it
+  // is under `MAX_STEP` off the ground and refuses to let you step off sideways once you are
+  // above that, so without this rail there is a 5 m invisible wall down the middle of the hall
+  // with nothing to explain it. It starts a little way up, which leaves open exactly the stretch
+  // at the foot the guard actually lets you walk on from the floor.
+  group.add(arcRailing(STAIR_INNER + 0.08, STAIR.treads, 0, BRIDGE.y, 0.07));
 
   // --- the emitter ----------------------------------------------------------------------------
   const plinth = new THREE.Mesh(
@@ -306,18 +334,25 @@ export function buildBridge(): Bridge {
   group.add(emitterLamp);
 
   // --- lighting -------------------------------------------------------------------------------
-  // The back of the hall is roofed over at 3.3 and the hall's own lamps are at 6.7, so without
-  // these the deepest part of the floor is simply black. Warm, because it is the sheltered part
-  // of the room — and the contrast with the cold glass forward is the whole brief.
-  for (const x of [-3.2, 3.2]) {
-    const lamp = new THREE.PointLight(0xffc79a, 1.6, 9, 2);
-    lamp.position.set(x, BRIDGE.y - BRIDGE.thickness - 0.3, deckCenterZ);
+  // The back of the hall is roofed over at 3.3 by the slab, so without these the deepest part of
+  // the floor is simply black. Warm, because it is the sheltered part of the room — and the
+  // contrast with the cold glass forward is the whole brief.
+  for (const x of [-2.4, 2.4]) {
+    const lamp = new THREE.PointLight(0xffc79a, 6, 9, 2);
+    lamp.position.set(x, BRIDGE.y - BRIDGE.thickness - 0.3, 4.6);
     group.add(lamp);
   }
 
-  for (const x of [-3.0, 3.0]) {
-    const lamp = new THREE.PointLight(0x66d9ff, 2.2, 12, 2);
-    lamp.position.set(x, HALL.height - 0.5, deckCenterZ);
+  // Two more over the deck. Hung at a fixed height above it rather than under the crown: the
+  // roof over the bridge is 6.7, and a lamp up there is four metres from the floor it is meant
+  // to light. Warm, like the rest — the cold in this room comes in through the glass, and having
+  // the lamps be cold as well left the whole interior reading blue.
+  for (const [x, z] of [
+    [-2.2, 4.2],
+    [2.2, 4.2]
+  ]) {
+    const lamp = new THREE.PointLight(0xffc39a, 9, 11, 2);
+    lamp.position.set(x, BRIDGE.y + 1.9, z);
     group.add(lamp);
   }
 

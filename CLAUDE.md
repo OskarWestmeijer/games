@@ -15,29 +15,45 @@ first-person camera you walk around inside it — click to lock the pointer, WAS
 Esc to release on a desktop; drag to look and push the on-screen stick to move on a tablet.
 There's no astronaut body and no game logic — it's a place to stand and look out of the window.
 
-The station is **one hall on two storeys**, 12 x 17 x 7.2 m, wide and square at the back and
-slimming over its front third to a **glazed nose** — the prow is 9 m across instead of 12, and
-that front third is glass on every face: the window in the prow, both curving sides, the roof
-*and* the floor.
+The station is **one lofted hull on two storeys** — a teardrop 18 m long, 12 m across and 8.6 m
+tall at its fullest, a closed round bulb aft where the bridge is, tapering forward over its front
+70% to a point. **The forward two thirds of it is glass**: everything ahead of the mezzanine's
+front edge, roof and both flanks and the shoulders between them, is one unbroken canopy running
+from the floor line on one side over the crown to the floor line on the other, framed with hoops
+and a few fore-and-aft longerons that converge on the tip. The form comes from
+`ai-assets/space-station-windowed-edge.jpeg`, which was read and not imported.
 
-- the **lower floor** is the office, and it sits inside that glass cage — a desk with a chair
-  and a computer at it, its screen a static miniature of
-  [oskar-westmeijer.com](https://oskar-westmeijer.com/), decorative only, with planet above,
-  below and to both sides. A radio on the desk switches the music on.
-- a **curved staircase** turns up through a quarter circle on the starboard side, aft of the
-  office, to the **bridge** — a mezzanine across the back. The navigation console stands at its
-  front edge facing forward down the length of the hall and out through the nose, and the
-  hologram globe floats behind it.
+- the **lower floor** runs the whole length. Forward, in the point of the nose, is the office — a
+  desk with a chair and a computer at it, its screen a static miniature of
+  [oskar-westmeijer.com](https://oskar-westmeijer.com/), decorative only, with planet ahead,
+  overhead and to both sides. A radio on the desk switches the music on. Amidships is the
+  **lounge**: a low dais with a couch ring round a table, deliberately bare.
+- a **staircase** runs the length of the starboard wall, hard against it, from the lounge up to
+  the **bridge** — a mezzanine across the back. It arrives level with the mezzanine's front edge,
+  so there is no stair well. The navigation console stands at that front edge facing forward down
+  the length of the hall and out through the glass, and the hologram globe floats behind it.
 
 You operate the station from that console and nowhere else — altitude, attitude, orbit mode and
 the clock are all keys on it, and there is no HUD for any of them.
 
 This replaced a hub-and-arms plan (an octagonal hub with four modules and corridors off it),
 which spent most of its floor on corridor and put the desk and the console as far apart as it
-could. Don't reintroduce it. The hull is deliberately not a box either — the first version of
-the hall was, and a rectangular room with a rectangular window is the thing the taper and the
-glass nose exist to get away from. Nothing in the station comes from `ai-assets/`; it is built from
-primitives, and the planet, its atmosphere and the nebula are GLSL shaders.
+could. Don't reintroduce it. The hull has been through several shapes since, and each was worse
+in a way worth remembering:
+
+- a **flat-roofed box**, then a box that tapered to a **flat prow wall with a rounded window
+  punched in it**. A rectangular room with a rectangular window is exactly what the loft exists
+  to get away from — don't put a flat wall or a punched opening back.
+- a hull that **stopped at 84% of full beam aft and simply ended**, leaving a 10 m elliptical
+  hole open to space behind the globe. The profile closes to zero at both ends now and the loft
+  seals itself; don't reintroduce a tail the rings do not close.
+- glazing over the **tip only**, with the shoulders solid. The shoulders are the part you
+  actually look through on the way to the planet from anywhere but the very point of the nose.
+- a **diagonal rib lattice** over that tip, and a **freestanding helix** of a staircase in the
+  middle of the floor. Both are covered below; neither should come back.
+
+Nothing else in the station comes from `ai-assets/`; it is built from primitives, and the planet,
+its atmosphere and the nebula are GLSL shaders.
 
 **Planet inspector** (`…/#inspect`) is the same world with the station taken away and the camera
 put outside it on an `OrbitControls`: drag to swing round the planet, scroll to zoom from the
@@ -103,20 +119,30 @@ src/
                        pitchFor() and the detent tables
   regions.ts           the walkable floor: convex XZ polygons (Region), the clamp that holds
                        the player inside their union, Deck — a region with a floor height and a
-                       storey, which is what makes two floors possible — and arcDecks(), which
-                       cuts a turning staircase into convex quads sharing one height function
-  station/index.ts     buildStation() — the seam. Composes the hall, the bridge, the office
-                       furniture, the console and the globe, and hands planet-view.ts one
+                       storey, which is what makes two floors possible — clipRegion(), which
+                       halves a convex region and keeps it convex, and arcDecks(), which cuts a
+                       turning staircase into convex quads sharing one height function
+  station/index.ts     buildStation() — the seam. Composes the hall, the bridge, the lounge, the
+                       office furniture, the console and the globe, and hands planet-view.ts one
                        object: decks, obstacles, spawn, targets, globe
-  station/layout.ts    the bauplan as data: HALL / WINDOW / BRIDGE / STAIR / CONSOLE / GLOBE,
-                       OFFICE_PLACEMENT, EYE_HEIGHT, halfWidthAt() and the hull polygon, and
-                       DECKS — the walkable floor of both storeys, whose *order* is load-bearing
-  station/hall.ts      buildHall() — the shell: the tapered hull as a polygon of wall panels,
-                       the glazed nose (sides, roof and floor), the prow window with its rounded
-                       opening + extruded frame + glass, the mullions and the LED strips
-  station/bridge.ts    buildBridge() — the mezzanine slab (extruded, with the stair well bitten
-                       out of its starboard corner), its railings, the curved flight and its two
-                       arc railings, the globe's plinth/lens/emitter, and the deck's lamps
+  station/hull.ts      the hull's *form*, as functions, and nothing else: the profile that scales
+                       one elliptical section along Z, sectionAt() / roofAt() / ringAt(),
+                       halfWidthAt(z, y) — the clearance test for anything tall — floorOutline()
+                       and outlineAt(), wallArc(), which fits a circle to one flank so the stairs
+                       can be derived from the wall rather than placed against it, and
+                       buildHullSurface(), which lofts the rings into an opaque shell aft and one
+                       sheet of glass forward, sharing the seam ring
+  station/layout.ts    the bauplan as data: BRIDGE / STAIR / LOUNGE / CONSOLE / GLOBE,
+                       OFFICE_PLACEMENT, EYE_HEIGHT, bridgeSlabPolygon(), and DECKS — the
+                       walkable floor of both storeys, whose *order* is load-bearing and whose
+                       outlines are taken at head height, not at floor height
+  station/hall.ts      buildHall() — what makes a lofted surface read as a room: the hull itself,
+                       the oval floor plate, the canopy's hoops and longerons, the lit rim where
+                       the glass meets the floor, and the roof strips aft
+  station/bridge.ts    buildBridge() — the mezzanine slab (extruded from a hull-following
+                       polygon), one railing along its exposed front edge, the flight of stairs
+                       with its treads run out to the wall, its single inboard railing, the
+                       globe's plinth/lens/emitter, and the deck's lamps
   station/shell.ts     MATERIALS — the shared palette, and nothing else. It used to hold a
                        generic room builder for the hub-and-arms plan; see git if that is
                        ever wanted back
@@ -125,6 +151,8 @@ src/
   station/globe.ts     buildGlobe() — the hologram Earth behind the console, built from
                        space.ts's own createEarthMaterial so it shares the planet's maps, sun
                        and spin. Counter-rotated against the rig so it holds still in space
+  station/lounge.ts    buildLounge() — the dais, the couch ring, the low table and the warm lamp
+                       amidships. One footprint you walk around, not a deck you climb onto
   station/office/index.ts   buildOffice() — the workstation and the radio. Furniture only;
                        authored room-local and placed by OFFICE_PLACEMENT
   station/office/desk.ts    the workstation: desk, chair, monitor, keyboard, the warm desk
@@ -244,18 +272,60 @@ clamped against.
   upper one past the middle. Crossing that midpoint is what swaps the walkable set. The
   midpoint has to be *inside* the flight — at either end you would swap sets while standing on
   a deck the new set does not contain.
-- **A turning stair is not convex, so it is many decks.** `arcDecks()` cuts the annular sector
+- **The flight is derived from the wall, not placed against it.** `wallArc()` in `hull.ts` fits
+  a circle through three points of the hull's own floor outline between the flight's two ends,
+  and `STAIR` is that circle. So nothing about the staircase is a coordinate: give it a foot,
+  a width and two clearances and it follows whatever shape the hull is. The fit is a three-point
+  circle rather than least squares because over a run short enough to be a flight of stairs the
+  two agree to 7 mm — but that is a property of a *short* run, so don't reach this round the
+  tail, where the outline stops being an arc.
+- **The radius that comes out is enormous — 26 m against a 12 m beam — and that is correct.**
+  The flank of a teardrop is nearly straight amidships: it bows out by 0.27 m over the whole 7 m
+  of the flight. A tighter curve is not a stair that hugs this wall, it is a spiral standing next
+  to one. The previous version was exactly that — a 3.4 m helix in the open middle of the floor,
+  which walled off the centre of the hall, put its outer rail 0.48 m through the hull the first
+  time it was drawn, and needed a well bitten out of the mezzanine to come up through.
+- **Running fore-and-aft pays for itself three times.** 6.9 m of run at 27.6° instead of 5.3 m
+  at 34°; the outer flank is the hull, so one railing instead of two; and the top tread lands
+  level with the mezzanine's front edge, so there is **no stair well** and the slab is a plain
+  outline with one convex walkable piece rather than two clipped ones.
+- **An arc stair is not convex, so it is many decks.** `arcDecks()` cuts the annular sector
   into quads, and every one of them answers height and storey from the *same* function of the
   angle about the arc's centre. That is what makes the seams exact however coarse the cut:
   there is no per-segment height to disagree about. It also means the sweep must stay under
-  half a turn and must not straddle the ±180° branch cut of `atan2` — which is why `STAIR` is
-  written as -90°..0° rather than the equivalent 270°..360°.
+  half a turn and must not straddle the ±180° branch cut of `atan2` — which the current 15.7°
+  sweep about a centre far off to port is nowhere near, but a re-placed stair could be.
+- **The walkable band is solved, not chosen, and it is much narrower than the flight.** The
+  flight is 1.9 m wide and its treads reach the wall; you may walk in the middle 0.75 m of it.
+  The hull leans in above the waist, so the binding constraint is your head at the *top* of the
+  flight — at z = 3.6 the wall is 5.72 wide at the floor and 5.24 at eye height on a 3.6 m deck.
+  `stairWalkOuter()` in `layout.ts` pulls the band in until the eye clears the hull everywhere
+  along the run, which lands it just under a metre off the wall — the same place the bridge's own
+  walkable edge is, so stepping off the top tread does not shove you sideways. Widen the flight
+  before narrowing that clearance.
+- **The treads are run out to `halfWidthAt` at their own height, not to the arc.** The arc is
+  fitted at floor level and the hull's widest point is around y = 2, so treads all cut to the arc
+  would touch the wall at the bottom and stand 0.27 m off it in the middle — a slot up the side
+  of the staircase with the planet visible through it. The outer stringer follows the same rule.
 - **The stair's region runs past its last tread**, at the flat height of the deck, so the two
   share floor rather than butting up edge to edge — the corridor-overlap trick from the old hub
   plan. Butt two regions together exactly and the closest-point clamp catches you on the seam.
 - **`DECKS` is ordered, and the order is load-bearing.** `deckAt` is first-match, and the stair
   shares its XZ with the hall floor it curves over — listed the other way round you would walk
   *under* the treads at ground level instead of up them.
+- **A deck's outline is taken at the height of your head, not your feet.** The hull leans in, so
+  the two are different shapes: at z = 5 it is 5.76 wide at the bridge deck and only 5.17 at
+  5.2 m, and by z = 7.7, where the bulb is closing, 3.56 against 2.16. Laid out on the slab's own
+  edge, the bridge would walk you head-first into the roof well before you ran out of floor, and
+  aft *badly* before — so `DECKS` derives it from `outlineAt(BRIDGE.y + EYE_HEIGHT, …)`, which
+  also stops the walkable deck at z ≈ 7.9 on its own, where the headroom runs out. The lower
+  floor is the other way round: the hull is widest a little above eye height, which is why
+  `floorOutline()` serves there. The *slab* is still drawn to deck height, or there would be a
+  gap at the hull to see through.
+- **The lounge dais is furniture, not floor.** A raised disc you could step onto sounds better
+  than it is: with a couch ring at 1.15–1.62 m there is a hand's width of tread outside it and an
+  unreachable pocket inside. The whole assembly is one footprint you walk around instead, and the
+  dais is not a `Deck`. If it ever grows a walkable rim, the couch becomes the obstacle.
 - **There is a step guard, and it is not optional.** `clampToRegions` moves an out-of-bounds
   point onto the nearest boundary of the *nearest* region, and distance knows nothing about
   height — a sideways shove from the hall floor towards the raised part of the flight lands
@@ -263,17 +333,22 @@ clamped against.
   move that changes the floor by more than `MAX_STEP` is refused and the previous position
   kept.
 - **`MAX_STEP` is bounded from both sides and the window is narrow**, so don't nudge it
-  casually. Below: the steepest *legitimate* frame is 2.4 m/s up a 33° flight at the 0.1 s dt
-  cap, or 0.157 m, and anything under about 0.17 makes the stairs themselves unwalkable on a
-  slow frame. Above: at the flank of the flight the clamp offers heights rising continuously
-  from zero, so whatever it is set to is exactly how far up the side of the staircase you can
-  hop — at 0.5 that was a visible half-metre vault onto the third tread, *and* a trap, because
-  the guard is symmetric and would then refuse to let you step back down. 0.25 sits between.
-- **The stair's railings are load-bearing, not trim.** The guard lets you board the flight only
+  casually. Below: the steepest *legitimate* frame is 2.4 m/s up the flight at the 0.1 s dt cap
+  — `dev/walk.mjs` measures 0.129 at that cap on the current 27.6°, and measured 0.168 on the
+  34° helix — so anything under about 0.14 makes the stairs themselves unwalkable on a slow
+  frame, and under 0.17 would have on the old ones. Above: at the flank of the flight the clamp
+  offers heights rising continuously from zero, so whatever it is set to is exactly how far up
+  the side of the staircase you can hop — at 0.5 that was a visible half-metre vault onto the
+  third tread, *and* a trap, because the guard is symmetric and would then refuse to let you step
+  back down. 0.25 sits between. The gentler flight bought margin at the bottom of that window,
+  not permission to spend it.
+- **The stair's railing is load-bearing, not trim.** The guard lets you board the flight only
   where it is under `MAX_STEP` off the ground and refuses to let you step off sideways above
-  that, so both flanks of it are invisible walls. A freestanding helix is exposed on the inside
-  *and* the outside, so both get a rail, and both start a little way up to leave the boarding
-  stretch open.
+  that, so its inboard flank is a 7 m invisible wall down the middle of the hall with nothing to
+  explain it. The rail is the explanation. It starts a little way up, which leaves open exactly
+  the stretch at the foot the guard actually lets you walk on from the floor. The *outboard*
+  flank needs nothing, because it is the hull — which is the whole reason to put the flight
+  against a wall.
 - **The walking surface is a ramp; the treads are decoration.** Mid-tread the eye rides half a
   rise (15 cm) below the tread it is nominally on. That is invisible with no body to look at,
   where stepping the eye instead would put a 30 cm jolt in it twelve times a flight.
@@ -281,11 +356,28 @@ clamped against.
   of the bridge that its inflated footprint meets the walkable edge — which is correct for a
   bridge, and worth knowing before wondering why you cannot squeeze past it.
 
+### Checking a change
+
+The station's shape is only judgeable by eye, and its floor is only judgeable by walking it.
+`dev/` has one harness for each, both of which start their own Vite server and drive a headless
+Chromium; neither is wired into `npm run build`.
+
+- **`node dev/shots.mjs`** writes a PNG per scripted camera pose to `dev/shots/`. Run it after
+  any change to the hull, the glazing or the lighting, and then *actually look at the output* —
+  the open tail, the tangled lattice and the longerons ending in mid-air were all invisible in
+  the numbers and obvious in the first frame.
+- **`node dev/walk.mjs`** replays the exact floor logic of `fpv-controls.ts` — clamp, obstacle
+  push-out, first-match `deckAt`, step guard — over a route from the desk, up the stairs, round
+  the bridge and back, at the 0.1 s dt cap. It reports the biggest single-frame step on each leg
+  and exits non-zero if a leg fails to arrive. Run it after any change to `DECKS`, the stair,
+  `MAX_STEP` or a footprint. A route that gets stuck is usually the route's fault — the lounge is
+  one footprint you are meant to walk *around* — so read the leg before believing the failure.
+
 ### Planet view behaviour
 Conventions worth knowing before touching it:
 
-- **Two scales in one scene.** The station is in metres (a 12 x 17 x 7.2 m hall, origin on the
-  lower floor at its middle); the planet is toy-scaled at `PLANET_RADIUS = 300`, centred on the
+- **Two scales in one scene.** The station is in metres (an 18 x 12 x 8.6 m hull, origin on the
+  lower floor amidships); the planet is toy-scaled at `PLANET_RADIUS = 300`, centred on the
   world origin, with the station somewhere in `ALTITUDE_DETENTS` (35..600, opening at 120)
   above it. That keeps the camera's near/far at a plain `0.1 / 20000` — no logarithmic depth
   buffer needed, even at the top of the range.
@@ -298,16 +390,18 @@ Conventions worth knowing before touching it:
   `space.ts`). The outer shell is a `BackSide` fresnel: a camera inside it is wrapped in it
   and gets glow smeared across the whole sky instead of a ring round the planet. That is what
   sets the lowest altitude detent and the inspector's `MIN_DISTANCE`, and `STATION_REACH`
-  (11 — half the hall's floor diagonal) is what says how much clearance the *building* needs
-  on top of that. It bit once already, when the altitude dropped from 70 to 20 with the outer
+  (11 — the hull's own farthest point, the top of the shoulder at 10.2) says how much
+  clearance the *building* needs
+  on top of that. That used to be the top of a blunt tail; the tail is a closed round bulb now
+  and the crown of the arch beat it. It bit once already, when the altitude dropped from 70 to 20 with the outer
   shell still at `1.22 × R`.
 - **The camera is a child of `stationRig`**, the group that carries the station around its
   orbit. This is what keeps the movement code simple: `PointerLockControls` writes
   `camera.position`/`camera.quaternion` and reads `camera.matrix`, all of which are local
   to the parent, so the player walks around in plain station coordinates (and so do `DECKS`
   and the furniture footprints) while the rig handles where the station actually is in space.
-- **The window is in the hall's -Z prow.** `Matrix4.lookAt` puts +Z *away* from its target,
-  so aiming the rig at the planet leaves -Z — and the window — facing it. Bearing 0° is that
+- **The glass is the hall's -Z end.** `Matrix4.lookAt` puts +Z *away* from its target, so
+  aiming the rig at the planet leaves -Z — and the nose — facing it. Bearing 0° is that
   same -Z, which is why the detent is called "the window" and why it is the one worth being on.
 - **The horizon is pinned, and the pitch is solved for.** The limb lands at `α - pitch`
   relative to the optical axis, where `α = asin(R / (R + altitude))`. Rather than fix the
@@ -323,44 +417,86 @@ Conventions worth knowing before touching it:
   bearing cross-couple into the pitch and flatten it to zero at 90°.
 - **The two storeys want different horizons, and that is a feature.** The horizon is an angle
   about the optical axis, so it does not move when the eye does — but *where in the glass it
-  lands* very much does. From the desk (eye 1.6, 2.8 m off the window) the default 9.4° puts
-  the limb mid-window, exactly where it has always been. From the bridge (eye 5.2, ~10 m off
-  it) the same 9.4° puts it above the window head. The console's own horizon key brings it
+  lands* very much does. From the desk (eye 1.6, some 2.6 m short of the tip) the default 9.4°
+  puts the limb mid-glass, exactly where it has always been. From the console (eye 5.2, 15 m
+  back from it) the same 9.4° puts it up in the roof of the nose. The console's own horizon key brings it
   back down. Don't "fix" this by moving the bridge or stretching the glass; the control is
   the answer, and having a reason to touch it is worth more than never needing to.
 - **There is a desk in the nose.** 2.2 x 0.7, off to port at x = -2 rather than centred, so it
-  stays out of the middle of the glass where the horizon runs. It stands inside the glazed
-  third — glass ahead, overhead, underfoot and to both sides — which is the whole argument for
-  the taper: the narrower the prow, the more of what you see from that desk is planet. The monitor
+  stays out of the middle of the glass where the horizon runs. It stands inside the glazed nose —
+  glass ahead, overhead and to both sides, the lit rim at its feet — which is the whole argument
+  for the taper: the narrower the nose, the more of what you see from that desk is planet. At
+  z = -7.0 the hull gives 3.48 of half-width at floor level against the desk's own 3.1, so its
+  port end all but touches the glass, which is the point of putting it there. The monitor
   shows a canvas-drawn miniature of oskar-westmeijer.com, decorative only; its material is
   `MeshBasicMaterial` with **`toneMapped: false`** (ACES at exposure 0.8 turns a white web page
   into dingy grey) and a `color` under 1.0 (at 1.0 it picks up a bloom halo it has not earned).
-  A short-range warm `PointLight` over it is the warm pool at the window end of the hall —
-  under the cold roof points alone the desk is a dark smudge against a lit planet.
+  A short-range warm `PointLight` over it is the warm pool at the window end of the hall, and
+  since the roof points there are gone it is now most of the light in the nose: without it the
+  desk is a dark smudge against a lit planet.
 - **You arrive standing at the desk, in first person already.** `DESK_SPAWN` in
   `station/office/desk.ts` puts the eye half a step back and to the left of the chair, as if
   you had just pushed it aside and stood up, facing the window: the opening frame is the planet
   with your own monitor below it in one look. It has to sit outside every footprint once those
   are inflated by the player radius, and it clears the chair's by 0.10 m — check that if either
   `DESK_SPAWN` or `OFFICE_PLACEMENT` moves.
-- **The window is nearly the whole prow, and it is two storeys tall.** 7.6 x 6.4 of a 9.0 x 7.2
-  wall (`WINDOW` in `station/layout.ts`), leaving 0.7 at the sides, with a thin frame ring on
-  top of that (`FRAME_WIDTH` 0.12, `FRAME_DEPTH` 0.16) — enough to give the hole an edge, not
-  enough to eat the view. Both floors look out of it. `FRAME_DEPTH` is also why
-  `OFFICE_PLACEMENT.z` is -5.85 and not a round number: the frame stands proud of the wall, and
-  the desk has to clear it.
-- **The hull tapers quadratically, and that is not styling.** `halfWidthAt()` holds 6.0
-  everywhere aft of `NOSE_Z` and loses 1.5 by the prow, as `u²` in the distance forward. The
-  square is what the quadratic buys: it leaves the sides straight where they meet the square
-  back, so there is no crease, and it bows the curve *outward* of the straight chord between
-  its ends — which is what lets the walkable nose stay a single convex trapezoid drawn on that
-  chord and still be guaranteed inside the hull. A linear taper gives up both.
-- **The nose is glass on every face and carries no lights at all.** Sides, roof and floor over
-  the front third, on top of the prow window. There is nowhere to mount a strip in a glass cage
-  and nothing that should compete with what is outside one, so the office is lit by its own
-  desk lamp and by the planet. The LED strips and the ceiling lamps are all aft of `NOSE_Z`.
-  The mullion ribs at each panel seam are what stop the faceted glass reading as a modelling
-  artefact — they are the only thing that makes the curve legible from inside.
+- **The hull is a loft, and three properties of its profile are load-bearing.** One function
+  `f(z)` in `station/hull.ts` scales a single elliptical section along the length: `sqrt(1 - s²)`
+  forward of the fullest station at z = 3, and `sqrt(1 - u⁴)` aft of it. Everything else — the
+  floor's outline, the roof over any point, how far a railing may stand out, where the staircase
+  runs — falls out of that one curve. First: both halves are **concave**, so the oval the profile
+  traces on the floor is **convex**, and the whole lower deck can stay a *single* region for
+  `clampToRegions`. A profile that is not concave costs a convex decomposition of the entire
+  floor, so check any replacement. Second: **it reaches zero at both ends**, so the loft closes
+  itself — `ringPoint` collapses a vanishing section onto the axis, and tip and tail are sealed
+  by the same triangles that make the sides. There are no end caps and no code to add them.
+  Third: **`TAIL_ROUND` (4) is what keeps the bridge under a roof.** A plain ellipse aft starts
+  closing immediately and is down to 1.9 m of headroom by the globe; the fourth power holds the
+  section near full for the length of the bridge and then rounds off over the last metre and a
+  half, which is also what a teardrop's fat end looks like. Only the arc above y = 0 is ever
+  built: the player can never get outside, so there is no keel.
+- **The hull leans inward above the waist, and a floor plan is not a clearance check.** At z = 5
+  it is 5.76 wide at the bridge deck, 5.42 at a railing's top rail and 5.17 at eye height.
+  Anything tall — railings, the console, the globe, the top of the staircase — has to be tested
+  with `halfWidthAt(z, y)` at *its own* height. This is not theoretical: a stair railing came out
+  0.48 m outside the hull the first time one was drawn. It is also why the bridge carries a
+  railing on its front edge only — along the sides the hull is already the barrier, and a rail
+  there would poke straight through it.
+- **Below the waist it leans the other way, which is just as easy to get wrong.** The section's
+  centre sits `FLOOR_DROP` above the floor plane, so the hull is widest around y = 2 and the
+  floor outline is *narrower* than the wall a metre above it — by up to 0.27 m along the
+  staircase. Anything meant to meet the wall at a height has to ask for that height.
+- **Everything forward of `NOSE_Z` is glass on every face above the floor, and carries no lights
+  at all.** `NOSE_Z` is 3.6 — the same line as the mezzanine's front edge, which is the whole
+  layout in one number: **the glass begins where the bridge ends**, and thirteen of the hull's
+  eighteen metres are window. The floor is solid: the glass floor of an earlier pass came out on
+  the concept's authority, and the **lit rim** — a tube of `MATERIALS.led` down each side where
+  the glass meets the deck — took over its real job of drawing the floor line against the planet.
+- **So the hall is lit from the floor line and from the seam, and that is not a compromise.**
+  There is nowhere to mount a lamp in a glass cage and nothing that should compete with what is
+  outside one. Four warm points used to hang under the crown amidships; they are inside the
+  canopy now, so they are gone. What replaced them is a pair on the **seam hoop** at `NOSE_Z`,
+  which is the last real frame in the hall and throws its length from behind you as you look out,
+  and four short-range warm points down at the **rim**, which is a `MeshBasicMaterial` and lights
+  nothing by itself. That is the reference sheet's own answer — lighting integrated along the
+  walls — and it leaves the middle of the room deliberately dim.
+- **The canopy's frames are hoops and longerons, and they are not decoration.** An unbroken sheet
+  of glass has no scale: without them you cannot tell a 4 m canopy from a 40 m one. They are also
+  the second thing about the shape you can see from inside, after the way the roof comes down —
+  the longerons converge on the tip at `Z_TIP` exactly, where the profile reaches zero and
+  `ringPoint` collapses every ring parameter onto the same point, so they meet at an apex like a
+  nose cone's stringers instead of ending in mid-air with rounded caps showing. They did that at
+  -9.0 and again at -9.45, and it was the first thing the eye went to from the desk.
+- **This replaced a diagonal lattice, and the reason matters.** Two families of ribs spiralling
+  round the nose in opposite directions and crossing into lozenges was defensible over a 7 m
+  nose. Stretched over 13 m of hull it stopped reading as structure at all: every rib crossed
+  every other one at a different place along the length, and from the lounge the window was a
+  tangle of black curves with a planet somewhere behind it. Fore-and-aft members are legible from
+  any standing position because they all vanish to the same point.
+- **The lit rim must stop short of the tip, unlike the longerons.** It is offset inboard of the
+  hull by a fixed 0.09, so carried all the way in, the two sides would cross over in the last
+  half metre and each end up on the wrong one. It is filtered on `floorHalfWidthAt` rather than
+  on a z limit, so it follows the hull.
 - **The orbit is inclined, and the tilt is measured against the sun.** `SUN_BETA` is the
   angle between the orbital plane and `SUN_DIR`; the plane built from it lives in `space.ts`
   (`ORBIT_NORMAL` / `ORBIT_NOON` / `ORBIT_DAWN`, so orbit angle 0 is local noon and π is
@@ -685,15 +821,21 @@ leave the interior a bare box.
 The interior is where the effort is owed. Ranked by presence gained per hour of work:
 
 1. **Fit out the hall.** *Started, and the shell is right; the contents are not.* There is a
-   desk, a chair and a computer downstairs, a console and a globe upstairs, and nothing else —
-   the hall is deliberately a spike, with correct proportions and almost no furniture. Still
-   wanted: handrails, a hatch, stowage, floor grating, something on the bridge besides the
-   console. Each is a new module beside `bridge.ts`, returning its own footprints (tagged with
-   a storey) for `obstacles`.
-2. **Relight it warm.** *Started.* The desk has a warm lamp, the globe's emitter is warm, and
-   two warm points fill the sheltered floor under the mezzanine. The cold roof points at
-   `toneMappingExposure` 0.8 still read clinical over the open half; a warm interior key
-   against the cold window fill is a few numbers and most of the remaining feeling.
+   desk, a chair and a computer forward, a bare lounge amidships, a console and a globe
+   upstairs, and nothing else — the hall is deliberately a spike, with correct proportions and
+   almost no furniture. Still wanted: a hatch, stowage, floor grating, something on the bridge
+   besides the console, and the lounge upholstered rather than blocked out. Each is a new module
+   beside `lounge.ts`, returning its own footprints (tagged with a storey) for `obstacles`.
+   Note where they can go: the canopy starts at z = 3.6, so anything mounted to a wall or a roof
+   has to live aft of that, on the mezzanine or under it. The reference sheet puts its stowage
+   and its hatch exactly there, in the wall below the mezzanine, and that is the one stretch of
+   solid interior wall the station has.
+2. **Relight it warm.** *Largely done, and now constrained by the glass.* Every light aboard is
+   warm: the desk lamp, the lounge table's, the globe's emitter, two under the mezzanine, two
+   over the bridge deck, a pair on the seam hoop and four at the floor rim. The cold roof points
+   that read clinical are gone — not for warmth but because they ended up inside the canopy. What
+   is left to judge is whether the forward half is now *too* dim: the rim and the seam are all
+   it has, and the planet.
 3. **Use `ai-assets/`.** The blueberry bush and chanterelle already committed there become a
    hydroponics tray and a mushroom log. A growing thing aboard a station is exactly the detail
    that says someone lives here, and it connects the repo's two halves.

@@ -44,15 +44,16 @@ export const SYNCHRONOUS_PERIOD = (Math.PI * 2) / PLANET_SPIN_RATE;
 export const SYNCHRONOUS_ALTITUDE = 480;
 
 /**
- * How far the station reaches from its own centre, in metres — half the hall's floor diagonal,
- * `hypot(6, 8.5)` ≈ 10.4, rounded up.
+ * How far the station reaches from its own centre, in metres — the hull's own farthest point,
+ * the top of its shoulder at `hypot(6.5, 7.86)` ≈ 10.2, rounded up. It used to be the top of a
+ * blunt tail; the tail is a closed round bulb now and the crown of the arch beat it.
  *
  * This sets the altitude floor rather than aesthetics does. The outer atmosphere shell is a
  * `BackSide` fresnel at `ATMOSPHERE_RADIUS`, 10.5 above the surface, and a camera inside it is
  * wrapped in glow across the whole sky instead of seeing a ring round the planet. The lowest
- * detent of 35 puts the nearest corner of the hall 25 units clear of it.
+ * detent of 35 puts the farthest part of the hull 26 units clear of it.
  */
-export const STATION_REACH = 11;
+export const STATION_REACH = 9;
 
 export const ALTITUDE_DETENTS = [35, 60, 120, 250, 400, 600];
 export const ALTITUDE_RANGE = {
