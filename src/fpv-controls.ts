@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
-import { clampToRegions, type Region } from './regions';
+import { clampToRegions, deckAt, type Deck, type Region } from './regions';
 
 /**
  * A first-person walk-around controller with two input paths, because the site has to work on
@@ -14,11 +14,16 @@ import { clampToRegions, type Region } from './regions';
  * happens. Both paths write the same `camera.quaternion` and both feed the same velocity
  * smoothing, so a device with a trackpad *and* a touchscreen can use either at any moment.
  *
- * Eye height is pinned to the floor and there is no astronaut body — this is a camera with a
- * walking speed. `PointerLockControls` writes `camera.position`/`camera.quaternion` and reads
- * `camera.matrix`, all of which are *local* to the camera's parent. That's what lets the
- * camera hang off the orbiting station rig in `planet-view.ts` and still be driven in plain
- * station coordinates here — `regions` is in station space, not world space.
+ * Eye height is pinned to *the floor under you* and there is no astronaut body — this is a
+ * camera with a walking speed. That floor is no longer a constant: the station is two storeys
+ * now, so the walkable set is `Deck`s rather than `Region`s (see `regions.ts`), the controller
+ * carries which storey you are on, and a staircase is a deck whose floor ramps. Nothing else
+ * about movement changed.
+ *
+ * `PointerLockControls` writes `camera.position`/`camera.quaternion` and reads `camera.matrix`,
+ * all of which are *local* to the camera's parent. That's what lets the camera hang off the
+ * orbiting station rig in `planet-view.ts` and still be driven in plain station coordinates
+ * here — `decks` is in station space, not world space.
  */
 
 /** Radians of rotation per pixel dragged. Pointer-lock mouse look uses 0.002 per pixel. */
@@ -38,24 +43,53 @@ const STICK_DEADZONE = 0.12;
 const PLAYER_RADIUS = 0.32;
 
 /**
+ * The largest jump in floor height a single frame may make, in metres.
+ *
+ * `clampToRegions` moves a position outside every region onto the nearest boundary of the
+ * *nearest* region, and with two storeys those two can be at different heights — a sideways
+ * step from the hall floor towards the raised part of the staircase lands nearer the stair's
+ * edge than the floor's, and without this the eye would be lifted through the mezzanine.
+ * Rather than try to make the region layout unambiguous everywhere (it cannot be: the clamp is
+ * a distance test, and distance knows nothing about height), a move that changes the floor by
+ * more than a step is refused and the previous position kept.
+ *
+ * **It is bounded from both sides, and the window is not wide.** Below, by the steepest
+ * *legitimate* frame — 2.4 m/s up a 33° flight with the 0.1 s dt cap is 0.156 m, so anything
+ * under about 0.17 would make the stairs themselves unwalkable on a slow frame. Above, by the
+ * shortest illegitimate one: walking at the flank of the flight, the clamp offers heights that
+ * rise continuously from zero, so whatever this is set to is exactly how far up the side of the
+ * staircase you can hop. At 0.5 that was a visible half-metre vault onto the third tread.
+ */
+const MAX_STEP = 0.25;
+
+/**
  * Whether this browser has the Pointer Lock API. iOS has never implemented it, and calling
  * `lock()` there is a TypeError rather than a no-op, so every use of it is guarded.
  */
 const POINTER_LOCK_SUPPORTED =
   typeof document !== 'undefined' && 'requestPointerLock' in document.documentElement;
 
+export interface LeveledObstacle {
+  box: THREE.Box2;
+  /** Which storey it stands on. A desk downstairs must not block you on the mezzanine. */
+  level: number;
+}
+
 export interface FpvOptions {
   /**
-   * The walkable floor, as a union of convex XZ polygons in the same space as
-   * `camera.position`. See `regions.ts` — this was one `Box3` when there was one room, and a
-   * station with arms off a hub is not a box.
+   * The walkable floor: convex XZ polygons, each with a height and a storey, in the same space
+   * as `camera.position`. See `regions.ts` — this was one `Box3` when there was one room, then
+   * a union of flat regions, and a hall with a mezzanine in it is neither.
    */
-  regions: Region[];
+  decks: Deck[];
   /**
    * Footprints in the walkable plane the player is pushed back out of — furniture. Optional,
    * and empty by default: an empty room needs none, and neither will EVA.
    */
-  obstacles?: THREE.Box2[];
+  obstacles?: LeveledObstacle[];
+  /** Which storey the camera starts on. Must match the deck the spawn point sits in. */
+  spawnLevel?: number;
+  /** How far the eye sits above whatever floor it is standing on. */
   eyeHeight: number;
   /** Top walking speed, units/second. */
   speed?: number;
@@ -92,7 +126,15 @@ export function createFpvControls(
   domElement: HTMLElement,
   options: FpvOptions
 ): FpvControls {
-  const { regions, obstacles = [], eyeHeight, speed = 2.4, onLockChange, joystick = null } = options;
+  const {
+    decks,
+    obstacles = [],
+    spawnLevel = 0,
+    eyeHeight,
+    speed = 2.4,
+    onLockChange,
+    joystick = null
+  } = options;
 
   const controls = new PointerLockControls(camera, domElement);
   const keys = new Set<string>();
@@ -111,6 +153,13 @@ export function createFpvControls(
   const velocity = new THREE.Vector2();
   /** Scratch for the floor clamp, so `update` allocates nothing per frame. */
   const _floor = new THREE.Vector2();
+  /** Which storey the eye is on. The only piece of state the two-deck hall needs. */
+  let level = spawnLevel;
+  /** The floor the eye stood on last frame, so an impossible change of it can be refused. */
+  let floorY: number | null = null;
+  /** Reused by the clamp: the active decks' regions, refilled rather than re-allocated. */
+  const _active: Deck[] = [];
+  const _activeRegions: Region[] = [];
   let enabled = false;
 
   const held = (codes: string[]) => (codes.some((code) => keys.has(code)) ? 1 : 0);
@@ -230,7 +279,11 @@ export function createFpvControls(
    * against a 70 cm desk, so it cannot happen without changing one of those numbers.
    */
   function pushOutOfObstacles() {
-    for (const box of obstacles) {
+    for (const obstacle of obstacles) {
+      // Furniture belongs to one storey. The desk is directly under the mezzanine, and without
+      // this test it would fence off a patch of the bridge deck for no visible reason.
+      if (obstacle.level !== level) continue;
+      const box = obstacle.box;
       const minX = box.min.x - PLAYER_RADIUS;
       const maxX = box.max.x + PLAYER_RADIUS;
       const minZ = box.min.y - PLAYER_RADIUS;
@@ -252,6 +305,11 @@ export function createFpvControls(
   }
 
   function update(dt: number) {
+    // Where we were before this frame moved anything, so the step guard below has somewhere
+    // known-good to put us back.
+    const priorX = camera.position.x;
+    const priorZ = camera.position.z;
+
     const forward = held(FORWARD_KEYS) - held(BACK_KEYS) + stick.y;
     const strafe = held(RIGHT_KEYS) - held(LEFT_KEYS) + stick.x;
 
@@ -271,18 +329,48 @@ export function createFpvControls(
     controls.moveRight(velocity.x * dt);
     controls.moveForward(velocity.y * dt);
 
+    // Only the decks reachable from the storey you are on. This is what makes the mezzanine
+    // safe: the floor below is not in the set, so there is no edge to walk off — and it is
+    // what makes the staircase work, since the stair is the one deck in *both* sets.
+    _active.length = 0;
+    _activeRegions.length = 0;
+    for (const deck of decks) {
+      if (!deck.levels.includes(level)) continue;
+      _active.push(deck);
+      _activeRegions.push(deck.region);
+    }
+
     // Held inside the union of the walkable regions. Unlike the furniture below this is a
     // *clamp*, not a push-out: a position outside every region is moved onto the nearest one
     // whatever the step size, so no walking speed can pass through a wall.
     _floor.set(camera.position.x, camera.position.z);
-    clampToRegions(_floor, regions);
+    clampToRegions(_floor, _activeRegions);
     camera.position.x = _floor.x;
     camera.position.z = _floor.y;
     // Twice, because the footprints can touch: one pass is enough to push you out of the desk
     // and straight into the chair beside it.
     pushOutOfObstacles();
     pushOutOfObstacles();
-    camera.position.y = eyeHeight;
+
+    // `deckAt` is first-match, so the order the station lists its decks in decides what you are
+    // standing on where two of them share XZ — the staircase is listed before the floor it
+    // runs over. The fallback can only fire on the frame a clamp lands exactly on a boundary.
+    let deck = deckAt(camera.position.x, camera.position.z, _active) ?? _active[0];
+    let nextFloor = deck.floorAt(camera.position.x, camera.position.z);
+
+    if (floorY !== null && Math.abs(nextFloor - floorY) > MAX_STEP) {
+      // Refuse the move rather than the height: putting the eye back where it was leaves it on
+      // a deck it was already standing on, which is always a valid place to be.
+      camera.position.x = priorX;
+      camera.position.z = priorZ;
+      velocity.set(0, 0);
+      deck = deckAt(priorX, priorZ, _active) ?? deck;
+      nextFloor = deck.floorAt(priorX, priorZ);
+    }
+
+    floorY = nextFloor;
+    level = deck.levelAt(camera.position.x, camera.position.z);
+    camera.position.y = nextFloor + eyeHeight;
   }
 
   function lock() {
@@ -299,6 +387,9 @@ export function createFpvControls(
       moveKnob(0, 0);
       lookPointer = null;
       stickPointer = null;
+      // Forgotten rather than kept: `planet-view.ts` re-places the camera on `start()`, and a
+      // remembered floor from the last visit would read as a teleport on the first frame back.
+      floorY = null;
       if (POINTER_LOCK_SUPPORTED) controls.unlock();
     }
   }

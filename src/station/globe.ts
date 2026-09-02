@@ -10,7 +10,7 @@ import type { FlightSnapshot } from '../flight';
 import { GLOBE } from './layout';
 
 /**
- * The hub's globe: the same Earth that is out of the window, a metre across and indoors.
+ * The bridge's globe: the same Earth that is out of the window, a metre across and indoors.
  *
  * It is built from `createEarthMaterial`, so it is not a *likeness* of the planet — it is the
  * planet, sharing its maps, its map cache, its sun and its axial spin. Point at a storm on
@@ -24,6 +24,9 @@ import { GLOBE } from './layout';
  * - **The frame.** The globe hangs inside a station that is constantly turning, so it sits in
  *   a group counter-rotated by the rig. In world terms the globe holds still while the room
  *   moves around it, which is both correct and the reason its north pole drifts over a lap.
+ *   Note the counter-rotation is applied to a *child* group, so moving the globe about the
+ *   station (as the redesign did, from the hub floor to the back of the bridge) only touches
+ *   the outer group's position and leaves that machinery alone.
  *
  * That last one is also what makes the next step cheap: a marker for the station's own
  * position has to live in this same world-oriented frame, and it is already here.
@@ -49,7 +52,7 @@ const GLOBE_FRAG = /* glsl */ `
     vec3 color = earth.color;
 
     // The planet's limb haze is the wrong effect at this scale — it is scattered sunlight
-    // through hundreds of kilometres of air, and there is none of that in a hub. A rim takes
+    // through hundreds of kilometres of air, and there is none of that indoors. A rim takes
     // its place: bright where the surface turns away, which reads as a projected volume and
     // is the only thing keeping the night hemisphere's silhouette legible in a dark room.
     float grazing = 1.0 - abs(dot(n, viewDir));
@@ -100,7 +103,7 @@ export function buildGlobe(
   options: GlobeOptions = {}
 ): Globe {
   const group = new THREE.Group();
-  group.position.y = GLOBE.centerY;
+  group.position.set(GLOBE.x, GLOBE.y, GLOBE.z);
 
   /**
    * World-oriented: everything in here is counter-rotated against the rig every frame, so it

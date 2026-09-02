@@ -16,8 +16,8 @@ import { createFlight, pitchFor, ROLL } from './flight';
  *
  * The camera is a *child* of `stationRig`, the group that carries the station around its
  * orbit. That is the whole trick that keeps this simple: the rig handles orbiting and
- * pointing, while the player walks around in plain station coordinates, oblivious to where
- * the station currently is in space.
+ * pointing, while the player walks around in plain station coordinates — on either of the two
+ * decks — oblivious to where the station currently is in space.
  *
  * The division of labour is worth knowing before touching any of it. What the station *is*
  * lives in `station/`. What it is *doing* — altitude, attitude, orbit mode, the clock — lives
@@ -77,50 +77,67 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
 
   const flight = createFlight();
 
-  // At the desk in the office, as if you had just got up from the chair. Moving the eye a few
-  // metres does not disturb the framing: the horizon is an angle about the optical axis and
+  // At the desk on the lower floor, as if you had just got up from the chair. Moving the eye a
+  // few metres does not disturb the framing: the horizon is an angle about the optical axis and
   // the planet is 300 units away, so the limb sits where it always did. What changes is how
-  // much of a window is in view.
-  camera.position.set(station.spawn.x, EYE_HEIGHT, station.spawn.z);
+  // much of the window is in view — and, going up to the bridge, where in it the limb lands.
+  // See the note on `WINDOW` in `station/layout.ts`.
+  camera.position.set(station.spawn.x, station.spawn.y + EYE_HEIGHT, station.spawn.z);
   // YXZ, matching `PointerLockControls`: any other order turns an initial yaw into roll.
   camera.rotation.order = 'YXZ';
   camera.rotation.y = station.spawn.yaw;
   stationRig.add(camera);
 
-  // The only light not owned by a module. Everything else fades with the room it belongs to;
-  // see `station.updateLighting`.
+  // The only light not owned by the station. Everything else is staged in `station/index.ts`
+  // and `station/bridge.ts`.
   stationRig.add(new THREE.AmbientLight(0x1a2430, 0.55));
 
   const controls = createFpvControls(camera, canvas, {
-    regions: station.regions,
+    decks: station.decks,
     obstacles: station.obstacles,
+    spawnLevel: station.spawn.level,
     eyeHeight: EYE_HEIGHT,
     onLockChange: options.onLockChange,
     joystick: options.joystick
   });
 
-  // Not fetched until switched on — but that's on by default now, so it loads immediately.
-  // See `audio.ts`. `setOn` is a no-op when the folders are empty, so this stays silent when
-  // there's nothing to play.
+  // The hull hum comes up with the view (`start()` below); the music waits for the radio,
+  // which starts off. See `audio.ts`. Nothing is fetched for a layer until it is wanted, and
+  // an empty folder is a supported state.
   const audio = createPodAudio();
-  audio.setOn(true);
   station.setRadioLit(audio.isOn());
 
-  // Autoplay is blocked until the page has seen a user gesture, and `setOn(true)` above just
-  // ran before one — so pick playback back up on the first click/tap/key the view gets.
+  // Autoplay is blocked until the page has seen a user gesture, and the bed starts before one
+  // — so pick playback back up on the first click/tap/key the view gets.
   const onFirstGesture = () => audio.resume();
   canvas.addEventListener('pointerdown', onFirstGesture, { once: true });
   window.addEventListener('keydown', onFirstGesture, { once: true });
+
+  /** The radio's switch, and the one place its indicator is kept honest. */
+  function toggleMusic() {
+    audio.setOn(!audio.isOn());
+    station.setRadioLit(audio.isOn());
+  }
+
+  /**
+   * M toggles the music from anywhere aboard. The unit on the desk is still the real control
+   * and the only *visible* one — this adds no HUD, no button and nothing to look at, which is
+   * the line CLAUDE.md's "diegetic controls" item actually draws; it just spares you the walk
+   * when the music is the one thing you came to change. Gated on `running`, or a keypress
+   * meant for the asset viewer would move the radio's state behind its back. There is no M key
+   * on an iPad, which is why the desk unit stays the control this is a shortcut *to*.
+   */
+  function onMusicKey(event: KeyboardEvent) {
+    if (running && event.code === 'KeyM') toggleMusic();
+  }
+  window.addEventListener('keydown', onMusicKey);
 
   const interactions = createInteractions(
     camera,
     station.targets(flight, {
       available: audio.available,
       isOn: () => audio.isOn(),
-      toggle: () => {
-        audio.setOn(!audio.isOn());
-        station.setRadioLit(audio.isOn());
-      }
+      toggle: toggleMusic
     }),
     { prompt: options.interactPrompt }
   );
@@ -142,7 +159,7 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
    * Places and aims the station.
    *
    * `Matrix4.lookAt` puts +Z *away* from the target, so -Z ends up on the nadir — and the
-   * office's window wall, which has always been built on -Z, ends up facing the planet. The
+   * hall's window wall, which has always been built on -Z, ends up facing the planet. The
    * orbit normal is the up hint rather than world up: it is perpendicular to the line to the
    * planet by construction, so `lookAt` can never degenerate, which world up would do over
    * the poles of an orbit this steeply inclined.
@@ -155,12 +172,12 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
    *   it up or down.
    * - `rotateX` then lifts the nose off the nadir by the pitch solved from the horizon dial.
    * - `rotateY` last, about the station's own vertical, swings the planet round to another
-   *   arm. It has to come after the pitch: applied before it, the bearing cross-couples into
+   *   face. It has to come after the pitch: applied before it, the bearing cross-couples into
    *   the pitch and flattens it to zero at 90°, which is a very confusing bug to look at.
    *
    * Turning the station by `+bearing` moves the planet to `+bearing` in station azimuth,
-   * where azimuth 0 is -Z (the office) and +90° is +X (navigation) — so the detent names in
-   * `flight.ts` mean what they say.
+   * where azimuth 0 is -Z (the window) and +90° is +X (the stair wall) — so the detent names
+   * in `flight.ts` mean what they say.
    */
   function updateOrbit() {
     const { orbitAngle, altitude, horizon, bearing } = flight.state;
@@ -199,7 +216,6 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
     controls.update(dt);
     flight.update(dt);
     updateOrbit();
-    station.updateLighting(camera.position);
     station.globe.update(flight.state, stationRig.quaternion, dt);
     // Simulated time, not wall-clock: the console's clock control scales it, and the planet's
     // spin, the moon and the terminator all have to speed up together or they drift apart.
@@ -223,8 +239,8 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
     resize(); // the canvas had no size while the view was hidden
     controls.setEnabled(true);
     interactions.setEnabled(true);
-    // Fades back in only if the radio was left on; it remembers where the track had got to,
-    // so coming back in is a continuation rather than the playlist starting over.
+    // Brings the bed up, and the music too if the radio was left on. Both remember where they
+    // had got to, so coming back in is a continuation rather than a restart.
     audio.setEnabled(true);
     clock.start();
     tick();
@@ -249,6 +265,7 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
     stop();
     window.removeEventListener('resize', resize);
     window.removeEventListener('keydown', onFirstGesture);
+    window.removeEventListener('keydown', onMusicKey);
     canvas.removeEventListener('pointerdown', onFirstGesture);
     interactions.dispose();
     controls.dispose();

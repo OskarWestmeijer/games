@@ -10,17 +10,36 @@
 A **GitHub Pages site with three Three.js scenes**, picked from a fixed dropdown in the
 top-right corner (`#mode-switcher`).
 
-**Planet view** (`…/#`, what the site opens on) is a small fictional scene of a one-room space
-pod in orbit around an Earth-like planet, with a big window in one wall, and a first-person
-camera you walk around with — click to lock the pointer, WASD/arrows to move, Esc to release
-on a desktop; drag to look and push the on-screen stick to move on a tablet. There's no
-astronaut body and no game logic — it's a place to stand and look out of the window. There is
-a desk under that window with a chair and a computer at it, its screen a static miniature of
-[oskar-westmeijer.com](https://oskar-westmeijer.com/), decorative only — nothing on it is
-interactive. Nothing in the room comes from `ai-assets/`; it is built from primitives and the
-planet, its atmosphere and the nebula are GLSL shaders.
+**Planet view** (`…/#`, what the site opens on) is a space station in orbit around Earth, with a
+first-person camera you walk around inside it — click to lock the pointer, WASD/arrows to move,
+Esc to release on a desktop; drag to look and push the on-screen stick to move on a tablet.
+There's no astronaut body and no game logic — it's a place to stand and look out of the window.
 
-**Planet inspector** (`…/#inspect`) is the same world with the pod taken away and the camera
+The station is **one hall on two storeys**, 12 x 17 x 7.2 m, wide and square at the back and
+slimming over its front third to a **glazed nose** — the prow is 9 m across instead of 12, and
+that front third is glass on every face: the window in the prow, both curving sides, the roof
+*and* the floor.
+
+- the **lower floor** is the office, and it sits inside that glass cage — a desk with a chair
+  and a computer at it, its screen a static miniature of
+  [oskar-westmeijer.com](https://oskar-westmeijer.com/), decorative only, with planet above,
+  below and to both sides. A radio on the desk switches the music on.
+- a **curved staircase** turns up through a quarter circle on the starboard side, aft of the
+  office, to the **bridge** — a mezzanine across the back. The navigation console stands at its
+  front edge facing forward down the length of the hall and out through the nose, and the
+  hologram globe floats behind it.
+
+You operate the station from that console and nowhere else — altitude, attitude, orbit mode and
+the clock are all keys on it, and there is no HUD for any of them.
+
+This replaced a hub-and-arms plan (an octagonal hub with four modules and corridors off it),
+which spent most of its floor on corridor and put the desk and the console as far apart as it
+could. Don't reintroduce it. The hull is deliberately not a box either — the first version of
+the hall was, and a rectangular room with a rectangular window is the thing the taper and the
+glass nose exist to get away from. Nothing in the station comes from `ai-assets/`; it is built from
+primitives, and the planet, its atmosphere and the nebula are GLSL shaders.
+
+**Planet inspector** (`…/#inspect`) is the same world with the station taken away and the camera
 put outside it on an `OrbitControls`: drag to swing round the planet, scroll to zoom from the
 whole disc down to the station's own altitude, and drag the `Sun` slider to sweep the sun
 around the equator and light whichever face you want to look at. Planet view is a place to
@@ -60,7 +79,7 @@ under review, unlicensed, or otherwise not cleared for public release.
 ```
 index.html            #mode-switcher (mode + surface-resolution selects), then
                       #asset-view (gallery + #viewport canvas); each planet view carries a
-                      .hud control pill (#planet-controls: altitude; #inspect-controls: sun),
+                      .hud control pill (#planet-controls: how to move; #inspect-controls: sun),
                       #planet-view (#planet-canvas + #crosshair + #interact-prompt) and
                       #inspect-view (#inspect-canvas + the #sun-azimuth slider),
                       loads /src/main.ts
@@ -75,27 +94,51 @@ src/
   viewer.ts            asset view. createViewer(canvas) — Three.js scene/camera/lights/
                        controls, GLTFLoader-based load(url) that swaps and disposes the
                        previous model, auto-frames the camera to its bounding box
-  planet-view.ts       planet view. createPlanetView(canvas) — assembles the scene,
-                       drives the orbit, owns the bloom composer and the render loop
+  planet-view.ts       planet view. createPlanetView(canvas) — assembles the scene, drives
+                       the orbit from flight.ts, owns the bloom composer and the render loop
   planet-inspect.ts    planet inspector. createPlanetInspect(canvas) — the same space with
                        an OrbitControls camera outside it, plus the sun-azimuth control
-  pod/index.ts         buildPod() — assembles the two below and returns the group, the
-                       radio's aiming target and the furniture footprints. Re-exports
-                       ROOM / EYE_HEIGHT / ROOM_BOUNDS / WINDOW, so `from './pod'` still
-                       means what it always did
-  pod/room.ts          the shell: walls, the rounded window + frame + glass, ceiling LED
-                       strips, and the dimensions above
-  pod/desk.ts          the workstation: desk, chair, monitor, keyboard, the warm desk lamp,
-                       and the XZ footprints the player is pushed out of
-  pod/screen.ts        makeScreenTexture() — the decorative homepage miniature on the
+  flight.ts            createFlight() — the station's altitude, attitude, orbit mode and clock.
+                       Written by the navigation console, read by the rig and the globe. Owns
+                       pitchFor() and the detent tables
+  regions.ts           the walkable floor: convex XZ polygons (Region), the clamp that holds
+                       the player inside their union, Deck — a region with a floor height and a
+                       storey, which is what makes two floors possible — and arcDecks(), which
+                       cuts a turning staircase into convex quads sharing one height function
+  station/index.ts     buildStation() — the seam. Composes the hall, the bridge, the office
+                       furniture, the console and the globe, and hands planet-view.ts one
+                       object: decks, obstacles, spawn, targets, globe
+  station/layout.ts    the bauplan as data: HALL / WINDOW / BRIDGE / STAIR / CONSOLE / GLOBE,
+                       OFFICE_PLACEMENT, EYE_HEIGHT, halfWidthAt() and the hull polygon, and
+                       DECKS — the walkable floor of both storeys, whose *order* is load-bearing
+  station/hall.ts      buildHall() — the shell: the tapered hull as a polygon of wall panels,
+                       the glazed nose (sides, roof and floor), the prow window with its rounded
+                       opening + extruded frame + glass, the mullions and the LED strips
+  station/bridge.ts    buildBridge() — the mezzanine slab (extruded, with the stair well bitten
+                       out of its starboard corner), its railings, the curved flight and its two
+                       arc railings, the globe's plinth/lens/emitter, and the deck's lamps
+  station/shell.ts     MATERIALS — the shared palette, and nothing else. It used to hold a
+                       generic room builder for the hub-and-arms plan; see git if that is
+                       ever wanted back
+  station/console.ts   buildConsole() — the navigation desk on the bridge and its seven keys,
+                       each an invisible aiming box with a label that reads live flight state
+  station/globe.ts     buildGlobe() — the hologram Earth behind the console, built from
+                       space.ts's own createEarthMaterial so it shares the planet's maps, sun
+                       and spin. Counter-rotated against the rig so it holds still in space
+  station/office/index.ts   buildOffice() — the workstation and the radio. Furniture only;
+                       authored room-local and placed by OFFICE_PLACEMENT
+  station/office/desk.ts    the workstation: desk, chair, monitor, keyboard, the warm desk
+                       lamp, and the XZ footprints the player is pushed out of
+  station/office/screen.ts  makeScreenTexture() — the decorative homepage miniature on the
                        monitor, drawn once into a 2D canvas
-  pod/radio.ts         buildRadio() — the unit on the right-hand end of the desk that switches
-                       the sound on, its aiming box and its indicator
+  station/office/radio.ts   buildRadio() — the unit on the right-hand end of the desk that
+                       switches the music on, its aiming box and its indicator
   interaction.ts       createInteractions() — one raycast a frame from the centre of the
                        screen, the prompt element, and E (or a tap on the prompt)
-  audio.ts             createPodAudio() — the room-tone bed and the music playlist, discovered
-                       with import.meta.glob, silent and unfetched until the radio is switched
-                       on. Owned by planet-view.ts, so it starts/stops/disposes with the view
+  audio.ts             createPodAudio() — the room-tone bed, which runs whenever you are aboard,
+                       under a music playlist the desk radio switches on. Discovered with
+                       import.meta.glob; neither layer is fetched until it is wanted. Owned
+                       by planet-view.ts, so it starts/stops/disposes with the view
   space.ts             the planet, its two atmosphere shells, the moon, the starfield and
                        the nebula skydome. Owns the shared simplex-noise GLSL, the planet
                        shader that lights the NASA maps, MAP_SETS / the page-wide map cache
@@ -103,7 +146,8 @@ src/
                        moon fly in (SUN_BETA / ORBIT_NORMAL / ORBIT_NOON / ORBIT_DAWN)
   fpv-controls.ts      createFpvControls() — two input paths (pointer-lock mouse look, and
                        touch drag-to-look plus an on-screen stick) feeding walk-on-the-floor
-                       movement clamped to ROOM_BOUNDS and pushed out of `obstacles`
+                       movement clamped to the `decks` of the storey you are on and pushed out
+                       of `obstacles`. Carries which storey that is, and the step guard
   audio/               bed/ and music/ as MP3, plus CREDITS.md — see "Ambient audio" below
   textures/            NASA Earth maps (day/night/clouds) as WebP, imported from space.ts
                        — see "Planet textures" below
@@ -163,15 +207,12 @@ and in the `#model-name` info line under the viewport.
   has to be listed before a big one it would otherwise lose the odd frame to as you swept
   across. Worth keeping in mind now that the radio is the only target — it stops mattering
   quietly, right up until a second one is added.
-- **`ROOM_BOUNDS` cannot express an obstacle**, so `fpv-controls.ts` takes a separate list of
-  XZ `Box2` footprints and pushes the eye out of any it is inside, along the axis of least
-  penetration, twice — one pass can push you out of the desk and straight into the chair.
-  Not swept, which at 2.4 m/s against a 0.7 m desk with a 0.1 s dt cap it does not need to be.
-- **The chair is parked out of the approach on purpose.** It is a solid obstacle, and left
-  where somebody would actually sit it fences off the one spot you have to stand in to reach
-  the radio. This was found the hard way, back when the desk also held an interactive
-  monitor: with the chair square in front of the desk, its prompt could not be reached at any
-  sane `reach`.
+- **A walkable region cannot express an obstacle**, so `fpv-controls.ts` takes a separate list
+  of XZ `Box2` footprints and pushes the eye out of any it is inside, along the axis of least
+  penetration, twice — one pass can push you out of the desk and straight into the chair. Not
+  swept, which at 2.4 m/s against a 0.7 m desk with a 0.1 s dt cap it does not need to be. Each
+  footprint carries the storey it stands on, so the desk downstairs does not fence off a patch
+  of the mezzanine above it.
 
 ### Asset viewer behaviour
 - Single-model view only: the gallery lists every discovered `.glb`, and clicking one
@@ -186,47 +227,140 @@ and in the `#model-name` info line under the viewport.
 - Lighting is a simple three-point-ish studio setup (hemisphere + key + fill directional
   lights) — these are isolated asset previews, not a scene with its own mood/atmosphere.
 
+### Two storeys, and how you walk between them
+
+`Region` in `regions.ts` is XZ only, so a mezzanine and the floor beneath it are the same
+rectangle and the clamp cannot tell them apart. Rather than make every clamp a 3D problem for a
+building whose floors are all flat, a **`Deck`** is a region plus a floor height plus a storey,
+and the player carries which storey they are on. Only decks reachable from that storey are
+clamped against.
+
+- **Falling off the mezzanine is not prevented, it is inexpressible.** While you are on the
+  bridge, the hall floor is simply not in the set being clamped against, so there is no edge to
+  cross. The same fact going the other way is why you cannot walk up into the underside of the
+  deck.
+- **The staircase is the one deck in both storeys**, and it is what moves you between them:
+  its floor ramps along the arc, and its `levelAt` answers the lower storey at the foot and the
+  upper one past the middle. Crossing that midpoint is what swaps the walkable set. The
+  midpoint has to be *inside* the flight — at either end you would swap sets while standing on
+  a deck the new set does not contain.
+- **A turning stair is not convex, so it is many decks.** `arcDecks()` cuts the annular sector
+  into quads, and every one of them answers height and storey from the *same* function of the
+  angle about the arc's centre. That is what makes the seams exact however coarse the cut:
+  there is no per-segment height to disagree about. It also means the sweep must stay under
+  half a turn and must not straddle the ±180° branch cut of `atan2` — which is why `STAIR` is
+  written as -90°..0° rather than the equivalent 270°..360°.
+- **The stair's region runs past its last tread**, at the flat height of the deck, so the two
+  share floor rather than butting up edge to edge — the corridor-overlap trick from the old hub
+  plan. Butt two regions together exactly and the closest-point clamp catches you on the seam.
+- **`DECKS` is ordered, and the order is load-bearing.** `deckAt` is first-match, and the stair
+  shares its XZ with the hall floor it curves over — listed the other way round you would walk
+  *under* the treads at ground level instead of up them.
+- **There is a step guard, and it is not optional.** `clampToRegions` moves an out-of-bounds
+  point onto the nearest boundary of the *nearest* region, and distance knows nothing about
+  height — a sideways shove from the hall floor towards the raised part of the flight lands
+  nearer the stair's edge than the floor's, and would lift the eye through the mezzanine. A
+  move that changes the floor by more than `MAX_STEP` is refused and the previous position
+  kept.
+- **`MAX_STEP` is bounded from both sides and the window is narrow**, so don't nudge it
+  casually. Below: the steepest *legitimate* frame is 2.4 m/s up a 33° flight at the 0.1 s dt
+  cap, or 0.157 m, and anything under about 0.17 makes the stairs themselves unwalkable on a
+  slow frame. Above: at the flank of the flight the clamp offers heights rising continuously
+  from zero, so whatever it is set to is exactly how far up the side of the staircase you can
+  hop — at 0.5 that was a visible half-metre vault onto the third tread, *and* a trap, because
+  the guard is symmetric and would then refuse to let you step back down. 0.25 sits between.
+- **The stair's railings are load-bearing, not trim.** The guard lets you board the flight only
+  where it is under `MAX_STEP` off the ground and refuses to let you step off sideways above
+  that, so both flanks of it are invisible walls. A freestanding helix is exposed on the inside
+  *and* the outside, so both get a rail, and both start a little way up to leave the boarding
+  stretch open.
+- **The walking surface is a ramp; the treads are decoration.** Mid-tread the eye rides half a
+  rise (15 cm) below the tread it is nominally on. That is invisible with no body to look at,
+  where stepping the eye instead would put a 30 cm jolt in it twelve times a flight.
+- **You walk behind the console, not along the deck edge.** It stands close enough to the front
+  of the bridge that its inflated footprint meets the walkable edge — which is correct for a
+  bridge, and worth knowing before wondering why you cannot squeeze past it.
+
 ### Planet view behaviour
 Conventions worth knowing before touching it:
 
-- **Two scales in one scene.** The pod is in metres (7 x 3.2 x 5 m, origin on the floor at
-  the room's centre); the planet is toy-scaled at `PLANET_RADIUS = 300`, centred on the
-  world origin, with the station somewhere in `ALTITUDE_RANGE` (20..600, opening at 120)
+- **Two scales in one scene.** The station is in metres (a 12 x 17 x 7.2 m hall, origin on the
+  lower floor at its middle); the planet is toy-scaled at `PLANET_RADIUS = 300`, centred on the
+  world origin, with the station somewhere in `ALTITUDE_DETENTS` (35..600, opening at 120)
   above it. That keeps the camera's near/far at a plain `0.1 / 20000` — no logarithmic depth
   buffer needed, even at the top of the range.
-- **Altitude is a slider, and it is the biggest lever in the scene.** At the bottom (20) the
-  limb sits `asin(300/320)` ≈ 69.6° off the nadir — ISS-like, the horizon a wide shallow arc
-  and the terrain close enough to read. At the top (600) it is 19.5° and the planet is a ball
-  hanging in the glass. Climbing also *brightens* the lap: from higher up the window sees
-  further round towards the day side, so mean illumination of the visible ground goes from
-  ~0.56 at altitude 20 to ~0.71 by 120.
+- **Altitude is a console key, and it is the biggest lever in the scene.** At the bottom (35)
+  the limb sits ≈ 63° off the nadir — ISS-like, the horizon a wide shallow arc and the terrain
+  close enough to read. At the top (600) it is 19.5° and the planet is a ball hanging in the
+  glass. Climbing also *brightens* the lap: from higher up the window sees further round
+  towards the day side.
 - **Every camera must stay outside `ATMOSPHERE_RADIUS`** (`1.035 × R` = 310.5, exported from
   `space.ts`). The outer shell is a `BackSide` fresnel: a camera inside it is wrapped in it
   and gets glow smeared across the whole sky instead of a ring round the planet. That is what
-  sets `ALTITUDE_RANGE.min` (20, not the 10.5 where the pod would actually touch it) and the
-  inspector's `MIN_DISTANCE`. It bit once already, when the altitude dropped from 70 to 20
-  with the outer shell still at `1.22 × R`.
-- **The camera is a child of `stationRig`**, the group that carries the pod around its
+  sets the lowest altitude detent and the inspector's `MIN_DISTANCE`, and `STATION_REACH`
+  (11 — half the hall's floor diagonal) is what says how much clearance the *building* needs
+  on top of that. It bit once already, when the altitude dropped from 70 to 20 with the outer
+  shell still at `1.22 × R`.
+- **The camera is a child of `stationRig`**, the group that carries the station around its
   orbit. This is what keeps the movement code simple: `PointerLockControls` writes
   `camera.position`/`camera.quaternion` and reads `camera.matrix`, all of which are local
-  to the parent, so the player walks around in plain room coordinates (and `ROOM_BOUNDS`
-  is room-local) while the rig handles where the room actually is in space.
-- **The window is on the pod's -Z wall.** `Matrix4.lookAt` puts +Z *away* from its target,
-  so aiming the rig at the planet leaves -Z — and the window — facing it.
+  to the parent, so the player walks around in plain station coordinates (and so do `DECKS`
+  and the furniture footprints) while the rig handles where the station actually is in space.
+- **The window is in the hall's -Z prow.** `Matrix4.lookAt` puts +Z *away* from its target,
+  so aiming the rig at the planet leaves -Z — and the window — facing it. Bearing 0° is that
+  same -Z, which is why the detent is called "the window" and why it is the one worth being on.
 - **The horizon is pinned, and the pitch is solved for.** The limb lands at `α - pitch`
-  relative to the optical axis, where `α = asin(R / (R + altitude))`, and the window spans
-  -19.8° to +20.3° vertically about that axis. Rather than fix the pitch, the scene fixes
-  where the horizon sits — `HORIZON_ELEVATION` = 9.4°, about three quarters of the way up
-  the glass — and `pitchFor(altitude)` inverts the relation every frame. **This is what makes
-  the altitude slider work**: without it the horizon slides off the top of the glass within a
-  few tens of units of climb. Lower `HORIZON_ELEVATION` to trade planet for sky; at 0 the
-  window looks flat out at the limb, which is where this started and why so little of the
-  planet was in it. `WINDOW_YAW` (~34°) then turns the pod about its own vertical
-  towards the direction of travel, which makes the view oblique — terrain comes towards you
-  and passes to one side instead of sliding straight across. Because a horizon is a cone
-  about the nadir, yaw is a pure azimuth change: it never tilts the horizon or moves it up
-  or down. **Order matters** — `rotateZ(-yaw)` then `rotateX(pitch)`. The other way round
-  banks the pod and puts the horizon on a diagonal.
+  relative to the optical axis, where `α = asin(R / (R + altitude))`. Rather than fix the
+  pitch, the scene fixes where the horizon sits — `flight.state.horizon`, opening at 9.4° —
+  and `pitchFor(altitude, horizon)` inverts the relation every frame. **This is what makes
+  changing altitude work**: without it the horizon slides off the top of the glass within a
+  few tens of units of climb. `ROLL` (0.6 rad, the pod's old `WINDOW_YAW`) then turns the
+  station about its own vertical towards the direction of travel, which makes the view oblique
+  — terrain comes towards you and passes to one side instead of sliding straight across.
+  Because a horizon is a cone about the nadir, roll is a pure azimuth change: it never tilts
+  the horizon or moves it up or down. **Order matters** — `rotateZ(-ROLL)`, then
+  `rotateX(pitch)`, then `rotateY(bearing)`. Any other order banks the station, or lets the
+  bearing cross-couple into the pitch and flatten it to zero at 90°.
+- **The two storeys want different horizons, and that is a feature.** The horizon is an angle
+  about the optical axis, so it does not move when the eye does — but *where in the glass it
+  lands* very much does. From the desk (eye 1.6, 2.8 m off the window) the default 9.4° puts
+  the limb mid-window, exactly where it has always been. From the bridge (eye 5.2, ~10 m off
+  it) the same 9.4° puts it above the window head. The console's own horizon key brings it
+  back down. Don't "fix" this by moving the bridge or stretching the glass; the control is
+  the answer, and having a reason to touch it is worth more than never needing to.
+- **There is a desk in the nose.** 2.2 x 0.7, off to port at x = -2 rather than centred, so it
+  stays out of the middle of the glass where the horizon runs. It stands inside the glazed
+  third — glass ahead, overhead, underfoot and to both sides — which is the whole argument for
+  the taper: the narrower the prow, the more of what you see from that desk is planet. The monitor
+  shows a canvas-drawn miniature of oskar-westmeijer.com, decorative only; its material is
+  `MeshBasicMaterial` with **`toneMapped: false`** (ACES at exposure 0.8 turns a white web page
+  into dingy grey) and a `color` under 1.0 (at 1.0 it picks up a bloom halo it has not earned).
+  A short-range warm `PointLight` over it is the warm pool at the window end of the hall —
+  under the cold roof points alone the desk is a dark smudge against a lit planet.
+- **You arrive standing at the desk, in first person already.** `DESK_SPAWN` in
+  `station/office/desk.ts` puts the eye half a step back and to the left of the chair, as if
+  you had just pushed it aside and stood up, facing the window: the opening frame is the planet
+  with your own monitor below it in one look. It has to sit outside every footprint once those
+  are inflated by the player radius, and it clears the chair's by 0.10 m — check that if either
+  `DESK_SPAWN` or `OFFICE_PLACEMENT` moves.
+- **The window is nearly the whole prow, and it is two storeys tall.** 7.6 x 6.4 of a 9.0 x 7.2
+  wall (`WINDOW` in `station/layout.ts`), leaving 0.7 at the sides, with a thin frame ring on
+  top of that (`FRAME_WIDTH` 0.12, `FRAME_DEPTH` 0.16) — enough to give the hole an edge, not
+  enough to eat the view. Both floors look out of it. `FRAME_DEPTH` is also why
+  `OFFICE_PLACEMENT.z` is -5.85 and not a round number: the frame stands proud of the wall, and
+  the desk has to clear it.
+- **The hull tapers quadratically, and that is not styling.** `halfWidthAt()` holds 6.0
+  everywhere aft of `NOSE_Z` and loses 1.5 by the prow, as `u²` in the distance forward. The
+  square is what the quadratic buys: it leaves the sides straight where they meet the square
+  back, so there is no crease, and it bows the curve *outward* of the straight chord between
+  its ends — which is what lets the walkable nose stay a single convex trapezoid drawn on that
+  chord and still be guaranteed inside the hull. A linear taper gives up both.
+- **The nose is glass on every face and carries no lights at all.** Sides, roof and floor over
+  the front third, on top of the prow window. There is nowhere to mount a strip in a glass cage
+  and nothing that should compete with what is outside one, so the office is lit by its own
+  desk lamp and by the planet. The LED strips and the ceiling lamps are all aft of `NOSE_Z`.
+  The mullion ribs at each panel seam are what stop the faceted glass reading as a modelling
+  artefact — they are the only thing that makes the curve legible from inside.
 - **The orbit is inclined, and the tilt is measured against the sun.** `SUN_BETA` is the
   angle between the orbital plane and `SUN_DIR`; the plane built from it lives in `space.ts`
   (`ORBIT_NORMAL` / `ORBIT_NOON` / `ORBIT_DAWN`, so orbit angle 0 is local noon and π is
@@ -238,31 +372,6 @@ Conventions worth knowing before touching it:
   20° of arc further into the day than the point directly below. The side effect is the one
   you actually notice: the plane comes out ≈73° inclined, so the ground track runs
   diagonally from ice cap to ice cap instead of circling the equator.
-- **There is a desk under the window.** 2.2 x 0.7 at x = -2, offset left rather than centred:
-  the eye starts at (0, 1.6, 1.2) and the window's framing is solved against exactly that
-  point, so a monitor in the middle of the glass would sit right on the horizon
-  `HORIZON_ELEVATION` was tuned to place. The monitor shows a canvas-drawn miniature of
-  oskar-westmeijer.com, decorative only; its material is `MeshBasicMaterial` with
-  **`toneMapped: false`** (ACES at exposure 0.8 turns a white web page into dingy grey) and a
-  `color` under 1.0 (at 1.0 it picks up a bloom halo it has not earned). One short-range warm
-  `PointLight` over the desk is the only warm light in the room — under the four cold ceiling
-  points alone the desk is a dark smudge against a lit planet.
-- **You arrive standing at the desk, in first person already.** `DESK_SPAWN` in `pod/desk.ts`
-  puts the eye half a step back and to the left of the chair, as if you had just pushed it
-  aside and stood up, facing the window: the opening frame is the planet with your own monitor
-  below it in one look.
-- **Moving the eye does not disturb the framing.** `HORIZON_ELEVATION` is an angle about the
-  optical axis and the planet is 300 units away, so the limb sits where it always did. What
-  changes is how much window is in view: from the old middle-of-the-room spawn the glass
-  subtended ±40° across and about ±20° up, and from the desk it is -26.6° to +64.4° and -29.0°
-  to +29.7° — it fills the view rather than sitting in it, and the horizon lands about two
-  thirds up instead of three quarters.
-- **The window is nearly the whole wall.** 6.2 x 2.7 of a 7 x 3.2 wall (`WINDOW` in
-  `pod.ts`), leaving a 0.4 margin at the sides and ~0.25 top and bottom, with a deliberately
-  thin frame ring on top of that (`FRAME_WIDTH` 0.1, `FRAME_DEPTH` 0.14) — enough to give
-  the hole an edge and a highlight, not enough to eat the view. The LED strips are
-  ceiling-only for the same reason: there is no wall left beside the glass to run them down, and
-  nothing bright at eye level competes with the planet.
 - **`ORBIT_NORMAL` is also the `lookAt` up hint**, not world up. It is perpendicular to the
   line to the planet by construction, so `lookAt` can't degenerate — with world up this
   steeply inclined an orbit would flip the rig as it passed over the poles.
@@ -359,7 +468,7 @@ Conventions worth knowing before touching it:
 - **The planet must never be a black sphere on load.** Planet view is the site's landing
   view and the maps take a moment, so the shader carries a procedural fallback selected by
   the `uHasMaps` uniform, faded in over ~0.4s once the textures resolve.
-- **Bloom does the glowing.** The LED strips and the atmosphere are authored with colour
+- **Bloom does the glowing.** The LED strips, the globe and the atmosphere are authored with colour
   channels deliberately over 1.0 and `UnrealBloomPass` has a threshold just above 1.0, so
   only those pick up a halo. `OutputPass` must stay last in the composer chain — with a
   composer in play the renderer skips its own tone mapping and colour conversion. If the
@@ -501,25 +610,51 @@ Conventions worth knowing before touching it:
   to prefix with `BASE_URL`. A glob does the same job with no plugin, no `vite-env.d.ts` entry
   and no hand-built paths. `modelManifest()` still earns its keep because it carries metadata
   (thumbnails, sizes); a list of URLs does not.
-- **Off by default means not fetched.** No `src` is assigned until `setOn(true)`, so a visitor
-  who never touches the radio downloads no audio at all.
-- **The radio kills both layers, not just the music.** The old system muted music and left the
-  ambient bed running. That is right when audio is on by default; it is wrong here, where "off"
-  has to mean silence or the switch does not read as a switch.
-- **Nothing is persisted.** Every visit starts silent. Persisting "on" is three lines, but the
-  browser would refuse to autoplay it before a gesture anyway, so the stored state would be a
-  lie half the time.
-- **Everything in `bed/` plays at once and loops; `music/` is a shuffled playlist.** The old
+- **The two layers have two different owners, and that is the design.** The bed is the *room*:
+  it comes up with the view, stays up the whole time you are aboard, and the radio has nothing
+  to do with it — a pressurised hull hums whether or not anybody fancies listening to it, and
+  that hum is most of what makes the place feel inhabited. The music is the *radio's*, and it
+  starts off; switching the radio off leaves the hum running. This reverses an earlier note
+  ("the radio kills both layers, or the switch does not read as a switch"), which was written
+  when *all* audio was off by default and the radio was the only way to hear anything. With a
+  hull hum as the baseline the reading changes: the radio is a radio, not a mute button for
+  the station. Don't quietly put them back under one switch.
+- **A layer is not fetched until it is wanted.** No `src` is assigned for the bed until
+  `setEnabled(true)` or for the music until `setOn(true)`, so a visitor who never touches the
+  radio downloads the bed and nothing else — which matters, because `music/` is much the
+  larger of the two.
+- **M is a shortcut to the radio, not a second control.** `planet-view.ts` binds it to the same
+  `toggleMusic()` the desk unit calls, so the indicator can never disagree with what is playing.
+  It adds no HUD element, which is the line the "diegetic controls" roadmap item actually draws
+  — a key you cannot see is not screen furniture. Gated on the view running, or a keypress aimed
+  at the asset viewer would flip the radio behind its back. There is no M key on an iPad, which
+  is why the unit on the desk stays the control this is a shortcut *to*.
+- **`available` is about the music only.** `station/index.ts` reads it to decide whether the
+  radio is offered as an interaction target at all; a radio with an empty `music/` should not
+  be, even though the bed is playing.
+- **Nothing is persisted.** Every visit starts with the radio off. Persisting "on" is three
+  lines, but the browser would refuse to autoplay it before a gesture anyway, so the stored
+  state would be a lie half the time.
+- **Everything in `bed/` plays at once and repeats; `music/` is a shuffled playlist.** The old
   system layered every file in `nature/` because a forest is many sources — a pressurised hull
-  is one, so the bed is expected to be a single file. A bed track whose loop seam clicks will
-  click once a minute forever; check it before committing. Music tracks need not loop.
+  is one, so the bed is expected to be a single file, and currently is (`station-drone.mp3`).
+- **The bed repeats by crossfading into itself, not with `el.loop`.** An MP3 carries encoder
+  padding at both ends, so `loop` inserts a short silence every time round — a tick every two
+  minutes, forever. `repeatBed()` builds a fresh element from the same URL and crossfades, which
+  hides the padding and covers a source whose own loop point is untidy too. It shares
+  `crossTo()` with the playlist's track change; the tail check for both lives in `update(dt)`.
 - **The playlist is advanced from the render loop's `dt`, not a `setInterval`.** The old
   `scheduleCrossfade()` polled every 500 ms for the life of the page even with the view parked.
   Driving it from `update(dt)` in `tick()` means it stops exactly when the view does.
 - **Fades use `requestAnimationFrame`, not that same `dt`.** The most important fade is the one
   on the way out, and by then `stop()` has already cancelled the render loop. Volume is plain
   linear `HTMLAudioElement.volume` — no WebAudio, so there is no `AudioContext` to unlock.
-- **Keep the folder under ~4 MB.** It downloads on top of the surface maps.
+- **Keep the folder under ~4 MB.** It downloads on top of the surface maps. `music/` is
+  currently ~22 MB and over that line — tolerated only because it is now an opt-in download
+  that nothing fetches until the radio is switched on. The fix if it ever needs to shrink is
+  re-encoding the three tracks to 96 kbps (`ffmpeg`, per `src/audio/CREDITS.md`), which would
+  bring them to roughly 3-4 MB. The bed has to stay small on its own terms: it *is* fetched
+  on arrival, on top of the maps.
 - Both layers sit well under 1.0 (bed 0.25, music 0.35). The window is the thing in this room;
   a bed you can consciously hear is a bed that is too loud.
 
@@ -549,33 +684,38 @@ leave the interior a bare box.
 
 The interior is where the effort is owed. Ranked by presence gained per hour of work:
 
-1. **Fit out the room.** *Started.* `pod.ts` is now `pod/` (`room.ts` + `desk.ts` + `screen.ts`,
-   assembled by `index.ts`), and there is a desk, chair and computer under the window. Still
-   wanted: handrails, a hatch, stowage, floor grating — each is a new module beside `desk.ts`,
-   returning its own footprints for `obstacles`.
-2. **Relight it warm.** *Started.* The desk has a warm lamp over it and the first non-grey-blue
-   materials in the room. The four cyan ceiling points at `toneMappingExposure` 0.8 still read
-   clinical everywhere else; a warm interior key against the cold window fill is a few numbers
-   and most of the remaining feeling.
+1. **Fit out the hall.** *Started, and the shell is right; the contents are not.* There is a
+   desk, a chair and a computer downstairs, a console and a globe upstairs, and nothing else —
+   the hall is deliberately a spike, with correct proportions and almost no furniture. Still
+   wanted: handrails, a hatch, stowage, floor grating, something on the bridge besides the
+   console. Each is a new module beside `bridge.ts`, returning its own footprints (tagged with
+   a storey) for `obstacles`.
+2. **Relight it warm.** *Started.* The desk has a warm lamp, the globe's emitter is warm, and
+   two warm points fill the sheltered floor under the mezzanine. The cold roof points at
+   `toneMappingExposure` 0.8 still read clinical over the open half; a warm interior key
+   against the cold window fill is a few numbers and most of the remaining feeling.
 3. **Use `ai-assets/`.** The blueberry bush and chanterelle already committed there become a
    hydroponics tray and a mushroom log. A growing thing aboard a station is exactly the detail
    that says someone lives here, and it connects the repo's two halves.
-4. **Diegetic controls.** *Started, in one place.* The radio (item 5) is the pattern: a switch
-   on the desk with an invisible aiming box and a stateful label, and **no HUD element at all**
-   — a mute button was considered and rejected for it. Altitude, sun and texture quality should
-   follow it off the HUD onto a console panel you walk up to, which deletes UI instead of
-   adding it. `interaction.ts` is the mechanism and now supports labels that change.
+4. **Diegetic controls.** *Largely done.* The radio was the pattern — a switch with an
+   invisible aiming box and a stateful label, and **no HUD element at all** — and the
+   navigation console followed it: altitude, horizon, bearing, orbit mode and the clock are
+   seven keys you walk up to the bridge to press, and the HUD they used to live on is gone.
+   Only the texture-quality dropdown is left off the console, because it is a download rather
+   than a thing the station does.
 5. **Sound.** *Started.* `audio.ts` is the old game's two-layer design rebuilt — a room-tone bed
-   under a crossfaded music playlist — but off by default, switched on from `pod/radio.ts`, and
-   discovered with `import.meta.glob` rather than the old `virtual:audio-manifest` plugin. See
-   "Ambient audio" below. What is missing is the files: `src/audio/bed/` and `src/audio/music/`
-   ship empty, and the code treats that as a supported state. The retired implementation is
-   still in git at `git show 29d1246^:src/audio.ts` if the old crossfade is ever wanted back.
-6. **EVA.** `fpv-controls.ts` is already positioned for it: `bounds`, `obstacles` and
-   `eyeHeight` are injected, and anything parented to `stationRig` floats along for free.
-   Going outside is a second controller mode — free the Y axis, swap the `Box3` for a tether
-   sphere — plus a hatch and an exterior hull to look back at. Keep room-clamping out of
-   anything new and it stays cheap.
+   under a crossfaded music playlist — but with the bed running whenever you are aboard and the
+   music behind the radio in `station/office/radio.ts`, and discovered with `import.meta.glob`
+   rather than the old `virtual:audio-manifest` plugin. See "Ambient audio" below. Both folders
+   now have files (a CC0 station drone, three CC0 synthwave tracks); an empty folder is still a
+   supported state. The retired implementation is still in git at
+   `git show 29d1246^:src/audio.ts` if the old crossfade is ever wanted back.
+6. **EVA.** `fpv-controls.ts` is better positioned for it than it was: `decks`, `obstacles`
+   and `eyeHeight` are injected, the Y axis is already driven by data rather than pinned to a
+   constant, and anything parented to `stationRig` floats along for free. Going outside is a
+   second controller mode — free Y entirely, swap the deck clamp for a tether sphere — plus a
+   hatch and an exterior hull to look back at. Keep floor-clamping out of anything new and it
+   stays cheap.
 
 ## Notes for whoever picks this up
 - The asset view is a utility — keep it simple there, "clean and readable" is the whole brief.

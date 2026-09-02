@@ -20,7 +20,7 @@ import { PLANET_RADIUS, PLANET_SPIN_RATE } from './space';
  *   solved from it (`pitchFor`). Because it is defined as an angle about that axis, it holds
  *   its framing at every altitude — which is the property that made the original altitude
  *   slider work, here generalised from a constant into a control.
- * - `bearing` swings the planet round to a different arm of the station.
+ * - `bearing` swings the planet round to a different face of the station.
  *
  * The order they are applied in is load-bearing and is documented at the call site in
  * `planet-view.ts`.
@@ -44,14 +44,15 @@ export const SYNCHRONOUS_PERIOD = (Math.PI * 2) / PLANET_SPIN_RATE;
 export const SYNCHRONOUS_ALTITUDE = 480;
 
 /**
- * How far the station reaches from its own centre, in metres — the navigation cupola's nose.
+ * How far the station reaches from its own centre, in metres — half the hall's floor diagonal,
+ * `hypot(6, 8.5)` ≈ 10.4, rounded up.
  *
  * This sets the altitude floor rather than aesthetics does. The outer atmosphere shell is a
- * `BackSide` fresnel at `ATMOSPHERE_RADIUS`, and a camera inside it is wrapped in glow across
- * the whole sky instead of seeing a ring round the planet. A 3.5 m pod could fly at 20; a
- * station whose nose is 14.35 m out cannot, and would put that nose 4.85 m inside the shell.
+ * `BackSide` fresnel at `ATMOSPHERE_RADIUS`, 10.5 above the surface, and a camera inside it is
+ * wrapped in glow across the whole sky instead of seeing a ring round the planet. The lowest
+ * detent of 35 puts the nearest corner of the hall 25 units clear of it.
  */
-export const STATION_REACH = 14.35;
+export const STATION_REACH = 11;
 
 export const ALTITUDE_DETENTS = [35, 60, 120, 250, 400, 600];
 export const ALTITUDE_RANGE = {
@@ -71,12 +72,16 @@ export const HORIZON_DETENTS = [
 
 export const TIME_DETENTS = [0.25, 1, 2, 4, 8];
 
-/** Which arm the planet is swung round to. Bearing 0° is the station's -Z, the office arm. */
+/**
+ * Which face of the hall the planet is swung round to. Bearing 0° is the station's -Z — the
+ * window, and the only face with anything to look through, which is why it is where the view
+ * opens and where it is worth coming back to. The other three point the glass at empty sky.
+ */
 export const BEARING_DETENTS = [
-  { value: 0, name: 'the office' },
-  { value: 90, name: 'navigation' },
-  { value: 180, name: 'the airlock' },
-  { value: 270, name: 'the reserve bay' }
+  { value: 0, name: 'the window' },
+  { value: 90, name: 'starboard' },
+  { value: 180, name: 'astern' },
+  { value: 270, name: 'port' }
 ];
 
 /**

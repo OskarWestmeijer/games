@@ -1,30 +1,28 @@
 import * as THREE from 'three';
-import { buildRoom } from './room';
 import { buildWorkstation } from './desk';
 import { buildRadio } from './radio';
 
 /**
- * The office/bedroom: the shell from `room.ts` with the workstation from `desk.ts` in it, and
- * the radio from `radio.ts` on the desk. The station's first module, and still the one you
- * arrive in.
+ * The office: the workstation from `desk.ts` with the radio from `radio.ts` on it. Still the
+ * place you arrive in, and still the only fitted-out part of the station.
  *
- * Its window, frame and proportions are solved against a specific eye position at the desk,
- * which is why it keeps a hand-built shell rather than going through `station/shell.ts` like
- * every other module. It sits on bearing 0° — station -Z, the same -Z the window has always
- * been on — so it needs no rotation and the framing carries over untouched.
+ * It used to own a room too — a hand-built shell whose window and proportions were solved
+ * against a specific eye position at the desk. That shell is now the hall (`station/hall.ts`),
+ * which is one room for both storeys, so what is left here is furniture. It is authored in its
+ * own room-local frame, with the origin on the floor and the window wall on -Z, and
+ * `station/index.ts` places it with `OFFICE_PLACEMENT`.
  */
 
-export { ROOM, EYE_HEIGHT, WINDOW } from './room';
 export { DESK, DESK_SPAWN } from './desk';
 
 export interface Office {
   group: THREE.Group;
   /**
-   * The radio's aiming volume. The office knows what its furniture *is*; `planet-view.ts`
+   * The radio's aiming volume. The office knows what its furniture *is*; `station/index.ts`
    * decides what looking at it does.
    */
   radioTarget: THREE.Object3D;
-  /** The radio's indicator, driven from whatever `planet-view.ts` wired the radio up to. */
+  /** The radio's indicator, driven from whatever the audio was wired up to. */
   setRadioLit(lit: boolean): void;
   /** Furniture footprints in room-local XZ, for `createFpvControls`. */
   obstacles: THREE.Box2[];
@@ -32,7 +30,6 @@ export interface Office {
 
 export function buildOffice(): Office {
   const group = new THREE.Group();
-  group.add(buildRoom());
 
   const workstation = buildWorkstation();
   group.add(workstation.group);

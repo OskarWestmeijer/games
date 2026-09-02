@@ -1,10 +1,18 @@
 /**
- * The pod's sound: a station room-tone bed with sparse ambient music over it.
+ * The station's sound, in two layers with two different owners.
  *
- * **Nothing plays until somebody asks for it.** There is no autoplay and no HUD mute button —
- * the radio on the desk is the switch (`pod/radio.ts`), reached through `interaction.ts`. That
- * is what "off by default" means here, and it is taken literally: no `src` is assigned and no
- * byte is fetched until `setOn(true)`.
+ * **The bed is the room, and it is not optional.** Every file in `audio/bed/` comes up with
+ * the view and stays up: a pressurised hull hums whether or not anybody fancies listening to
+ * it, and that hum is most of what makes the place feel inhabited rather than rendered.
+ *
+ * **The music is the radio's, and it starts off.** The playlist in `audio/music/` plays only
+ * once somebody walks to the desk and switches the unit on (`station/office/radio.ts`, reached
+ * through `interaction.ts`). Switching it off leaves the hum running — the radio is a radio,
+ * not a mute button for the station.
+ *
+ * That split is also the download policy, and it is taken literally: no `src` is assigned and
+ * no byte fetched for a layer until that layer is wanted. A visitor who never touches the
+ * radio pays for the bed and nothing else.
  *
  * **Files are discovered with `import.meta.glob`, not a Vite plugin.** The retired game used a
  * `virtual:audio-manifest` plugin that scanned `public/audio/` and handed back bare filenames
@@ -12,11 +20,12 @@
  * each file to `dist/assets/` with a content hash and rewrites the URL against `base: './'`,
  * so the deployed `/games/` sub-path works without anyone reassembling a path by hand.
  *
- * Empty folders are a supported state. No files means `setOn()` is a no-op and the room stays
- * quiet — the build never depends on a binary being present.
+ * Empty folders are a supported state. No bed means silence on arrival, no music means the
+ * radio is never offered as something to look at — the build never depends on a binary
+ * being present.
  */
 
-/** Every file in `audio/bed/` plays at once and loops forever: the hull, always the same. */
+/** Every file in `audio/bed/` plays at once and repeats forever: the hull, always the same. */
 const BED = Object.values(
   import.meta.glob('./audio/bed/*.mp3', { eager: true, query: '?url', import: 'default' })
 ) as string[];
@@ -53,32 +62,34 @@ export interface AudioOptions {
 
 export interface PodAudio {
   /**
-   * Whether there is anything to play at all. False when both folders are empty, which is a
-   * supported state — `planet-view.ts` reads it to leave the radio out of the interaction
-   * targets rather than offering a prompt for a switch that would do nothing.
+   * Whether the radio has anything to play. False when `audio/music/` is empty, which is a
+   * supported state — `station/index.ts` reads it to leave the radio out of the interaction
+   * targets rather than offering a prompt for a switch that would do nothing. The bed is not
+   * part of this: it is not the radio's, and it plays whether or not there is any music.
    */
   available: boolean;
-  /** The radio switch. Fades both layers in or out; safe to call before anything has loaded. */
+  /** The radio switch. Fades the music in or out; safe to call before anything has loaded. */
   setOn(on: boolean): void;
   isOn(): boolean;
   /**
-   * The *view's* start/stop, not the player's. Leaving the pod fades the sound out and pauses
-   * it without forgetting where the radio was left, so coming back resumes mid-track rather
-   * than restarting the playlist.
+   * The *view's* start/stop, and the bed's switch. Entering the station brings the hum up;
+   * leaving fades both layers out and pauses them without forgetting where the radio was left,
+   * so coming back resumes mid-track rather than restarting the playlist.
    */
   setEnabled(enabled: boolean): void;
   /**
-   * Retries `play()` on whatever should be audible right now. The radio starts on by default,
-   * which means `setOn(true)` fires before any user gesture has happened — autoplay is blocked,
-   * `play()` rejects and is swallowed, and the elements sit there paused with their volume
-   * still ramping. Call this from the first click/keydown/tap the page sees to pick it back up.
+   * Retries `play()` on whatever should be audible right now. The bed comes up with the view,
+   * which means it starts before any user gesture has happened — autoplay is blocked, `play()`
+   * rejects and is swallowed, and the elements sit there paused with their volume still
+   * ramping. Call this from the first click/keydown/tap the page sees to pick it back up.
    * A no-op once the browser is already letting audio play.
    */
   resume(): void;
   /**
-   * Advances the playlist. Called from the render loop rather than a `setInterval`: the old
-   * implementation polled every 500 ms for the lifetime of the page even with the view parked,
-   * and driving it from `dt` means it stops exactly when the view does, for free.
+   * Advances the playlist and repeats the bed. Called from the render loop rather than a
+   * `setInterval`: the old implementation polled every 500 ms for the lifetime of the page
+   * even with the view parked, and driving it from `dt` means it stops exactly when the view
+   * does, for free.
    */
   update(dt: number): void;
   dispose(): void;
@@ -118,16 +129,23 @@ function shuffled(urls: string[]): string[] {
   return out;
 }
 
+/** A bed layer keeps its url, because repeating it means building the element again. */
+interface BedTrack {
+  url: string;
+  el: HTMLAudioElement;
+}
+
 export function createPodAudio(options: AudioOptions = {}): PodAudio {
   const bedVolume = options.bedVolume ?? BED_VOL;
   const musicVolume = options.musicVolume ?? MUSIC_VOL;
 
   let on = false;
   let enabled = false;
-  let loaded = false;
+  let bedLoaded = false;
+  let musicLoaded = false;
   let sinceCheck = 0;
 
-  let bed: HTMLAudioElement[] = [];
+  let bed: BedTrack[] = [];
   const playlist = shuffled(MUSIC);
   let trackIdx = 0;
   let music: HTMLAudioElement | null = null;
@@ -135,7 +153,10 @@ export function createPodAudio(options: AudioOptions = {}): PodAudio {
   const retiring = new Set<HTMLAudioElement>();
   const timers = new Set<ReturnType<typeof setTimeout>>();
 
-  const silent = () => BED.length === 0 && MUSIC.length === 0;
+  /** The hull hums whenever you are aboard; the radio has nothing to do with it. */
+  const bedAudible = () => enabled;
+  /** The music needs the radio on *and* somebody in the room to hear it. */
+  const musicAudible = () => on && enabled;
 
   function makeAudio(url: string): HTMLAudioElement {
     const el = new Audio();
@@ -143,23 +164,6 @@ export function createPodAudio(options: AudioOptions = {}): PodAudio {
     el.volume = 0; // everything arrives from silence
     el.src = url;
     return el;
-  }
-
-  /** First `setOn(true)` — and only then — is when any of this is actually fetched. */
-  function load(): void {
-    if (loaded) return;
-    loaded = true;
-    bed = BED.map((url) => {
-      const el = makeAudio(url);
-      el.loop = true;
-      return el;
-    });
-    if (playlist.length > 0) {
-      music = makeAudio(playlist[0]);
-      // A single track has nothing to cross into, so it loops itself; a playlist is advanced
-      // by `update()` instead, which is what gives the crossfade something to overlap.
-      music.loop = playlist.length === 1;
-    }
   }
 
   /** `play()` rejects on an autoplay block, which is a normal outcome here, not an error. */
@@ -175,31 +179,7 @@ export function createPodAudio(options: AudioOptions = {}): PodAudio {
     timers.add(id);
   }
 
-  /** Should sound be coming out right now? Both switches have to agree. */
-  const audible = () => on && enabled;
-
-  function apply(): void {
-    if (!loaded) return;
-    const dur = audible() ? FADE : FADE_OUT;
-    for (const el of bed) {
-      if (audible()) play(el);
-      fadeTo(el, audible() ? bedVolume : 0, dur);
-    }
-    if (music) {
-      if (audible()) play(music);
-      fadeTo(music, audible() ? musicVolume : 0, dur);
-    }
-    if (!audible()) {
-      // Pause only once the ramp has finished, or the fade is a cut. Captured by value: a
-      // re-enable inside the window starts a fresh fade, and the guard below sees it.
-      after(dur * 1000 + 250, () => {
-        if (audible()) return;
-        for (const el of bed) el.pause();
-        music?.pause();
-      });
-    }
-  }
-
+  /** Fades an outgoing element down and lets go of its buffer once it is inaudible. */
   function retire(el: HTMLAudioElement): void {
     retiring.add(el);
     fadeTo(el, 0, FADE);
@@ -211,23 +191,83 @@ export function createPodAudio(options: AudioOptions = {}): PodAudio {
     });
   }
 
-  function nextTrack(): void {
-    const previous = music;
-    trackIdx = (trackIdx + 1) % playlist.length;
-    music = makeAudio(playlist[trackIdx]);
-    play(music);
-    fadeTo(music, musicVolume, FADE);
+  /** Starts `url` at `volume` and crossfades whatever it replaces out underneath it. */
+  function crossTo(url: string, previous: HTMLAudioElement | null, volume: number): HTMLAudioElement {
+    const el = makeAudio(url);
+    play(el);
+    fadeTo(el, volume, FADE);
     if (previous) retire(previous);
+    return el;
+  }
+
+  /**
+   * The bed is deliberately *not* `loop = true`. An MP3 carries encoder padding at both ends,
+   * so `loop` inserts a short silence every time round — a tick every couple of minutes,
+   * forever. Repeating it as a crossfade into a second element hides that, and covers a
+   * source whose own loop point isn't perfect either.
+   */
+  function repeatBed(track: BedTrack): void {
+    track.el = crossTo(track.url, track.el, bedVolume);
+  }
+
+  /** First `setEnabled(true)` — and only then — is when the bed is actually fetched. */
+  function loadBed(): void {
+    if (bedLoaded) return;
+    bedLoaded = true;
+    bed = BED.map((url) => ({ url, el: makeAudio(url) }));
+  }
+
+  /** Likewise the music, on the first `setOn(true)`: the radio is what pays for the playlist. */
+  function loadMusic(): void {
+    if (musicLoaded) return;
+    musicLoaded = true;
+    if (playlist.length > 0) {
+      music = makeAudio(playlist[0]);
+      // A single track has nothing to cross into, so it loops itself; a playlist is advanced
+      // by `update()` instead, which is what gives the crossfade something to overlap.
+      music.loop = playlist.length === 1;
+    }
+  }
+
+  function applyBed(): void {
+    if (!bedLoaded) return;
+    const dur = bedAudible() ? FADE : FADE_OUT;
+    for (const { el } of bed) {
+      if (bedAudible()) play(el);
+      fadeTo(el, bedAudible() ? bedVolume : 0, dur);
+    }
+    if (!bedAudible()) {
+      // Pause only once the ramp has finished. A re-enable inside that window starts a fresh
+      // fade, and the guard below sees it.
+      after(dur * 1000 + 250, () => {
+        if (bedAudible()) return;
+        for (const { el } of bed) el.pause();
+      });
+    }
+  }
+
+  function applyMusic(): void {
+    if (!musicLoaded || !music) return;
+    const el = music;
+    const dur = musicAudible() ? FADE : FADE_OUT;
+    if (musicAudible()) play(el);
+    fadeTo(el, musicAudible() ? musicVolume : 0, dur);
+    if (!musicAudible()) {
+      after(dur * 1000 + 250, () => {
+        if (musicAudible()) return;
+        el.pause();
+      });
+    }
   }
 
   return {
-    available: !silent(),
+    available: MUSIC.length > 0,
 
     setOn(next: boolean) {
-      if (next === on || silent()) return;
+      if (next === on || MUSIC.length === 0) return;
       on = next;
-      if (on) load();
-      apply();
+      if (on) loadMusic();
+      applyMusic();
     },
 
     isOn: () => on,
@@ -235,29 +275,35 @@ export function createPodAudio(options: AudioOptions = {}): PodAudio {
     setEnabled(next: boolean) {
       if (next === enabled) return;
       enabled = next;
-      apply();
+      if (enabled) loadBed();
+      applyBed();
+      applyMusic();
     },
 
     resume() {
-      if (!audible()) return;
-      for (const el of bed) if (el.paused) play(el);
-      if (music?.paused) play(music);
+      if (bedAudible()) for (const { el } of bed) if (el.paused) play(el);
+      if (musicAudible() && music?.paused) play(music);
     },
 
     update(dt: number) {
-      if (!audible() || !music || playlist.length < 2) return;
+      if (!enabled) return;
       sinceCheck += dt;
       if (sinceCheck < CHECK_INTERVAL) return;
       sinceCheck = 0;
       // `duration` is NaN until the metadata lands, which is exactly the case this must not
       // act on — NaN fails the comparison, so no guard is needed beyond the truthiness check.
-      if (music.duration && music.currentTime > music.duration - FADE) nextTrack();
+      const spent = (el: HTMLAudioElement) => !!el.duration && el.currentTime > el.duration - FADE;
+      for (const track of bed) if (spent(track.el)) repeatBed(track);
+      if (musicAudible() && music && playlist.length > 1 && spent(music)) {
+        trackIdx = (trackIdx + 1) % playlist.length;
+        music = crossTo(playlist[trackIdx], music, musicVolume);
+      }
     },
 
     dispose() {
       for (const id of timers) clearTimeout(id);
       timers.clear();
-      for (const el of [...bed, ...retiring, ...(music ? [music] : [])]) {
+      for (const el of [...bed.map((t) => t.el), ...retiring, ...(music ? [music] : [])]) {
         el.pause();
         el.removeAttribute('src');
         el.load();

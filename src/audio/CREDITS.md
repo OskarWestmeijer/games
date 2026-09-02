@@ -13,6 +13,7 @@ provenance, exactly like `#planet-credit`; nothing in it is imposed on anyone.
 
 | file | layer | title | author | source | licence |
 | --- | --- | --- | --- | --- | --- |
+| `station-drone.mp3` | bed | Space Station Drone | db3005 | [Freesound](https://freesound.org/people/db3005/sounds/686237/) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `001_Synthwave_4k.mp3` | music | Calm Ambient 1 (Synthwave 4k) | The Cynic Project | [OpenGameArt](https://opengameart.org/content/calm-ambient-1-synthwave-4k) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `002_Synthwave_15k.mp3` | music | Calm Ambient 2 (Synthwave 15k) | The Cynic Project | [OpenGameArt](https://opengameart.org/content/calm-ambient-2-synthwave-15k) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `003_lifeWave_2k.mp3` | music | Calm Ambient 3 (Lifewave 2k) | The Cynic Project | [OpenGameArt](https://opengameart.org/content/calm-ambient-3-lifewave-2k) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
@@ -21,6 +22,10 @@ Fill a row in per file: the `.mp3` as committed, `bed` or `music`, the original 
 author as they credit themselves, a link to the page the file came from, and a link to the
 licence deed (`https://creativecommons.org/publicdomain/zero/1.0/`). Add a "changes" note for
 anything done beyond re-encoding — a trim, a loop crossfade, a level change.
+
+`station-drone.mp3` is Freesound's own 128 kbps MP3 preview of the sound, used as-is: the
+original is a WAV behind a login, the preview is public, and 128 kbps is more than a bed needs.
+Both are covered by the same CC0 dedication.
 
 ## Encoding
 
@@ -36,9 +41,12 @@ ffmpeg -i source.wav -c:a libmp3lame -b:a 96k -ar 44100 music/ambient-1.mp3
 ffmpeg -i hum.wav -c:a libmp3lame -b:a 80k -ac 1 -ar 44100 bed/station-hum.mp3
 ```
 
-**Check the loop before committing a bed track.** Everything in `bed/` plays on `loop`, so a
-seam that clicks will click once a minute forever — crossfade the tail into the head, or
-reject the file. Music tracks do not need to loop: `audio.ts` crossfades between them.
+**Bed tracks do not have to loop perfectly.** `audio.ts` repeats them by crossfading each one
+into a fresh element of itself rather than setting `loop` — it has to, because an MP3 carries
+encoder padding and `loop` would insert a short silence every time round. That crossfade also
+covers a source whose own loop point is untidy. Still prefer one that is close: the fade is
+`FADE` seconds long and cannot hide a track that ends somewhere completely different from
+where it began. Music tracks need not loop at all; `audio.ts` crossfades between them.
 
 ## Vetted CC0 sources
 
@@ -56,6 +64,8 @@ Confirmed public-domain dedications, as of September 2026:
 - [Background Space Track](https://opengameart.org/content/background-space-track) — yd,
   OpenGameArt, CC0. Cold and mechanical ("my very own dead ship") — a bed candidate rather
   than music.
+- [Space Station Drone](https://freesound.org/people/db3005/sounds/686237/) — db3005,
+  Freesound, CC0. Two minutes of low machine drone; the bed in use.
 - [Freesound, licence filtered to CC0](https://freesound.org/search/?q=spaceship+interior+hum&f=license:%22Creative+Commons+0%22)
   for the room tone. **Read the badge on the individual sound page, not the search results** —
   Freesound mixes CC0, CC BY and CC BY-NC in one list, and only the first is usable here.

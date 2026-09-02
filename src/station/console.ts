@@ -1,14 +1,18 @@
 import * as THREE from 'three';
 import type { InteractionTarget } from '../interaction';
 import type { Flight } from '../flight';
-import { CONSOLE } from './layout';
+import { BRIDGE, CONSOLE } from './layout';
 
 /**
  * The navigation console: the station's only controls.
  *
  * There is no HUD for any of this. Altitude, bearing, horizon, orbit mode and time exist here
- * and nowhere else, which deletes UI rather than adding it — you walk to navigation and
+ * and nowhere else, which deletes UI rather than adding it — you walk up to the bridge and
  * operate the station where the station is operated from.
+ *
+ * It stands on the mezzanine at its front edge with its long axis along X, so you work it with
+ * your back to the globe, looking down the hall over the office and out of the window. The
+ * keys read left to right in the order they are listed.
  *
  * **Steppers with named detents, not sliders.** A slider needs a drag; `interaction.ts` gives
  * a look and a keypress, and it already supports a label that is a *function* of state, which
@@ -25,7 +29,7 @@ import { CONSOLE } from './layout';
 /** How close the eye has to be before the console offers anything. */
 export const CONSOLE_REACH = 1.9;
 
-const KEY_SIZE = new THREE.Vector3(0.3, 0.16, 0.26);
+const KEY_SIZE = new THREE.Vector3(0.26, 0.16, 0.3);
 
 const deskMaterial = new THREE.MeshStandardMaterial({ color: 0x2f3540, roughness: 0.55, metalness: 0.45 });
 const keyMaterial = new THREE.MeshStandardMaterial({ color: 0x1b1f26, roughness: 0.5, metalness: 0.2 });
@@ -39,10 +43,10 @@ export interface Console {
 
 export function buildConsole(): Console {
   const group = new THREE.Group();
-  group.position.set(CONSOLE.x, 0, 0);
+  group.position.set(CONSOLE.x, BRIDGE.y, CONSOLE.z);
 
   const desk = new THREE.Mesh(
-    new THREE.BoxGeometry(CONSOLE.depth, 0.06, CONSOLE.width),
+    new THREE.BoxGeometry(CONSOLE.width, 0.06, CONSOLE.depth),
     deskMaterial
   );
   desk.position.y = CONSOLE.top;
@@ -50,10 +54,10 @@ export function buildConsole(): Console {
 
   for (const side of [-1, 1]) {
     const leg = new THREE.Mesh(
-      new THREE.BoxGeometry(CONSOLE.depth * 0.8, CONSOLE.top, 0.06),
+      new THREE.BoxGeometry(0.06, CONSOLE.top, CONSOLE.depth * 0.8),
       deskMaterial
     );
-    leg.position.set(0, CONSOLE.top / 2, side * (CONSOLE.width / 2 - 0.2));
+    leg.position.set(side * (CONSOLE.width / 2 - 0.2), CONSOLE.top / 2, 0);
     group.add(leg);
   }
 
@@ -62,19 +66,19 @@ export function buildConsole(): Console {
    * `THREE.Raycaster` does not check `visible`, so the aiming volume costs one more object
    * and makes looking at a 30 cm key forgiving enough to hit with a thumb.
    */
-  function key(z: number): THREE.Object3D {
+  function key(x: number): THREE.Object3D {
     const cap = new THREE.Mesh(new THREE.BoxGeometry(KEY_SIZE.x, KEY_SIZE.y, KEY_SIZE.z), keyMaterial);
-    cap.position.set(0, CONSOLE.top + 0.06, z);
+    cap.position.set(x, CONSOLE.top + 0.06, 0);
     group.add(cap);
 
-    const aim = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.34, 0.46), keyMaterial);
+    const aim = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.34, 0.52), keyMaterial);
     aim.position.copy(cap.position);
     aim.visible = false;
     group.add(aim);
     return aim;
   }
 
-  // Laid out along the desk, inboard to outboard.
+  // Laid out along the desk, left to right as you stand at it.
   const keys = {
     altitudeDown: key(-1.2),
     altitudeUp: key(-0.8),
@@ -123,8 +127,8 @@ export function buildConsole(): Console {
 
   const obstacles = [
     new THREE.Box2(
-      new THREE.Vector2(CONSOLE.x - CONSOLE.depth / 2, -CONSOLE.width / 2),
-      new THREE.Vector2(CONSOLE.x + CONSOLE.depth / 2, CONSOLE.width / 2)
+      new THREE.Vector2(CONSOLE.x - CONSOLE.width / 2, CONSOLE.z - CONSOLE.depth / 2),
+      new THREE.Vector2(CONSOLE.x + CONSOLE.width / 2, CONSOLE.z + CONSOLE.depth / 2)
     )
   ];
 
