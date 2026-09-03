@@ -63,11 +63,19 @@ const pillowMaterials = [
   new THREE.MeshStandardMaterial({ color: 0x7a4632, roughness: 0.96, metalness: 0 })
 ];
 
-/** Matte, unlike `MATERIALS.strut`: a metal top here throws a specular starburst off its cap. */
+/**
+ * Matte, unlike `MATERIALS.strut`: a metal top here throws a specular starburst off its cap.
+ *
+ * **Warm, and that is the whole reason it is not the near-black it started as.** The table's top
+ * face and the dais it stands on are the two big upward-facing surfaces in the lounge, so they
+ * both catch the cold blue fill off the planet and almost nothing else — at 0x24211e against the
+ * dais's 0x272d38 they came out the same washed pale grey and the table stopped existing. A warm
+ * brown is the one thing in the room the earthlight cannot flatten into the floor.
+ */
 const tableMaterial = new THREE.MeshStandardMaterial({
-  color: 0x24211e,
-  roughness: 0.55,
-  metalness: 0.14
+  color: 0x4a3626,
+  roughness: 0.68,
+  metalness: 0.04
 });
 
 const daisMaterial = new THREE.MeshStandardMaterial({
@@ -146,16 +154,16 @@ export function buildLounge(): Lounge {
   plinth.position.y = dais / 2;
   group.add(plinth);
 
-  // Two rings of light let into it: one at the outer edge and one tucked against the foot of the
-  // couch. The same trick as the rim in the nose and the strip under the bridge — a line of
-  // `MATERIALS.led` for the bloom pass to turn into light, which is most of what makes a dark
-  // room read as lit rather than as underexposed. With the roof lamps gone from the nose these
-  // and the table lamp are the lounge's whole light budget.
+  // Two rings let into it: one at the outer edge and one tucked against the foot of the couch.
+  // The same trick as the rim in the nose — but on `MATERIALS.ledFloor`, below the bloom
+  // threshold. Blooming, two full circles of strip a metre and a half below the eye were the
+  // brightest thing in every frame taken from the mouth of the U, which put a glare across the
+  // one view the lounge exists for. They mark the step now; the planet lights the room.
   for (const [radius, y] of [
     [LOUNGE.daisRadius + 0.02, dais - 0.03],
     [LOUNGE.couchOuter + 0.05, dais + 0.03]
   ]) {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.02, 8, 72), MATERIALS.led);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.018, 8, 72), MATERIALS.ledFloor);
     ring.rotation.x = Math.PI / 2;
     ring.position.y = y;
     group.add(ring);
@@ -230,22 +238,31 @@ export function buildLounge(): Lounge {
 
   // Throw pillows, propped against the back. Boxes, tilted out of true and alternating in colour
   // — at this distance the eye reads "somebody lives here" off the untidiness, not the shape.
+  //
+  // **Each one is a mesh inside a turned group, and both halves of that matter.** The group takes
+  // the facing and the mesh takes the tilt. A radial thing — the arm cylinders above — faces the
+  // right way at `rotation.y = -angle`, and a pillow copied from them does not: that maps its
+  // *width* to the radius and stands its 0.14 m edge across the seat, so seven of them read as
+  // thin slabs planted in the cushions rather than as anything soft. The facing a flat-fronted
+  // object wants is `PI/2 - angle`. Then the tilts have to be applied *under* that rotation or
+  // they are taken about the world axes, and "leaning back into the couch" becomes "toppling
+  // sideways" everywhere except the two ends of the U where the two happen to agree.
   for (let i = 0; i < 7; i++) {
     const angle = from + ((to - from) * (i + 0.5)) / 7 + (i % 3 === 1 ? 0.06 : -0.04);
-    const radius = backInner - 0.05;
+    const radius = backInner - 0.08;
+    const pivot = new THREE.Group();
+    pivot.position.set(Math.cos(angle) * radius, LOUNGE.seatHeight + 0.18, Math.sin(angle) * radius);
+    pivot.rotation.y = Math.PI / 2 - angle;
     const pillow = new THREE.Mesh(
-      new THREE.BoxGeometry(0.34, 0.32, 0.14),
+      new THREE.BoxGeometry(0.36, 0.30, 0.16),
       pillowMaterials[i % pillowMaterials.length]
     );
-    pillow.position.set(
-      Math.cos(angle) * radius,
-      LOUNGE.seatHeight + 0.20,
-      Math.sin(angle) * radius
-    );
-    pillow.rotation.y = -angle;
-    pillow.rotation.x = 0.22;
-    pillow.rotation.z = i % 2 ? 0.13 : -0.1;
-    group.add(pillow);
+    // Tipped back onto the roll, and rolled a little out of true. Alternating the sign is what
+    // keeps a row of seven from reading as a repeat.
+    pillow.rotation.x = -0.30;
+    pillow.rotation.z = i % 2 ? 0.15 : -0.11;
+    pivot.add(pillow);
+    group.add(pivot);
   }
 
   // --- the table ------------------------------------------------------------------------------
@@ -285,19 +302,26 @@ export function buildLounge(): Lounge {
   group.add(radio.group);
 
   // A warm pool over the table — with the desk lamp gone this is the warmest thing on the lower
-  // deck, and the one that says the room is inhabited rather than merely lit.
-  const lamp = new THREE.PointLight(0xffc79a, 7, 7, 2);
+  // deck, and the one that says the room is inhabited rather than merely lit. Kept modest: the
+  // planet through the glass is meant to carry the room, not this.
+  const lamp = new THREE.PointLight(0xffc79a, 4, 6, 2);
   lamp.position.set(0, dais + 1.5, 0);
   group.add(lamp);
 
   // --- obstacles ------------------------------------------------------------------------------
   // The couch ring, as a chain of axis-aligned boxes round the U rather than one box over the
   // whole dais. That is what leaves the mouth open: a single footprint would fence off the pocket
-  // the U exists to make. Each box is the bounding box of one sector's four corners, which
-  // overshoots into the gaps between them by a few centimetres — on the *inside* of a couch you
-  // are not allowed to stand on anyway.
+  // the U exists to make.
+  //
+  // **The chunk count is a clearance, not a level of detail.** Each box is the bounding box of one
+  // sector's four corners, so it bulges *inboard* of the arc by the sagitta — and the player is a
+  // point tested against boxes already inflated by `PLAYER_RADIUS`, so that bulge comes straight
+  // off the walkable ring inside the U. At 12 chunks over this 260° arc it came to ~0.55 m, which
+  // is more than the ring is wide: the pocket sealed itself, and `dev/walk.mjs` wedged in the two
+  // slivers left between chunk corners with no way out, because the push-out is two passes and not
+  // a solver. 32 brings it under 8 cm. Widen the couch or the arc and this wants checking again.
   const obstacles: THREE.Box2[] = [];
-  const chunks = 12;
+  const chunks = 32;
   for (let i = 0; i < chunks; i++) {
     const a0 = from + ((to - from) * i) / chunks;
     const a1 = from + ((to - from) * (i + 1)) / chunks;
@@ -317,7 +341,14 @@ export function buildLounge(): Lounge {
     }
     obstacles.push(new THREE.Box2(new THREE.Vector2(minX, minZ), new THREE.Vector2(maxX, maxZ)));
   }
-  obstacles.push(footprint(LOUNGE.x, LOUNGE.z, LOUNGE.tableRadius * 2, LOUNGE.tableRadius * 2));
+  // The table is round, and one square over it is not a cheap approximation of that — it is a
+  // *worse* shape in the only place that matters. Its corners sit at r·sqrt2, so a 0.38 m table
+  // inflated by the player reached 0.99 into a ring whose inner face is at 1.13, and pinched the
+  // pocket shut on all four diagonals while looking correct on the axes. Two crossed boxes are an
+  // octagon: the same table, corners at 1.23·r instead of 1.41·r, and the ring stays open.
+  const tR = LOUNGE.tableRadius;
+  obstacles.push(footprint(LOUNGE.x, LOUNGE.z, tR * 2, tR * 1.414));
+  obstacles.push(footprint(LOUNGE.x, LOUNGE.z, tR * 1.414, tR * 2));
 
   return { group, obstacles, radioTarget: radio.target, setRadioLit: radio.setLit };
 }

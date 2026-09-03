@@ -213,9 +213,12 @@ export function buildBridge(): Bridge {
   group.add(railing('x', -frontLimit, STAIR_TOP_X, BRIDGE.frontZ, BRIDGE.y));
 
   // The strip along the slab's front edge. This is the line that says "there is a floor up
-  // there" from anywhere on the ground, and the only lighting the underside gets that is visible
-  // from across the room. It runs the *whole* edge, past the head of the stairs to the hull,
-  // because it is the edge it draws, not the railing.
+  // there" from anywhere on the ground. It runs the *whole* edge, past the head of the stairs to
+  // the hull, because it is the edge it draws, not the railing.
+  //
+  // On `ledFloor` with the rest of the deck edges: blooming, thirteen metres of strip straight
+  // across the middle of the frame was a glare bar between you and the window from anywhere aft.
+  // The pair of lamps under the slab light that space; this only has to draw the edge.
   const ledFrom = -frontLimit;
   const ledTo = halfWidthAt(BRIDGE.frontZ, BRIDGE.y) - 0.1;
   group.add(
@@ -223,7 +226,7 @@ export function buildBridge(): Bridge {
       ledTo - ledFrom,
       0.06,
       0.06,
-      MATERIALS.led,
+      MATERIALS.ledFloor,
       (ledFrom + ledTo) / 2,
       BRIDGE.y - BRIDGE.thickness - 0.05,
       BRIDGE.frontZ

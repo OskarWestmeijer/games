@@ -120,6 +120,8 @@ const FORWARD_KEYS = ['KeyW', 'ArrowUp'];
 const BACK_KEYS = ['KeyS', 'ArrowDown'];
 const LEFT_KEYS = ['KeyA', 'ArrowLeft'];
 const RIGHT_KEYS = ['KeyD', 'ArrowRight'];
+/** The keys that mean "I want to walk", and so are worth taking the pointer for. */
+const MOVE_KEYS = [...FORWARD_KEYS, ...BACK_KEYS, ...LEFT_KEYS, ...RIGHT_KEYS];
 
 export function createFpvControls(
   camera: THREE.Camera,
@@ -164,8 +166,36 @@ export function createFpvControls(
 
   const held = (codes: string[]) => (codes.some((code) => keys.has(code)) ? 1 : 0);
 
+  /**
+   * Take the pointer if we can, and say nothing if we cannot.
+   *
+   * **Not `controls.lock()`.** That drops the promise `requestPointerLock()` returns, and every
+   * browser refuses a lock that has no transient user activation behind it — so on a cold page
+   * load, where the view starts itself, three's version leaves an unhandled rejection in the
+   * console every time. Three tracks the lock from `pointerlockchange` either way, so calling
+   * the DOM method directly costs nothing and lets us swallow the refusal.
+   *
+   * Called from three places, which between them are what "you arrive already walking" means:
+   * when the view goes live (works whenever the player got here by clicking, e.g. the mode
+   * dropdown), on a click, and on the first movement key. The last is the one that matters on a
+   * cold load — the browser will not hand over the pointer until the player does *something*,
+   * and pressing W is that something.
+   */
+  function tryLock() {
+    if (!enabled || !POINTER_LOCK_SUPPORTED || controls.isLocked) return;
+    try {
+      const request = domElement.requestPointerLock() as unknown;
+      if (request instanceof Promise) request.catch(() => {});
+    } catch {
+      // No user activation yet, or the browser is in its post-Escape cooldown. Either way the
+      // click path is still there.
+    }
+  }
+
   function onKeyDown(event: KeyboardEvent) {
-    if (enabled) keys.add(event.code);
+    if (!enabled) return;
+    keys.add(event.code);
+    if (MOVE_KEYS.includes(event.code)) tryLock();
   }
 
   function onKeyUp(event: KeyboardEvent) {
@@ -174,7 +204,7 @@ export function createFpvControls(
 
   function onClick() {
     // Touch has no lock to take — it looks after itself in the pointer handlers below.
-    if (enabled && POINTER_LOCK_SUPPORTED) controls.lock();
+    tryLock();
   }
 
   // --- touch: drag to look ---------------------------------------------------------------
@@ -374,13 +404,18 @@ export function createFpvControls(
   }
 
   function lock() {
-    if (enabled && POINTER_LOCK_SUPPORTED) controls.lock();
+    tryLock();
   }
 
   function setEnabled(next: boolean) {
     if (next === enabled) return;
     enabled = next;
-    if (!enabled) {
+    if (enabled) {
+      // Straight into walking, rather than waiting to be clicked on. Succeeds whenever the
+      // player reached this view by a gesture — switching modes, or coming back from the asset
+      // viewer — and is a no-op on a cold load, where the first movement key picks it up.
+      tryLock();
+    } else {
       keys.clear();
       velocity.set(0, 0);
       stick.set(0, 0);

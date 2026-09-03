@@ -17,7 +17,7 @@ const VIEW = { width: 1280, height: 800 };
 
 /** Poses are station-local: the camera is a child of `stationRig`. */
 const POSES = [
-  { name: '1-spawn', note: 'where you arrive, behind the couch' },
+  { name: '1-spawn', note: 'where you arrive: head of the stairs, cap window ahead' },
   { name: '2-nose', pos: [0, 1.78, -5.2], look: [0, 1.5, -12] },
   { name: '3-lounge-fwd', pos: [0, 1.6, -0.4], look: [0, 1.2, -12] },
   { name: '4-aft-fwd', pos: [0, 1.6, 5.4], look: [0, 1.5, -12] },
@@ -32,7 +32,15 @@ const POSES = [
   // The two the couch exists for: standing in the mouth of the U, and looking back at it.
   { name: '13-in-the-U', pos: [0, 1.78, -5.3], look: [0, 1.4, -12] },
   { name: '14-couch-back', pos: [0, 1.9, -7.2], look: [0, 1.0, -1.0] },
-  { name: '15-stair-down', pos: [3.5, 4.0, 1.4], look: [1.5, 0.6, -6.0] }
+  { name: '15-stair-down', pos: [3.5, 4.0, 1.4], look: [1.5, 0.6, -6.0] },
+  // Outside. The station's silhouette is the one thing about it nobody aboard can ever see —
+  // there is no exterior view in the site — so every previous shape mistake (the open tail, the
+  // spike of a nose) was found by accident from inside, late. `pose()` takes station-local
+  // coordinates and the camera is a child of the rig, so standing off the hull costs nothing.
+  { name: '16-outside-bow', pos: [-13, 6.5, -13], look: [0.5, 2.6, 0.5], note: 'the concept art\'s own 3/4' },
+  { name: '17-outside-side', pos: [-24, 3.2, -0.4], look: [0, 3.2, -0.4], note: 'profile silhouette' },
+  { name: '18-outside-nose', pos: [0, 3.0, -20], look: [0, 3.0, 0], note: 'the cap window head-on' },
+  { name: '19-outside-plan', pos: [-5, 22, -0.4], look: [0, 1.5, -0.4], note: 'the ovoid in plan' }
 ];
 
 

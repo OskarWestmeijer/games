@@ -41,7 +41,7 @@ export interface Station {
   decks: Deck[];
   /** Furniture footprints in station-space XZ, each tagged with the storey it stands on. */
   obstacles: LeveledObstacle[];
-  spawn: { x: number; y: number; z: number; yaw: number; level: number };
+  spawn: { x: number; y: number; z: number; yaw: number; pitch: number; level: number };
   /** Built against the flight state, because the console's labels read it. */
   targets(flight: Flight, radio: { available: boolean; isOn(): boolean; toggle(): void }): InteractionTarget[];
   /** The bridge's hologram. Driven from the render loop, which is the only thing that has the rig. */
@@ -87,31 +87,24 @@ export function buildStation(options: StationOptions): Station {
   // Four warm points used to sit under the crown at z = -1.0 and 2.2, which is inside the
   // canopy — a lamp floating in a window, and a bright one at that, right where the planet is.
   //
-  // What replaces them is the two places there is still structure. The **seam hoop** at
-  // `NOSE_Z` is where the glass meets the shell and is the last real frame in the hall; a pair
-  // hung off it throws the length of the room from behind you as you look out. The **floor
-  // line** is the other, and it is the reference sheet's own answer — lighting integrated along
-  // the walls, at knee height, washing up off the deck. Between them the middle of the hall is
-  // deliberately left dim: the window is the thing in this room.
+  // What replaces them is the one place there is still structure: the **seam hoop** at
+  // `NOSE_Z`, where the glass meets the shell and the last real frame in the hall. A pair hung
+  // off it throws a little warmth the length of the room from behind you as you look out, kept
+  // low so it reads as a fitting rather than a floodlight. The lit rim along the floor line is
+  // left to be exactly that — a `MeshBasicMaterial` line the bloom pass turns into a glow —
+  // with no point light behind it any more: it was reading as the room's main light source,
+  // which is backwards. The planet is meant to be that; see `planetShine` below. The middle of
+  // the hall stays deliberately dim: the window is the thing in this room.
   for (const x of [-2.6, 2.6]) {
-    const lamp = new THREE.PointLight(0xffc39a, 15, 15, 2);
+    const lamp = new THREE.PointLight(0xffc39a, 5, 10, 2);
     lamp.position.set(x, layout.roofAt(layout.NOSE_Z) - 2.0, layout.NOSE_Z);
     group.add(lamp);
   }
 
-  // Down at the lit rim, which is a `MeshBasicMaterial` and so lights nothing by itself. These
-  // are what make it read as a source rather than as a bright stripe painted on the floor.
-  for (const z of [-0.4, -4.6]) {
-    for (const side of [-1, 1]) {
-      const lamp = new THREE.PointLight(0xffb877, 6, 8, 2);
-      lamp.position.set(side * (layout.halfWidthAt(z, 0) - 0.4), 0.35, z);
-      group.add(lamp);
-    }
-  }
-
-  // Cold light spilling in through the nose, so the hall reads as lit by the planet. Aimed aft
-  // from the glass, which is what puts a rim on the bridge's front edge.
-  const planetShine = new THREE.DirectionalLight(0x8fc6ff, 0.9);
+  // Cold light spilling in through the nose, so the hall reads as lit by the planet rather than
+  // by its own fittings — the point of taking the floor lamps out above. Aimed aft from the
+  // glass, which is what puts a rim on the bridge's front edge.
+  const planetShine = new THREE.DirectionalLight(0x8fc6ff, 1.6);
   planetShine.position.set(0, 2.6, layout.Z_TIP);
   planetShine.target.position.set(0, 1.3, 1.6);
   group.add(planetShine);
@@ -153,9 +146,11 @@ export function buildStation(options: StationOptions): Station {
     obstacles,
     spawn: {
       x: layout.SPAWN.x,
-      y: 0,
+      // The storey's floor height, not zero: the spawn is on the mezzanine now.
+      y: layout.SPAWN.y,
       z: layout.SPAWN.z,
       yaw: layout.SPAWN.yaw,
+      pitch: layout.SPAWN.pitch,
       level: layout.SPAWN.level
     },
     targets,

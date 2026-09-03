@@ -1,13 +1,23 @@
 import * as THREE from 'three';
 import { arcDecks, flatDeck, regularRegion, type Deck } from '../regions';
-import { NOSE_Z, Z_TAIL, floorOutline, halfWidthAt, outlineAt, roofAt, wallArc } from './hull';
+import {
+  NOSE_CAP_Z,
+  NOSE_Z,
+  Z_TAIL,
+  floorOutline,
+  halfWidthAt,
+  outlineAt,
+  roofAt,
+  wallArc
+} from './hull';
 
 /**
  * The bauplan, as data.
  *
- * **One lofted hull, two storeys.** A teardrop: a closed round bulb aft where the bridge is,
- * tapering forward to a point, and glazed over its whole forward two thirds. The shape itself
- * lives in `hull.ts`; this file says what is *in* it and where you may stand.
+ * **One lofted hull, two storeys.** An ovoid: a closed round bulb aft where the bridge is,
+ * holding its beam forward through the hall and closing into a blunt, glazed cap at the nose,
+ * glazed over its whole forward two thirds. The shape itself lives in `hull.ts`; this file says
+ * what is *in* it and where you may stand.
  *
  * - the **lounge** forward, in the glass: a raised dais with a U of couch open to the window,
  *   a low table in the middle of it, and the radio that switches the music on,
@@ -57,8 +67,11 @@ export const BRIDGE = {
  * wall it stands against rather than a helix that happens to be near one — nothing here is a
  * position, only a length and two clearances. Move the hull and the stairs move with it.
  *
- * That circle comes out huge: about 21 m of radius against a 10 m beam, because the flank of a
- * teardrop is nearly straight amidships. **That is the correct answer**, and the shape an
+ * That circle comes out huge: 26 m of radius against a 10 m beam, because the flank of an ovoid
+ * is nearly straight amidships — it bows out by 11 cm over the whole 4.8 m of the flight. (It was
+ * 21 m when the nose still tapered to a point; blunting it flattened this wall further, and the
+ * flight followed on its own, which is the whole reason it is fitted rather than placed.)
+ * **That is the correct answer**, and the shape an
  * earlier version got wrong: a 3.4 m helix standing in the open middle of the floor, which
  * walled off the centre of the hall, put its outer rail 0.48 m through the hull the first time
  * it was drawn, and needed a well bitten out of the mezzanine to come up through.
@@ -76,7 +89,7 @@ const STAIR_FOOT_Z = -3.0;
 /**
  * How wide the flight is drawn, and how far the walkable band is held off its inner edge, clear
  * of the railing. The flight is generous because the hull leans in over the top of it: the band
- * is 1.39 m across at the foot and only 0.68 at the head, and narrowing the flight narrows the
+ * is 1.45 m across at the foot and only 0.68 at the head, and narrowing the flight narrows the
  * head of it first.
  */
 const STAIR_WIDTH = 1.8;
@@ -109,7 +122,7 @@ export function onStairArc(r: number, t: number): THREE.Vector2 {
  * hull, and **a function of `t` rather than one number, which is the whole point.**
  *
  * The flight climbs into the part of the hull that leans in, so the limit tightens as you go up:
- * at the foot the eye may be 3.95 out, at the head only 3.86 with the wall itself at 4.86.
+ * at the foot the eye may be 4.31 out, at the head only 3.87 with the wall itself at 4.86.
  * Taking the worst of those and applying it the length of the flight — which is what this did
  * when it returned a single radius — leaves the *floor* deck reaching further outboard than the
  * stair does at the bottom, in exactly the place where the treads are ankle high. Walk along the
@@ -155,33 +168,77 @@ export const STAIR_TOP_X = onStairArc(STAIR_INNER, 1).x;
  * The radius is bounded by the hull. At 2.3 about z = -4.2 the forward edge lands at z = -6.5,
  * where the floor is 2.64 from the centreline; much bigger or much further forward and the dais
  * runs out through the glass.
+ *
+ * **`couchInner` and `tableRadius` are a clearance, not a taste.** The pocket you stand in is the
+ * gap between the table and the seats, and the player is a point tested against both inflated by
+ * `PLAYER_RADIUS` — so the ring is only `couchInner - tableRadius - 2 * 0.32` wide. At the first
+ * numbers (1.35 and 0.5) that came to 0.21 m, and once the table's own footprint and the couch's
+ * box chain had eaten their share there was nothing left: you could reach the mouth and the near
+ * edge of the table and go no further, which is not a lounge you can be in. 1.45 and 0.38 give
+ * 0.49 m, enough to walk round the table, and they buy it *without* growing `couchOuter` or the
+ * dais — the station is meant to be tight. Change either and re-run `dev/walk.mjs`.
  */
 export const LOUNGE = {
   x: 0,
   z: -4.2,
   daisRadius: 2.3,
   daisHeight: 0.18,
-  couchInner: 1.35,
+  couchInner: 1.45,
   couchOuter: 2.05,
   seatHeight: 0.42,
   backHeight: 0.86,
   /** How much of the circle is left out, centred on -Z. */
   openAngle: THREE.MathUtils.degToRad(100),
-  tableRadius: 0.5,
+  tableRadius: 0.38,
   tableHeight: 0.38
 };
 
 /**
- * Where the player is standing when they arrive: on the floor a step behind the dais, facing the
- * window over the back of the couch. The opening frame is the lounge, the table and the whole
- * glazed nose with the planet in it — the shot the reference sheet labels "view from lounge",
- * and the reason the couch was moved forward in the first place.
+ * Where the player is standing when they arrive: **at the head of the stairs, on the bridge**,
+ * looking forward down the length of the hall and out through the nose.
  *
- * It used to be at a desk in the nose. There is no desk. It has to stay outside the couch's
- * footprints once those are inflated by the player radius, which the aft-most of them reaches
- * z = -1.83 to do.
+ * This is the one viewpoint that has the whole station in it at once. From the bridge you are
+ * four metres up and eleven metres back, so the hall reads as a *room* — the mezzanine's edge in
+ * front of you, the flight dropping away to starboard, the lounge and its lit dais below and to
+ * port, and the cap window with the planet in it dead ahead. From the lounge, where it used to
+ * be, you see the window and almost nothing else of the place you are standing in.
+ *
+ * **Nothing here is a coordinate.** The position is one stride inboard of the flight's inner
+ * edge and one stride aft of where it arrives, so it follows the staircase, which follows the
+ * wall, which follows the hull. The aim is a `lookAt` at the **middle of the cap window** — which
+ * is what "watching outside towards the planet" means when the window is a round one — and the
+ * lounge falls into the lower left of the frame on its own, 6.5 degrees off the axis and 14 down,
+ * against a vertical field of 65.
+ *
+ * It has to stay clear of the console, whose footprint inflated by the player radius reaches
+ * x = 1.62 and z = 2.11; at x = 3.4 it is not close.
+ *
+ * It used to be at a desk in the nose, then on the floor behind the couch. There is no desk, and
+ * the couch is better looked *at* than stood behind.
  */
-export const SPAWN = { x: 0.8, z: -1.1, yaw: -0.1, level: 0 };
+const SPAWN_INBOARD = 0.35;
+const SPAWN_AFT = 0.7;
+const SPAWN_X = STAIR_TOP_X + SPAWN_INBOARD;
+const SPAWN_Z = BRIDGE.frontZ + SPAWN_AFT;
+
+/** The point the arriving camera is aimed at: the centre of the round window in the nose. */
+const SPAWN_TARGET = { x: 0, y: roofAt(NOSE_CAP_Z) / 2, z: NOSE_CAP_Z };
+
+/**
+ * Yaw and pitch of a look from the spawn to that target. Yaw is measured the way three.js does
+ * it — a camera at yaw 0 looks down -Z, and positive yaw swings that towards +X — which is why
+ * the arguments come out as (eye - target) rather than the other way round.
+ */
+const SPAWN_REACH = Math.hypot(SPAWN_X - SPAWN_TARGET.x, SPAWN_Z - SPAWN_TARGET.z);
+
+export const SPAWN = {
+  x: SPAWN_X,
+  y: BRIDGE.y,
+  z: SPAWN_Z,
+  yaw: Math.atan2(SPAWN_X - SPAWN_TARGET.x, SPAWN_Z - SPAWN_TARGET.z),
+  pitch: Math.atan2(SPAWN_TARGET.y - (BRIDGE.y + EYE_HEIGHT), SPAWN_REACH),
+  level: 1
+};
 
 /**
  * The navigation console: on the bridge, forward and central. The stairs arrive at the deck's

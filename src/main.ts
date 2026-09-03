@@ -6,10 +6,12 @@ import './style.css';
 import type { createViewer } from './viewer';
 import type { createPlanetView } from './planet-view';
 import type { createPlanetInspect } from './planet-inspect';
+import type { createFlyView } from './fly-view';
 
 type Viewer = ReturnType<typeof createViewer>;
 type PlanetView = ReturnType<typeof createPlanetView>;
 type PlanetInspect = ReturnType<typeof createPlanetInspect>;
+type FlyView = ReturnType<typeof createFlyView>;
 type PlanetModule = typeof import('./planet-view');
 
 const canvas = document.querySelector<HTMLCanvasElement>('#viewport')!;
@@ -24,6 +26,10 @@ const interactPrompt = document.querySelector<HTMLButtonElement>('#interact-prom
 const inspectView = document.querySelector<HTMLDivElement>('#inspect-view')!;
 const inspectCanvas = document.querySelector<HTMLCanvasElement>('#inspect-canvas')!;
 const sunSlider = document.querySelector<HTMLInputElement>('#sun-azimuth')!;
+const flyView = document.querySelector<HTMLDivElement>('#fly-view')!;
+const flyCanvas = document.querySelector<HTMLCanvasElement>('#fly-canvas')!;
+const flySpeed = document.querySelector<HTMLSpanElement>('#fly-speed')!;
+const flyAltitude = document.querySelector<HTMLSpanElement>('#fly-altitude')!;
 const qualitySelect = document.querySelector<HTMLSelectElement>('#texture-quality')!;
 const moveStick = document.querySelector<HTMLDivElement>('#move-stick')!;
 
@@ -109,12 +115,13 @@ async function selectModel(index: number) {
   await viewer?.load(model.url);
 }
 
-type Mode = 'asset' | 'planet' | 'inspect';
+type Mode = 'asset' | 'planet' | 'inspect' | 'fly';
 
 /** Planet view is what the site opens on now, so it takes the bare hash. */
 const MODE_HASHES: Record<Mode, string> = {
   planet: '#',
   inspect: '#inspect',
+  fly: '#fly',
   asset: '#assets'
 };
 
@@ -123,6 +130,7 @@ const MODE_HASHES: Record<Mode, string> = {
 // no reason to pay for any of them until someone actually looks.
 let planet: PlanetView | null = null;
 let inspect: PlanetInspect | null = null;
+let fly: FlyView | null = null;
 let currentMode: Mode = 'planet';
 
 /**
@@ -177,7 +185,11 @@ qualitySelect.addEventListener('change', async () => {
   const switches = [modeSelect, qualitySelect];
   switches.forEach((el) => (el.disabled = true));
   try {
-    await Promise.all([planet?.setTextureQuality(quality()), inspect?.setTextureQuality(quality())]);
+    await Promise.all([
+      planet?.setTextureQuality(quality()),
+      inspect?.setTextureQuality(quality()),
+      fly?.setTextureQuality(quality())
+    ]);
   } finally {
     switches.forEach((el) => (el.disabled = false));
   }
@@ -210,6 +222,7 @@ async function setMode(mode: Mode) {
   assetView.hidden = mode !== 'asset';
   planetView.hidden = mode !== 'planet';
   inspectView.hidden = mode !== 'inspect';
+  flyView.hidden = mode !== 'fly';
   // Nothing in the asset view has a surface map.
   qualitySelect.hidden = mode === 'asset';
   modeSelect.value = mode;
@@ -218,6 +231,7 @@ async function setMode(mode: Mode) {
   if (mode !== 'asset') viewer?.setActive(false);
   if (mode !== 'planet') planet?.stop();
   if (mode !== 'inspect') inspect?.stop();
+  if (mode !== 'fly') fly?.stop();
 
   if (mode === 'asset') {
     await ensureViewer();
@@ -231,6 +245,14 @@ async function setMode(mode: Mode) {
     inspect ??= createPlanetInspect(inspectCanvas, { quality: quality() });
     inspect.setSunAzimuth(Number(sunSlider.value));
     inspect.start();
+  } else if (mode === 'fly') {
+    const { createFlyView } = await import('./fly-view');
+    fly ??= createFlyView(flyCanvas, {
+      quality: quality(),
+      speedLabel: flySpeed,
+      altitudeLabel: flyAltitude
+    });
+    fly.start();
   }
 }
 
@@ -246,6 +268,11 @@ planetCanvas.addEventListener('webglcontextlost', () => {
   // Stop the loop first: it would otherwise keep calling into a dead context every frame.
   planet?.stop();
   planet = null;
+});
+
+flyCanvas.addEventListener('webglcontextlost', () => {
+  fly?.stop();
+  fly = null;
 });
 
 modeSelect.addEventListener('change', () => goTo(modeSelect.value as Mode));

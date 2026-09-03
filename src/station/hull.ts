@@ -5,36 +5,49 @@ import type { Region } from '../regions';
 /**
  * The hull's form, as functions.
  *
- * A teardrop: a round, closed bulb aft where the bridge is, tapering forward over most of its
- * length to a point, curved in **plan and elevation at once**. One profile `f(z)` scales a
- * single elliptical cross-section along the length, and everything about the shape — the
- * floor's outline, the roof height over any point, how far a railing may stand out at *its own*
- * height, where the staircase's wall runs — falls out of that one curve.
+ * An **ovoid**: a round, closed bulb aft where the bridge is, holding its beam forward through
+ * the whole hall and then rounding off into a blunt, domed nose — curved in **plan and elevation
+ * at once**. One profile `f(z)` scales a single elliptical cross-section along the length, and
+ * everything about the shape — the floor's outline, the roof height over any point, how far a
+ * railing may stand out at *its own* height, where the staircase's wall runs — falls out of that
+ * one curve.
  *
  * Nose at -Z, as always: the face `updateOrbit()` aims at the planet.
  *
  *   SIDE (nose left)                     PLAN
- *          __---‾‾‾‾‾‾---__                     __---‾‾‾---__
- *     __-‾‾               ‾‾-_          __--‾‾               ‾‾--__
- *   _-‾       bridge ▬▬▬▬      ‾-_    <                             >
- *  (  ·  ·  ·  ·  ·  ·  ·  ·  ·   )     ‾‾--__               __--‾‾
- *   ‾--------------------------- -‾            ‾‾---___---‾‾
+ *         __--‾‾‾‾‾‾‾‾‾‾‾‾--__                  __--‾‾‾‾‾‾‾‾--__
+ *      _-‾                    ‾-_        __--‾‾                 ‾‾--__
+ *    _-‾        bridge ▬▬▬▬▬      ‾-_   <                              >
+ *   (  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  )   ‾‾--__                 __--‾‾
+ *    ‾--_______________________-- -‾            ‾‾--________--‾‾
+ *      cap                    tail
+ *
+ * **The nose used to come to a point, and the concept sheet does not.** The forward half was a
+ * plain half-ellipse over its whole 10.6 m — a long, even taper into a spike, which meant the
+ * hull was still visibly narrowing everywhere you stood and the canopy's longerons ran into a
+ * needle. `ai-assets/space_station_outside.jpeg` is an egg: full beam most of the way forward,
+ * closing over the last metre and a half into a round glazed cap with a collar round it. Raising
+ * `NOSE_ROUND` from 2 to 3 is that whole change — the profile is the shape.
  *
  * Three properties of the profile are load-bearing, and none of them is aesthetic:
  *
- * - **`sqrt(1 - x²)` is concave, so the floor's outline is convex.** That is what lets the whole
- *   lower deck stay a *single* convex region for `clampToRegions` (see `regions.ts`). Swap in a
- *   profile that is not concave and the floor needs a convex decomposition instead. The aft
- *   curve `sqrt(1 - u⁴)` is concave too — check any replacement, it is not a free choice.
+ * - **`sqrt(1 - x^p)` is concave, so the floor's outline is convex.** That is what lets the whole
+ *   lower deck stay a *single* convex region for `clampToRegions` (see `regions.ts`). The floor's
+ *   half-width is exactly `HW_MAX * sqrt(1 - FLOOR_DROP²) * f(z)` — a constant times the profile —
+ *   so convex floor and concave profile are the same statement. This family is concave for **any
+ *   exponent >= 2** (its second derivative carries a factor of `(p - 1) + u^p (1 - p/2)`, which is
+ *   at least `p/2` on the unit interval), so `NOSE_ROUND` and `TAIL_ROUND` are free to move within
+ *   that. A profile from *outside* the family is not a free choice — check it.
  * - **The profile reaches zero at both ends, so the loft closes itself.** There are no end caps
  *   and no code to add them: `ringPoint` collapses a vanishing section onto the axis, so tip and
  *   tail are sealed by the same triangles that make the sides. The tail used to stop at 84% of
  *   full beam and simply end, which left a 10 m elliptical hole open to space behind the globe —
  *   in shot, every time you turned round on the bridge.
- * - **`TAIL_ROUND` is what keeps the bridge under a roof.** A plain ellipse aft (exponent 2)
- *   starts closing immediately and is short of headroom by the globe. The fourth power
- *   holds the section near full through the whole bridge and then rounds off hard over the last
- *   metre and a half — which is also what a teardrop's fat end actually looks like.
+ * - **The two round-off exponents are what keep each end under a roof.** A plain ellipse
+ *   (exponent 2) starts closing immediately: aft it was short of headroom by the globe, and
+ *   forward it left the lounge with 2.6 m of half-width at the front edge of its own dais. Powers
+ *   above two hold the section near full and then round off hard over the last stretch, which is
+ *   both what a teardrop's fat end and what an egg's blunt end actually look like.
  *
  * ### The thing that bites
  *
@@ -77,12 +90,22 @@ const ROOF_MAX = 6.8;
 const FLOOR_DROP = 0.3;
 
 /**
- * How the aft bulb closes: `sqrt(1 - u^TAIL_ROUND)`. Two is a plain ellipse and starts falling
- * away at once; four holds the section near full for the length of the bridge and then rounds
- * off over the last metre and a half. Turning it down costs headroom over the globe, which sits
- * three quarters of the way to the tail.
+ * How each end rounds off: `sqrt(1 - u^ROUND)` over its own run. Two is a plain ellipse and
+ * starts falling away at once; higher powers hold the section near full and then close over the
+ * last stretch.
+ *
+ * **Aft**, four is what keeps the bridge under a roof — turning it down costs headroom over the
+ * globe, which sits three quarters of the way to the tail.
+ *
+ * **Forward**, three is what makes the nose blunt instead of pointed, and it buys the lounge the
+ * room it was short of: at the forward edge of the dais (z = -6.5) the floor goes from 2.64 out
+ * to 3.11 and the roof from 3.69 to 4.34, against a dais 2.3 across. Nothing about the station's
+ * envelope grows — `HW_MAX`, `ROOF_MAX` and both ends stay exactly where they were — the hull
+ * simply stops narrowing so early. Which is also what leaves a cap wide enough to be a window:
+ * see `NOSE_CAP_FRACTION` in `hall.ts`.
  */
 const TAIL_ROUND = 4;
+const NOSE_ROUND = 3;
 
 const HH_MAX = ROOF_MAX / (1 + FLOOR_DROP);
 
@@ -124,7 +147,7 @@ function profile(z: number): number {
     return Math.sqrt(Math.max(0, 1 - u ** TAIL_ROUND));
   }
   const s = (Z_MAX - z) / (Z_MAX - Z_TIP);
-  return Math.sqrt(Math.max(0, 1 - s * s));
+  return Math.sqrt(Math.max(0, 1 - s ** NOSE_ROUND));
 }
 
 export function sectionAt(z: number): Section {
@@ -134,6 +157,32 @@ export function sectionAt(z: number): Section {
   const yc = FLOOR_DROP * hh;
   return { hw, hh, yc, roof: yc + hh };
 }
+
+/**
+ * The z, forward of the fullest section, where the profile is `fraction` of full beam.
+ *
+ * The inverse of the forward branch, and it exists so the nose cap's collar can be **derived
+ * from the hull** the way the staircase is derived from the wall: `hall.ts` asks for the station
+ * where the hull has closed to 62% and puts the collar there, so the cap follows any later change
+ * to `NOSE_ROUND` or to the hull's length instead of drifting off it.
+ */
+export function zForProfile(fraction: number): number {
+  const f = THREE.MathUtils.clamp(fraction, 0, 1);
+  const s = (1 - f * f) ** (1 / NOSE_ROUND);
+  return Z_MAX - s * (Z_MAX - Z_TIP);
+}
+
+/**
+ * Where the nose cap begins: the station at which the hull has closed to `NOSE_CAP_FRACTION` of
+ * full beam, which is where `hall.ts` puts its collar.
+ *
+ * A fraction rather than a z, so the cap stays on the shoulder of the nose whatever `NOSE_ROUND`
+ * or the hull's length does later. It lives here rather than in `hall.ts` because two modules
+ * want it now: the frames that draw the cap, and `SPAWN`, which aims the arriving camera at the
+ * middle of it.
+ */
+export const NOSE_CAP_FRACTION = 0.62;
+export const NOSE_CAP_Z = zForProfile(NOSE_CAP_FRACTION);
 
 /**
  * How far the hull stands out from the centreline at height `y` above the floor. Zero once `y`
@@ -158,16 +207,12 @@ export function roofAt(z: number): number {
 }
 
 /**
- * One ring: the arc of the section's ellipse **above the floor**, from the starboard floor edge
- * up over the crown and down to the port one.
+ * One point on a ring: `t` runs 0..1 from the starboard floor edge, **up over the crown**, down
+ * to the port one — the arc of the section's ellipse above the floor plate, and the only part of
+ * the hull anyone aboard can see. Constant `t` traced along Z is a **longeron**; see the frames
+ * in `hall.ts`, which is why this is a point function and not just `ringAt`.
  *
- * Only the part above y = 0 is ever built. Nothing below the floor plate can be seen from
- * inside, and the player can never leave, so the keel is simply not modelled — which halves the
- * hull's geometry and removes any question about what the underside looks like.
- */
-/**
- * One point on a ring: `t` runs 0..1 from the starboard floor edge, up over the crown, down to
- * the port one. Constant `t` traced along Z is a **longeron** — see the frames in `hall.ts`.
+ * `keelPoint` is the rest of the same ellipse.
  */
 export function ringPoint(z: number, t: number): THREE.Vector3 {
   const { hw, hh, yc } = sectionAt(z);
@@ -179,10 +224,51 @@ export function ringPoint(z: number, t: number): THREE.Vector3 {
   return new THREE.Vector3(hw * Math.sin(a), yc + hh * Math.cos(a), z);
 }
 
+/**
+ * One point on a **keel** ring: the same section's ellipse *below* the floor plane, running from
+ * the starboard floor edge under the bottom to the port one. The complement of `ringPoint`, so
+ * the two together close the section.
+ *
+ * **This exists only to be seen from outside.** For most of the station's life nothing below the
+ * floor plate was modelled at all — the player can never leave, so it halved the hull's geometry
+ * and removed any question about what the underside looked like. The first exterior shot answered
+ * that question anyway: a station sliced off flat along its waterline, a half-egg on a plate,
+ * where `space_station_outside.jpeg` is a closed ovoid you could roll. It costs one more loft and
+ * nothing indoors — the floor plate hides every triangle of it.
+ */
+export function keelPoint(z: number, t: number): THREE.Vector3 {
+  const { hw, hh, yc } = sectionAt(z);
+  if (hh <= 1e-4) return new THREE.Vector3(0, 0, z);
+  const floorAngle = Math.acos(THREE.MathUtils.clamp(-yc / hh, -1, 1));
+  const a = floorAngle + (2 * Math.PI - 2 * floorAngle) * THREE.MathUtils.clamp(t, 0, 1);
+  return new THREE.Vector3(hw * Math.sin(a), yc + hh * Math.cos(a), z);
+}
+
 export function ringAt(z: number, points = RING_POINTS): THREE.Vector3[] {
   const ring: THREE.Vector3[] = [];
   for (let i = 0; i < points; i++) ring.push(ringPoint(z, i / (points - 1)));
   return ring;
+}
+
+export function keelAt(z: number, points = RING_POINTS): THREE.Vector3[] {
+  const ring: THREE.Vector3[] = [];
+  for (let i = 0; i < points; i++) ring.push(keelPoint(z, i / (points - 1)));
+  return ring;
+}
+
+/**
+ * The **whole** section as one closed loop, starboard floor edge up over the crown, round to
+ * port, back under the keel and home — with the first point repeated at the end so a tube swept
+ * along it closes.
+ *
+ * Only the collars want this. Everything else in the station is authored from the inside, where
+ * half the loop is under the floor plate and invisible; a collar is a ring round the *outside* of
+ * the hull, and one that stopped at the waterline would be a band drawn on the top half of an egg.
+ */
+export function sectionRing(z: number, points = RING_POINTS): THREE.Vector3[] {
+  const top = ringAt(z, points);
+  const bottom = keelAt(z, points).reverse().slice(1, -1);
+  return [...top, ...bottom, top[0].clone()];
 }
 
 /** The z of every station the loft is sampled at, tip to tail. */
@@ -260,14 +346,14 @@ export interface WallArc {
  *
  * A circle through the two ends and the midpoint, rather than a least-squares fit, because over
  * any run short enough to be a flight of stairs the two are indistinguishable: along the
- * staircase's own 7 m the three-point circle is never more than 7 mm off the hull. Do not
+ * staircase's own 4.8 m the three-point circle is never more than 13 mm off the hull. Do not
  * extend this to a run that reaches round the tail, where the outline stops being an arc and
  * the error grows without warning.
  *
- * The radius is deliberately huge — 26 m against a 12 m beam — because the flank of a teardrop
- * *is* nearly straight amidships. That is what hugging this wall looks like, and a tighter
- * curve would be a spiral staircase standing in the room next to the wall rather than a flight
- * running along it.
+ * The radius is deliberately huge — 26 m against a 10 m beam — because the flank of an ovoid
+ * *is* nearly straight amidships: it bows out by 11 cm over the whole run of the flight. That is
+ * what hugging this wall looks like, and a tighter curve would be a spiral staircase standing in
+ * the room next to the wall rather than a flight running along it.
  */
 export function wallArc(fromZ: number, toZ: number, side: 1 | -1 = 1): WallArc {
   const at = (z: number) => new THREE.Vector2(side * floorHalfWidthAt(z), z);
@@ -289,27 +375,31 @@ export function wallArc(fromZ: number, toZ: number, side: 1 | -1 = 1): WallArc {
 }
 
 /**
- * Lofts the rings into a surface, split at `NOSE_Z` into an opaque shell aft and glass forward.
+ * Lofts the hull into three surfaces: above the floor, an opaque shell aft of `NOSE_Z` and glass
+ * forward of it; below the floor, the keel in one opaque piece the whole length.
  *
- * The two halves **share the ring at the seam**, so there is no gap and no double-drawn band
- * however coarsely the hull is sampled. Both are `DoubleSide`, per the house rule: the player
- * can never get outside, so solving every triangle's winding buys nothing and a silently
- * missing panel costs a lot.
+ * The two halves above the floor **share the ring at the seam**, so there is no gap and no
+ * double-drawn band however coarsely the hull is sampled. The keel crosses no seam — the glazing
+ * is a *canopy*, and the reference sheet's belly is plain metal tip to tail.
+ *
+ * All three are `DoubleSide`, per the house rule: solving every triangle's winding buys nothing
+ * here and a silently missing panel costs a lot.
  */
 export function buildHullSurface(): THREE.Group {
   const group = new THREE.Group();
   const zs = stations();
   const rings = zs.map((z) => ringAt(z));
+  const keel = zs.map((z) => keelAt(z));
 
-  /** Lofts `rings[from..to]` into one geometry. */
-  function loft(from: number, to: number): THREE.BufferGeometry {
+  /** Lofts `sections[from..to]` into one geometry. */
+  function loft(sections: THREE.Vector3[][], from: number, to: number): THREE.BufferGeometry {
     const position: number[] = [];
     const normal: number[] = [];
     const index: number[] = [];
     const cols = RING_POINTS;
 
     for (let i = from; i <= to; i++) {
-      for (const p of rings[i]) {
+      for (const p of sections[i]) {
         position.push(p.x, p.y, p.z);
         normal.push(0, 0, 0);
       }
@@ -336,8 +426,11 @@ export function buildHullSurface(): THREE.Group {
   let seam = 0;
   for (let i = 0; i < zs.length; i++) if (zs[i] <= NOSE_Z) seam = i;
 
-  group.add(new THREE.Mesh(loft(0, seam), MATERIALS.glass));
-  group.add(new THREE.Mesh(loft(seam, zs.length - 1), MATERIALS.shell));
+  group.add(new THREE.Mesh(loft(rings, 0, seam), MATERIALS.glass));
+  group.add(new THREE.Mesh(loft(rings, seam, zs.length - 1), MATERIALS.shell));
+  // The keel is one piece and opaque the whole way: the glazing is a *canopy*, and the reference
+  // sheet's belly is plain metal from tip to tail. It takes no seam because it crosses none.
+  group.add(new THREE.Mesh(loft(keel, 0, zs.length - 1), MATERIALS.shell));
 
   return group;
 }

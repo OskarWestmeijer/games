@@ -52,5 +52,17 @@ export const MATERIALS = {
    * a cold blue planet, which left nothing for the contrast in "real outside, warm inside" to
    * work with. Same magnitude, so it blooms exactly as hard as it did.
    */
-  led: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.8, 1.24, 0.72) })
+  led: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.8, 1.24, 0.72) }),
+  /**
+   * The same warm strip, deliberately **under** the bloom threshold, for anything at floor level.
+   *
+   * The rim along the floor line and the rings in the dais are the two longest runs of strip in
+   * the station and they are directly under the eye, so on the bright `led` they bloomed into
+   * the brightest thing in the frame — a floor lit like a runway, with the planet behind it
+   * coming a distant second. That is backwards: the window is the light source in this room.
+   * Below 1.0 they get no halo at all and read as what they are, a line marking the edge of the
+   * deck. Anything mounted high — the roof strips, the bridge's edge — stays on `led`, where a
+   * bloom is a light overhead rather than a glare underfoot.
+   */
+  ledFloor: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.34, 0.2) })
 };

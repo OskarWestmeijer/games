@@ -77,15 +77,18 @@ export function createPlanetView(canvas: HTMLCanvasElement, options: PlanetViewO
 
   const flight = createFlight();
 
-  // At the desk on the lower floor, as if you had just got up from the chair. Moving the eye a
-  // few metres does not disturb the framing: the horizon is an angle about the optical axis and
-  // the planet is 300 units away, so the limb sits where it always did. What changes is how
-  // much of the glass is in view — and, going up to the bridge, where in it the limb lands.
-  // See "The two storeys want different horizons" in CLAUDE.md.
+  // At the head of the stairs, on the bridge, looking down the hall and out through the nose.
+  // Moving the eye a few metres does not disturb the framing: the horizon is an angle about the
+  // optical axis and the planet is 300 units away, so the limb sits where it always did. What
+  // changes is how much of the glass is in view — and, up here on the bridge, where in it the
+  // limb lands. See "The two storeys want different horizons" in CLAUDE.md.
   camera.position.set(station.spawn.x, station.spawn.y + EYE_HEIGHT, station.spawn.z);
-  // YXZ, matching `PointerLockControls`: any other order turns an initial yaw into roll.
+  // YXZ, matching `PointerLockControls`: any other order turns an initial yaw into roll, and
+  // the spawn carries a pitch now — it is aimed at the middle of the cap window, which is below
+  // the eye from up here.
   camera.rotation.order = 'YXZ';
   camera.rotation.y = station.spawn.yaw;
+  camera.rotation.x = station.spawn.pitch;
   stationRig.add(camera);
 
   // The only lights not owned by the station. Everything else is staged in `station/index.ts`

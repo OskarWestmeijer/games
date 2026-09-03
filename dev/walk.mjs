@@ -21,25 +21,38 @@ import { chromium } from 'playwright';
  * the floor under the route, not the pathfinding.
  */
 const ROUTE = [
-  { name: 'spawn', to: [0.8, -1.1] },
-  // Round the dais to port, then in through the mouth of the U to the table — the pocket in the
-  // couch is walkable on purpose, and the radio is reached from it.
-  { name: 'round the dais, port', to: [-2.9, -4.4] },
-  { name: 'to the mouth of the U', to: [-0.4, -5.6] },
-  { name: 'into the pocket, at the table', to: [0.0, -4.9] },
-  { name: 'back out and aft, starboard', to: [2.6, -2.6] },
-  { name: 'to the foot of the stairs', to: [3.1, -2.9] },
-  // Along the flight rather than at its top: you cannot board a staircase halfway up, so a
-  // straight line to the head of it tests the step guard, not the stairs.
-  { name: 'up the flight, lower half', to: [3.7, -1.2] },
-  { name: 'up the flight, top', to: [3.6, 1.5] },
-  { name: 'off the top onto the deck', to: [3.2, 2.4] },
+  // You arrive on the bridge now, at the head of the stairs — so the tour starts upstairs, goes
+  // down, does the lounge, and comes back up. Both directions on the flight get walked either
+  // way, which is the half of this that catches a step-guard bug.
+  { name: 'spawn', to: [3.42, 2.5] },
   { name: 'behind the console', to: [0, 3.9] },
   { name: 'round the globe, port', to: [-2.0, 5.2] },
   { name: 'back to the head of the stairs', to: [3.4, 2.1] },
   { name: 'down the flight', to: [3.7, -1.2] },
   { name: 'off at the foot', to: [3.0, -3.1] },
-  { name: 'back to the spawn', to: [0.8, -1.1] }
+  // Out into the hall clear of the couch: the straight line from the stair foot passes 2.83 m
+  // from the lounge's centre, against the 2.37 m its outer boxes reach once inflated.
+  { name: 'out into the hall', to: [0.8, -1.1] },
+  // Round the lounge to port and in through the mouth of the U. Every waypoint outside the couch
+  // stays clear of r = 2.37 about (0, -4.2) — `couchOuter` plus the player radius — because the
+  // ring is an obstacle you walk *around*, and a straight line that cuts the corner is testing the
+  // push-out rather than the floor.
+  { name: 'down the port side', to: [-2.6, -4.2] },
+  { name: 'round the port bow', to: [-2.7, -5.3] },
+  { name: 'in front of the mouth', to: [-1.3, -6.2] },
+  // The pocket. Standing at the table facing the window is the shot the lounge exists for, and
+  // stepping round the table to starboard is what proves the ring is a ring and not a dead end —
+  // it sealed itself once, and wedged this harness in a sliver it could not push out of.
+  { name: 'in to the table', to: [0, -5.0] },
+  { name: 'round the table, starboard', to: [0.9, -4.2] },
+  { name: 'back out through the mouth', to: [0.4, -6.1] },
+  { name: 'round the starboard bow', to: [2.5, -5.8] },
+  { name: 'to the foot of the stairs', to: [3.1, -2.9] },
+  // Along the flight rather than at its top: you cannot board a staircase halfway up, so a
+  // straight line to the head of it tests the step guard, not the stairs.
+  { name: 'up the flight, lower half', to: [3.7, -1.2] },
+  { name: 'up the flight, top', to: [3.6, 1.5] },
+  { name: 'back to the spawn', to: [3.42, 2.5] }
 ];
 
 

@@ -11,6 +11,7 @@
       <select id="mode-select">
         <option value="planet">Planet View</option>
         <option value="inspect">Planet Inspector</option>
+        <option value="fly">Flight View</option>
         <option value="asset">Asset View</option>
       </select>
       <select id="texture-quality" title="Resolution of the planet's surface maps">
@@ -52,10 +53,24 @@
           to move.
         -->
         <div id="planet-controls" class="hud">
-          <span class="hud-note fine-only">Click to look around · WASD to move · Esc to release</span>
+          <span class="hud-note fine-only">Click or press W to look around · WASD to move · Esc to release</span>
           <span class="hud-note coarse-only">Drag to look · stick to move</span>
         </div>
         <div id="move-stick" aria-hidden="true"><div id="move-knob"></div></div>
+        <p class="planet-credit">
+          Surface maps from
+          <a href="https://visibleearth.nasa.gov/" target="_blank" rel="noopener">NASA Visible Earth</a>
+          (public domain), downscaled.
+        </p>
+      </div>
+      <div id="fly-view" class="view" hidden>
+        <canvas id="fly-canvas"></canvas>
+        <div id="fly-controls" class="hud">
+          <span><span id="fly-speed" class="hud-value">45</span> u/s</span>
+          <span><span id="fly-altitude" class="hud-value">120</span> alt</span>
+          <span class="hud-note fine-only">Arrows to fly · <kbd>A</kbd><kbd>D</kbd> rudder · <kbd>W</kbd> faster · <kbd>S</kbd> slower</span>
+          <span class="hud-note coarse-only">Needs a keyboard</span>
+        </div>
         <p class="planet-credit">
           Surface maps from
           <a href="https://visibleearth.nasa.gov/" target="_blank" rel="noopener">NASA Visible Earth</a>
