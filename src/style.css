@@ -250,6 +250,70 @@ body {
   }
 }
 
+/* --- messages from the command post ---------------------------------------------------------
+   A line at the top of the screen for a few seconds, then gone. Warm and amber, because it is
+   ours — the incoming bars in the corner are theirs, and cold green. It says who is talking,
+   because "we are under attack" wants somebody behind it.
+
+   No `hidden` juggling: the panel is always in the layout at opacity 0, which is what lets the
+   fade out actually run. It never takes a click either way. */
+#fly-message {
+  position: absolute;
+  top: 1.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 1rem 0.55rem 0.75rem;
+  background: linear-gradient(rgba(14, 10, 6, 0.92), rgba(14, 10, 6, 0.78));
+  border: 1px solid rgba(255, 181, 107, 0.55);
+  border-radius: 4px;
+  box-shadow: 0 0 18px rgba(255, 181, 107, 0.14);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
+}
+
+/* Snapped on and faded off: an arrival should land, a departure should get out of the way. */
+#fly-message.show {
+  opacity: 1;
+  transition: none;
+}
+
+.message-icon {
+  width: 1.9rem;
+  height: 1.9rem;
+  flex-shrink: 0;
+  fill: none;
+  stroke: #ffcf7a;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.message-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.message-from {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(255, 207, 122, 0.7);
+}
+
+.message-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffe6c2;
+}
+
 /* --- the incoming bars ---------------------------------------------------------------------
    One bar per landing ship on its way down, stacked at the top of the screen: what it is coming
    down on, how long it has left, and a fill that drains as it descends. Loud on purpose — this

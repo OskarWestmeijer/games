@@ -72,6 +72,21 @@
         <div id="fly-alerts" hidden>
           <span class="alert-caption">Incoming</span>
         </div>
+        <!-- A line from the command post, top and centre, for a few seconds. Its text is
+             written by fly-view.ts; the icon is a stand-in of the station itself — a ring, a
+             spine and two solar wings — and is deliberately the crudest thing on screen until
+             there is real art for it. -->
+        <div id="fly-message">
+          <svg class="message-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="6.5" />
+            <path d="M12 3.5 v17 M3 12 h3.2 M17.8 12 H21" />
+            <path d="M1.5 9.5 h3 v5 h-3 z M19.5 9.5 h3 v5 h-3 z" />
+          </svg>
+          <span class="message-body">
+            <span class="message-from">Command post</span>
+            <span class="message-text"></span>
+          </span>
+        </div>
         <!-- Where the nose is pointing, which is not the middle of the screen: the chase camera
              is aimed a little below the nose so the planet stays in frame. Placed every frame
              by fly-view.ts, which also hides it when the nose swings behind the camera. -->

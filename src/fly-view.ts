@@ -163,6 +163,14 @@ const SHIP_MARK = 2.6;
 const URGENT_SECONDS = 10;
 
 /**
+ * What the command post says when you arrive, and how long it stays up. Short, because a line
+ * you have already read is in the way of the game — it snaps on and fades off, and the flight
+ * has not waited for it.
+ */
+const BRIEFING = 'We are under attack — shoot down the landing ships!';
+const MESSAGE_SECONDS = 5;
+
+/**
  * How quickly the minimap marker's heading follows the track it is leaving. It is smoothed
  * because it comes from the *difference* between two positions a frame apart — a small number
  * over a variable dt, which a marker pointed straight at it would jitter on.
@@ -257,6 +265,12 @@ export interface FlyViewOptions {
    * `landerLayer`, and for the same reason.
    */
   alertPanel?: HTMLElement | null;
+  /**
+   * The command post's message panel and the line inside it. This module writes the text and
+   * shows the panel for a few seconds; everything else about it is markup and CSS.
+   */
+  messagePanel?: HTMLElement | null;
+  messageText?: HTMLElement | null;
   /** The aiming reticle, placed over wherever the nose is pointing. */
   reticle?: HTMLElement | SVGElement | null;
 }
@@ -427,6 +441,20 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   const basis = new THREE.Matrix4();
   const muzzle = new THREE.Vector3();
   const aim = new THREE.Vector3();
+  /** Seconds of screen time the current message has left. Counted down in `update()`, so it
+   *  stops with the view rather than running on behind a parked scene. */
+  let messageLeft = 0;
+
+  /**
+   * Puts a line on screen from the command post. Public in spirit — the next thing to say here
+   * is what happens when a ship gets through, which is a message and not a mechanic yet.
+   */
+  function say(text: string, seconds = MESSAGE_SECONDS) {
+    if (!options.messagePanel || !options.messageText) return;
+    options.messageText.textContent = text;
+    options.messagePanel.classList.add('show');
+    messageLeft = seconds;
+  }
 
   function reset() {
     plane.position.copy(START_DIRECTION).multiplyScalar(START_RADIUS);
@@ -537,6 +565,12 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     const radius = plane.position.length();
     const clamped = THREE.MathUtils.clamp(radius, MIN_RADIUS, MAX_RADIUS);
     if (clamped !== radius) plane.position.multiplyScalar(clamped / radius);
+
+    if (messageLeft > 0) {
+      messageLeft -= dt;
+      // Dropping the class hands it back to the transition, which is the fade.
+      if (messageLeft <= 0) options.messagePanel?.classList.remove('show');
+    }
 
     // The trigger. `forward` is the nose as it is *after* the level-hold has had its say, which
     // is the direction the aeroplane is actually pointing and so the direction it fires in. The
@@ -796,6 +830,7 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     if (running) return;
     running = true;
     resize(); // the canvas had no size while the view was hidden
+    say(BRIEFING);
     clock.start();
     tick();
   }
@@ -805,6 +840,10 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     running = false;
     cancelAnimationFrame(rafId);
     keys.clear();
+    // Nothing counts down while the view is parked, so a message would otherwise still be
+    // sitting there on the way back in.
+    messageLeft = 0;
+    options.messagePanel?.classList.remove('show');
     // Bolts in the air would otherwise be hanging there, mid-flight, on the way back in.
     bolts.clear();
     clock.stop();

@@ -36,6 +36,8 @@ const flyPost = document.querySelector<SVGSVGElement>('#minimap-post')!;
 const flyReticle = document.querySelector<HTMLDivElement>('#fly-reticle')!;
 const flyPaths = document.querySelector<SVGSVGElement>('#minimap-paths')!;
 const flyAlerts = document.querySelector<HTMLDivElement>('#fly-alerts')!;
+const flyMessage = document.querySelector<HTMLDivElement>('#fly-message')!;
+const flyMessageText = document.querySelector<HTMLSpanElement>('#fly-message .message-text')!;
 const qualitySelect = document.querySelector<HTMLSelectElement>('#texture-quality')!;
 const moveStick = document.querySelector<HTMLDivElement>('#move-stick')!;
 
@@ -264,7 +266,9 @@ async function setMode(mode: Mode) {
       postMarker: flyPost,
       reticle: flyReticle,
       landerLayer: flyPaths,
-      alertPanel: flyAlerts
+      alertPanel: flyAlerts,
+      messagePanel: flyMessage,
+      messageText: flyMessageText
     });
     fly.start();
   }
