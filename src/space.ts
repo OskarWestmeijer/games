@@ -751,6 +751,35 @@ export interface Space {
   setSunDirection(dir: THREE.Vector3): void;
   /** Swaps in another map set. Resolves once it is on screen. */
   setQuality(quality: TextureQuality): Promise<void>;
+  /**
+   * Where a point in space sits on the surface maps: the same `uv` the planet's own shader
+   * samples them with. `u` runs 0..1 west to east from the left edge of the map — 180° W, the
+   * maps being plain equirectangular — and `v` is 1 at the north pole, 0 at the south.
+   *
+   * Handed out for the flight view's minimap, which draws that same day map flat and needs the
+   * aircraft's ground track on it. It is *derived* from `SphereGeometry`'s own convention
+   * rather than guessed at, which is why it can be trusted to land on the right coastline:
+   *
+   *   x = -r·cos(2πu)·sin(πw),  y = r·cos(πw),  z = r·sin(2πu)·sin(πw),  v = 1 - w
+   *
+   * inverted. Note **in the planet's local frame**, not the world's — that is what makes the
+   * slow axial spin come out in the answer instead of being quietly ignored.
+   */
+  surfaceUv(point: THREE.Vector3, target: THREE.Vector2): THREE.Vector2;
+  /**
+   * The other way round: a latitude and longitude on the planet's surface, at `radius` from its
+   * centre, as a point in **world** space — so a place on the ground stays on that place while
+   * the planet turns underneath it.
+   *
+   * The same `SphereGeometry` convention `surfaceUv` inverts, run forwards. Handed out for the
+   * flight view's landing ships, which aim at a country rather than at a point in space.
+   */
+  worldFromLatLon(
+    latitude: number,
+    longitude: number,
+    radius: number,
+    target: THREE.Vector3
+  ): THREE.Vector3;
 }
 
 export interface EarthMaterial {
@@ -897,6 +926,9 @@ export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions 
   );
   group.add(nebula);
 
+  /** Scratch for `surfaceUv`, which is called every frame by the flight view's minimap. */
+  const localPoint = new THREE.Vector3();
+
   return {
     group,
     ready: surface.ready,
@@ -920,6 +952,32 @@ export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions 
     },
     setQuality(next: TextureQuality) {
       return surface.setQuality(next);
+    },
+    surfaceUv(point: THREE.Vector3, target: THREE.Vector2) {
+      // `update()` above spins the planet, so "where is this on the map" is a question about
+      // the planet's *local* frame. `updateWorldMatrix` first because a caller may well ask
+      // before the renderer has refreshed the matrices this frame — the same trap as
+      // raycasting from a rig that has already moved.
+      planet.updateWorldMatrix(true, false);
+      planet.worldToLocal(localPoint.copy(point)).normalize();
+      const u = Math.atan2(localPoint.z, -localPoint.x) / (Math.PI * 2);
+      const w = Math.acos(THREE.MathUtils.clamp(localPoint.y, -1, 1)) / Math.PI;
+      // `u - floor(u)` rather than a modulo: atan2 is signed, and a negative longitude has to
+      // come back as the east end of the map, not as a negative fraction of it.
+      return target.set(u - Math.floor(u), 1 - w);
+    },
+    worldFromLatLon(latitude: number, longitude: number, radius: number, target: THREE.Vector3) {
+      const phi = ((longitude + 180) / 360) * Math.PI * 2;
+      const theta = ((90 - latitude) / 180) * Math.PI;
+      localPoint
+        .set(
+          -Math.cos(phi) * Math.sin(theta),
+          Math.cos(theta),
+          Math.sin(phi) * Math.sin(theta)
+        )
+        .multiplyScalar(radius);
+      planet.updateWorldMatrix(true, false);
+      return target.copy(planet.localToWorld(localPoint));
     }
   };
 }

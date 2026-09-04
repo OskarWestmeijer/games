@@ -5,6 +5,11 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ATMOSPHERE_RADIUS, PLANET_RADIUS, SUN_DIR, buildSpace } from './space';
 import type { TextureQuality } from './space';
+import { createUfo } from './fly/ufo';
+import { createBolts } from './fly/bolts';
+import type { BoltTarget } from './fly/bolts';
+import { createLanders, LANDING_TIME } from './fly/landers';
+import { createCommandPost } from './fly/command-post';
 
 /**
  * "Flight view": the same world as the other two planet scenes, with a small aeroplane you
@@ -18,6 +23,12 @@ import type { TextureQuality } from './space';
  *
  * Like `planet-inspect.ts` it builds its own `buildSpace()`, so it shares no GPU resources
  * and no sun with the other scenes.
+ *
+ * There is one saucer in the sky, a few landing ships on their way down, an Earth defence
+ * command post going round overhead and a laser on the space bar — see `fly/ufo.ts`,
+ * `fly/landers.ts`, `fly/command-post.ts` and `fly/bolts.ts`. That is the extent of the game in
+ * here: no score, nothing that can shoot back, and the only clock is the forty seconds a landing
+ * ship takes to arrive. What it is all *for* is having somewhere to fly to.
  */
 
 /** Nose is -Z, up is +Y, right is +X — the same convention three's cameras use. */
@@ -118,6 +129,47 @@ const CHASE_FOLLOW = 6.0;
 const CHASE_ROLL_SHARE = 0.65;
 
 /**
+ * The guns, in aircraft-local metres: the wingtips, just ahead of the navigation lights they
+ * sit beside. Mirrored in x and fired alternately, which is what makes a stream of bolts read
+ * as an aeroplane's rather than as a cursor's.
+ */
+const MUZZLE = new THREE.Vector3(4.2, 0.05, -0.6);
+/**
+ * How far down the nose the reticle is projected — the range it is boresighted for.
+ *
+ * It exists because the chase camera does *not* look along the nose: it is aimed a little below
+ * it so the planet stays in the picture, so the middle of the screen is not where the shots go,
+ * and a gun whose aim you cannot see is a guess rather than a gun.
+ *
+ * There is a range in it because the camera sits 3.4 above the nose line, so the angle from the
+ * camera down to a point ahead of the aeroplane depends on how far ahead it is: 1.7° at 100
+ * units, 1.0° at 200, 0.5° at 400. One ring cannot be right at every range — the same boresight
+ * problem a real gunsight has — so it is set for the middle of the range things actually get
+ * shot at, where the residual error is well inside the saucer's own hit radius. The wingtips
+ * straddle it symmetrically and so bias it not at all.
+ */
+const RETICLE_RANGE = 220;
+
+/**
+ * The minimap's SVG overlay is drawn in map fractions — 100 across by 50 down, which is the
+ * panel's own 2:1 — so a longitude is an x and a latitude is a y with nothing in between.
+ */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const MAP_W = 100;
+const MAP_H = 50;
+/** The landing ship's mark on that map, in the same units. */
+const SHIP_MARK = 2.6;
+/** When a countdown stops being information and starts being your problem. */
+const URGENT_SECONDS = 10;
+
+/**
+ * How quickly the minimap marker's heading follows the track it is leaving. It is smoothed
+ * because it comes from the *difference* between two positions a frame apart — a small number
+ * over a variable dt, which a marker pointed straight at it would jitter on.
+ */
+const TRACK_LAG = 0.25;
+
+/**
  * Where the aircraft starts. Low enough that the planet fills the bottom of the frame — the
  * curve of the limb is the whole reason to be here — and still 60 above the atmosphere shell.
  */
@@ -183,6 +235,30 @@ export interface FlyViewOptions {
   /** Live readouts in the HUD pill. Injected, never queried for. */
   speedLabel?: HTMLElement | null;
   altitudeLabel?: HTMLElement | null;
+  /**
+   * The minimap's marker, sitting inside a panel that holds a flat map of the whole world.
+   * Injected like the readouts — `main.ts` is the only file that reaches for DOM ids — and the
+   * panel it is a child of is what supplies the proportions `updateMinimap()` needs.
+   */
+  planeMarker?: HTMLElement | SVGElement | null;
+  /** The minimap's marker for the saucer. Hidden by this module while there isn't one. */
+  ufoMarker?: HTMLElement | SVGElement | null;
+  /** The minimap's marker for the command post, which is always up there. */
+  postMarker?: HTMLElement | SVGElement | null;
+  /**
+   * An empty `<svg>` over the minimap, in which this module draws one approach path and one
+   * mark per landing ship. Handed the container rather than the marks themselves because how
+   * many there are belongs to `fly/landers.ts`, not to the markup.
+   */
+  landerLayer?: SVGElement | null;
+  /**
+   * The banner across the top of the screen. This module appends one countdown per landing ship
+   * to it and hides the whole panel when there is nothing on its way down. Same arrangement as
+   * `landerLayer`, and for the same reason.
+   */
+  alertPanel?: HTMLElement | null;
+  /** The aiming reticle, placed over wherever the nose is pointing. */
+  reticle?: HTMLElement | SVGElement | null;
 }
 
 export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions = {}) {
@@ -225,6 +301,27 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   const plane = buildPlane();
   scene.add(plane);
 
+  // One saucer, drifting; one pool of laser bolts. Both live in world space beside the
+  // aeroplane rather than under it.
+  const ufo = createUfo();
+  scene.add(ufo.group);
+  const landers = createLanders(space);
+  scene.add(landers.group);
+  const post = createCommandPost();
+  scene.add(post.group);
+  const bolts = createBolts();
+  scene.add(bolts.group);
+  /** Built once: the position inside it is the saucer's own live vector. */
+  const ufoTarget: BoltTarget = {
+    position: ufo.position,
+    radius: ufo.hitRadius,
+    hit: () => ufo.hit()
+  };
+  /** What the laser can hit right now. Refilled every frame, never reallocated. */
+  const boltTargets: BoltTarget[] = [];
+  /** Which wingtip fires next. */
+  let muzzleSide = 1;
+
   // Same chain as the other planet scenes: the atmosphere and the nav lights are authored
   // over 1.0 so bloom turns them into light, and `OutputPass` has to stay last.
   const composer = new EffectComposer(renderer);
@@ -243,6 +340,82 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   let yaw = 0;
   let speed = CRUISE_SPEED;
 
+  /** Where the aircraft is on the flat map, 0..1 each way. See `Space.surfaceUv`. */
+  const groundTrack = new THREE.Vector2();
+  /** Smoothed direction of travel *as the map draws it*, in panel widths per second. */
+  let trackX = 0;
+  let trackY = 0;
+  let hasTrack = false;
+  let lastU = 0;
+  let lastV = 0;
+  let heading = 0;
+  /** The minimap panel's own proportions, read in `resize()`. 2:1 unless the CSS says else. */
+  let mapAspect = 2;
+  /** Where the saucer, and each landing ship, is on that same map. */
+  const contactUv = new THREE.Vector2();
+
+  function setLine(line: SVGElement, x1: number, y1: number, x2: number, y2: number) {
+    line.setAttribute('x1', String(x1));
+    line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x2));
+    line.setAttribute('y2', String(y2));
+    line.style.display = '';
+  }
+
+  /**
+   * One countdown per landing ship: a mark the colour of its square on the map, and the seconds
+   * it has left. Built here for the same reason the map's marks are — how many there are is
+   * `LANDER_COUNT`'s business, not the markup's.
+   */
+  const timerRows = options.alertPanel
+    ? landers.all.map(() => {
+        const el = (tag: string, className: string, parent: HTMLElement) => {
+          const node = document.createElement(tag);
+          node.className = className;
+          parent.appendChild(node);
+          return node;
+        };
+        const row = document.createElement('div');
+        row.className = 'fly-alert';
+        row.style.display = 'none';
+        const head = el('div', 'alert-head', row);
+        el('span', 'timer-mark', head);
+        const place = el('span', 'timer-place', head);
+        const value = el('span', 'timer-value', head);
+        // The bar proper: a track that stays put and a fill that runs out of it.
+        const fill = el('div', 'alert-fill', el('div', 'alert-track', row) as HTMLElement);
+        options.alertPanel!.appendChild(row);
+        // `shown` is the last number written: the countdown ticks once a second against a frame
+        // rate sixty times that, so this is what keeps it from rewriting the DOM all day.
+        return { row, place, value, fill, shown: -1, named: '' };
+      })
+    : null;
+
+  /**
+   * One approach path, its wrapped twin, its landing site and its ship mark, per landing ship.
+   * Made here rather than written into `index.html`: it is the same four nodes repeated, and
+   * how many times is `LANDER_COUNT`'s business.
+   */
+  const landerSlots = options.landerLayer
+    ? landers.all.map(() => {
+        const node = (tag: string, className: string) => {
+          const el = document.createElementNS(SVG_NS, tag) as SVGElement;
+          el.setAttribute('class', className);
+          el.style.display = 'none';
+          options.landerLayer!.appendChild(el);
+          return el;
+        };
+        const path = node('line', 'lander-path');
+        const wrap = node('line', 'lander-path');
+        const site = node('circle', 'lander-site');
+        site.setAttribute('r', '1.3');
+        const ship = node('rect', 'lander-ship');
+        ship.setAttribute('width', String(SHIP_MARK));
+        ship.setAttribute('height', String(SHIP_MARK));
+        return [path, wrap, site, ship] as const;
+      })
+    : null;
+
   const forward = new THREE.Vector3();
   const right = new THREE.Vector3();
   const radialUp = new THREE.Vector3();
@@ -252,6 +425,8 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   const levelAxis = new THREE.Vector3();
   const spin = new THREE.Quaternion();
   const basis = new THREE.Matrix4();
+  const muzzle = new THREE.Vector3();
+  const aim = new THREE.Vector3();
 
   function reset() {
     plane.position.copy(START_DIRECTION).multiplyScalar(START_RADIUS);
@@ -264,6 +439,11 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
 
     pitch = roll = yaw = 0;
     speed = CRUISE_SPEED;
+    // The marker's heading is a difference between frames, so it has no meaning across a jump.
+    hasTrack = false;
+    bolts.clear();
+    ufo.spawn(plane.position);
+    landers.reset();
     placeCamera(1);
   }
 
@@ -358,6 +538,27 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     const clamped = THREE.MathUtils.clamp(radius, MIN_RADIUS, MAX_RADIUS);
     if (clamped !== radius) plane.position.multiplyScalar(clamped / radius);
 
+    // The trigger. `forward` is the nose as it is *after* the level-hold has had its say, which
+    // is the direction the aeroplane is actually pointing and so the direction it fires in. The
+    // cadence lives in `bolts`, so holding the key down is all this has to know.
+    if (keys.has('Space')) {
+      muzzle
+        .set(MUZZLE.x * muzzleSide, MUZZLE.y, MUZZLE.z)
+        .applyQuaternion(plane.quaternion)
+        .add(plane.position);
+      if (bolts.fire(muzzle, forward)) muzzleSide = -muzzleSide;
+    }
+    // Tested before anything moves, so a bolt is checked against the target it was aimed at
+    // this frame rather than against where it has got to since.
+    boltTargets.length = 0;
+    if (ufo.alive) boltTargets.push(ufoTarget);
+    landers.collect(boltTargets);
+    bolts.update(dt, boltTargets);
+    ufo.update(dt, plane.position);
+    landers.update(dt, plane.position);
+    // Neither shootable nor interactive: it just goes round, whatever else is happening.
+    post.update(dt);
+
     placeCamera(1 - Math.exp(-dt * CHASE_FOLLOW));
 
     if (options.speedLabel) options.speedLabel.textContent = `${Math.round(speed)}`;
@@ -366,11 +567,184 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     }
   }
 
+  /**
+   * Puts the aeroplane on the minimap. The panel is a *static* equirectangular Earth, so the
+   * marker's position on it simply is the ground track: `surfaceUv` answers where the aircraft
+   * is on the same map the planet is wearing, and the marker goes there as a percentage of the
+   * panel — no pixels, so it stays right while the panel is sized in `vw`.
+   *
+   * The heading is finite-differenced **in map space** rather than taken from the aircraft's
+   * own nose, because the marker sits on a projection: due north over Greenland is drawn as a
+   * run along the top of the map, and a marker pointing up there would disagree with the track
+   * it is leaving. The planet's axial spin falls out of the difference for free, `surfaceUv`
+   * working in the planet's local frame — fly slowly enough due east and the track really does
+   * creep backwards, which is the correct answer and not one the nose could have given.
+   */
+  function updateMinimap(dt: number) {
+    const marker = options.planeMarker;
+    if (!marker || dt <= 0) return;
+
+    space.surfaceUv(plane.position, groundTrack);
+    const u = groundTrack.x;
+    const v = groundTrack.y;
+
+    if (hasTrack) {
+      // Wrapped, or the one frame that crosses the antimeridian reads as a sprint the whole
+      // way back across the map and snaps the marker round on the spot.
+      let du = u - lastU;
+      if (du > 0.5) du -= 1;
+      else if (du < -0.5) du += 1;
+      // Into panel space: `u` spans a panel `mapAspect` times as wide as `v` spans it tall, and
+      // screen y grows downwards where `v` grows towards the north pole.
+      const dx = (du * mapAspect) / dt;
+      const dy = (lastV - v) / dt;
+      const blend = 1 - Math.exp(-dt / TRACK_LAG);
+      trackX += (dx - trackX) * blend;
+      trackY += (dy - trackY) * blend;
+      // A dart drawn pointing up lies along (dx, dy) once turned clockwise by atan2(dx, -dy).
+      if (trackX * trackX + trackY * trackY > 1e-9) heading = Math.atan2(trackX, -trackY);
+    } else {
+      hasTrack = true;
+    }
+    lastU = u;
+    lastV = v;
+
+    marker.style.left = `${u * 100}%`;
+    marker.style.top = `${(1 - v) * 100}%`;
+    marker.style.transform = `translate(-50%, -50%) rotate(${heading}rad)`;
+
+    // The command post's own ground track, by the same means. It is never hidden: unlike the
+    // saucer, there is always one, which is rather the point of it.
+    if (options.postMarker) {
+      space.surfaceUv(post.position, contactUv);
+      options.postMarker.style.left = `${contactUv.x * 100}%`;
+      options.postMarker.style.top = `${(1 - contactUv.y) * 100}%`;
+    }
+
+    // The saucer on the same map, by the same means. It carries no heading — a contact is a
+    // place, and eight units per second would make a dart's direction a lie at this scale.
+    const contact = options.ufoMarker;
+    if (!contact) return;
+    if (!ufo.alive) {
+      contact.style.display = 'none';
+      return;
+    }
+    space.surfaceUv(ufo.position, contactUv);
+    contact.style.display = '';
+    contact.style.left = `${contactUv.x * 100}%`;
+    contact.style.top = `${(1 - contactUv.y) * 100}%`;
+  }
+
+  /**
+   * The landing ships on the same map: each one's approach drawn as a line from where it came
+   * in to where it is going to touch down, with a ring on the landing site and a square for the
+   * ship itself somewhere along it. The line is the point of the whole thing — a mark on its own
+   * says where something is, a line says where it is *going*, which is what you need to decide
+   * whether to go after it.
+   *
+   * Redrawn every frame rather than once at spawn, because the planet turns underneath: both
+   * ends are fixed in space, so on the map they creep west together with the ground they are
+   * over.
+   */
+  function updateLanderMarkers() {
+    let anyInbound = false;
+    landers.all.forEach((lander, i) => {
+      const timer = timerRows?.[i];
+      if (timer) {
+        if (lander.active) {
+          // Rounded up, so it never reads 0 while the ship is still in the air.
+          const left = Math.max(0, Math.ceil((1 - lander.progress) * LANDING_TIME));
+          if (left !== timer.shown) {
+            timer.value.textContent = `${left}s`;
+            timer.shown = left;
+          }
+          if (lander.name !== timer.named) {
+            timer.place.textContent = lander.name;
+            timer.named = lander.name;
+          }
+          // The bar itself: what is left of the approach, which is the same number the count is
+          // rounded from. Written every frame — it is one style property on at most three bars,
+          // and a bar that only moved once a second would tick rather than drain.
+          timer.fill.style.width = `${(1 - lander.progress) * 100}%`;
+          timer.row.classList.toggle('urgent', left <= URGENT_SECONDS);
+          timer.row.style.display = '';
+          anyInbound = true;
+        } else {
+          timer.row.style.display = 'none';
+          timer.shown = -1;
+        }
+      }
+
+      const slot = landerSlots?.[i];
+      if (!slot) return;
+      if (!lander.active) {
+        for (const node of slot) node.style.display = 'none';
+        return;
+      }
+      space.surfaceUv(lander.entry, contactUv);
+      const x1 = contactUv.x * MAP_W;
+      const y1 = (1 - contactUv.y) * MAP_H;
+      space.surfaceUv(lander.site, contactUv);
+      const x2 = contactUv.x * MAP_W;
+      const y2 = (1 - contactUv.y) * MAP_H;
+      space.surfaceUv(lander.position, contactUv);
+      const shipX = contactUv.x * MAP_W;
+      const shipY = (1 - contactUv.y) * MAP_H;
+
+      const [path, wrap, site, ship] = slot;
+      // A path whose ends are more than half a map apart is the short way round the *back* of
+      // the world, and drawn as one line it streaks all the way across instead. Drawn twice, a
+      // map width apart, the panel's own clipping leaves exactly the two halves you should see.
+      const shift = Math.abs(x2 - x1) > MAP_W / 2 ? (x2 > x1 ? -MAP_W : MAP_W) : 0;
+      setLine(path, x1, y1, x2 + shift, y2);
+      if (shift) setLine(wrap, x1 - shift, y1, x2, y2);
+      else wrap.style.display = 'none';
+
+      site.setAttribute('cx', String(x2));
+      site.setAttribute('cy', String(y2));
+      ship.setAttribute('x', String(shipX - SHIP_MARK / 2));
+      ship.setAttribute('y', String(shipY - SHIP_MARK / 2));
+      site.style.display = '';
+      ship.style.display = '';
+    });
+    // The banner is only there when something is on its way down; an empty header is furniture.
+    if (options.alertPanel) options.alertPanel.hidden = !anyInbound;
+  }
+
+  /**
+   * Puts the reticle where the nose is pointing.
+   *
+   * **Called after the render, and that is load-bearing.** `Vector3.project` reads
+   * `camera.matrixWorldInverse` without updating it, and `placeCamera()` has just moved the
+   * camera — asked before the render it would mark where the nose pointed last frame, which at
+   * two radians a second of roll is visibly wrong. Rendering has just refreshed the matrices.
+   */
+  function updateReticle() {
+    const el = options.reticle;
+    if (!el) return;
+    aim
+      .copy(NOSE)
+      .applyQuaternion(plane.quaternion)
+      .multiplyScalar(RETICLE_RANGE)
+      .add(plane.position)
+      .project(camera);
+    // z > 1 is behind the camera, where the projection folds over and the reticle would appear
+    // on the opposite side of the screen from the thing it is aiming at.
+    if (aim.z > 1) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+    el.style.left = `${(aim.x * 0.5 + 0.5) * 100}%`;
+    el.style.top = `${(-aim.y * 0.5 + 0.5) * 100}%`;
+  }
+
   function onKeyDown(event: KeyboardEvent) {
     if (!running) return;
     keys.add(event.code);
-    // The arrows would otherwise scroll whatever is behind the canvas on a short viewport.
-    if (event.code.startsWith('Arrow')) event.preventDefault();
+    // The arrows would otherwise scroll whatever is behind the canvas on a short viewport, and
+    // the space bar scrolls it a page at a time.
+    if (event.code.startsWith('Arrow') || event.code === 'Space') event.preventDefault();
   }
 
   const onKeyUp = (event: KeyboardEvent) => keys.delete(event.code);
@@ -384,6 +758,13 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     composer.setSize(clientWidth, clientHeight);
     camera.aspect = clientWidth / clientHeight;
     camera.updateProjectionMatrix();
+
+    // The marker's heading needs the minimap panel's proportions (see `updateMinimap`). Read
+    // here rather than per frame: touching `clientWidth` forces layout, and this is the one
+    // place that already knows the window changed. Zero while the panel is hidden — a narrow
+    // viewport drops it — in which case the last good value stands and nothing can see it.
+    const panel = options.planeMarker?.parentElement;
+    if (panel && panel.clientHeight > 0) mapAspect = panel.clientWidth / panel.clientHeight;
   }
 
   const clock = new THREE.Clock(false);
@@ -395,7 +776,13 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     const dt = Math.min(clock.getDelta(), 0.1);
     update(dt);
     space.update(clock.elapsedTime, dt);
+    // After `space.update()`, which is where this frame's spin lands on the planet. The marker
+    // is a question about the surface, so it has to be asked of the surface as it is about to
+    // be drawn rather than as it was last frame.
+    updateMinimap(dt);
+    updateLanderMarkers();
     composer.render();
+    updateReticle();
   }
 
   window.addEventListener('resize', resize);
@@ -418,6 +805,8 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     running = false;
     cancelAnimationFrame(rafId);
     keys.clear();
+    // Bolts in the air would otherwise be hanging there, mid-flight, on the way back in.
+    bolts.clear();
     clock.stop();
   }
 
@@ -441,7 +830,14 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
       },
       get speed() {
         return speed;
-      }
+      },
+      /** Lets a harness check the marker against the coastline it is supposed to be over. */
+      get groundTrack() {
+        return { u: groundTrack.x, v: groundTrack.y };
+      },
+      ufo,
+      landers,
+      post
     };
   }
 

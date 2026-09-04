@@ -30,6 +30,12 @@ const flyView = document.querySelector<HTMLDivElement>('#fly-view')!;
 const flyCanvas = document.querySelector<HTMLCanvasElement>('#fly-canvas')!;
 const flySpeed = document.querySelector<HTMLSpanElement>('#fly-speed')!;
 const flyAltitude = document.querySelector<HTMLSpanElement>('#fly-altitude')!;
+const flyMarker = document.querySelector<SVGSVGElement>('#minimap-plane')!;
+const flyContact = document.querySelector<SVGSVGElement>('#minimap-ufo')!;
+const flyPost = document.querySelector<SVGSVGElement>('#minimap-post')!;
+const flyReticle = document.querySelector<HTMLDivElement>('#fly-reticle')!;
+const flyPaths = document.querySelector<SVGSVGElement>('#minimap-paths')!;
+const flyAlerts = document.querySelector<HTMLDivElement>('#fly-alerts')!;
 const qualitySelect = document.querySelector<HTMLSelectElement>('#texture-quality')!;
 const moveStick = document.querySelector<HTMLDivElement>('#move-stick')!;
 
@@ -117,11 +123,13 @@ async function selectModel(index: number) {
 
 type Mode = 'asset' | 'planet' | 'inspect' | 'fly';
 
-/** Planet view is what the site opens on now, so it takes the bare hash. */
+/** Flight view is what the site opens on now, so it takes the bare hash. Listed in the
+ *  dropdown's own order, which is not load-bearing — the hashes are unique, so the reverse
+ *  lookup below cannot care. */
 const MODE_HASHES: Record<Mode, string> = {
-  planet: '#',
+  fly: '#',
+  planet: '#planet',
   inspect: '#inspect',
-  fly: '#fly',
   asset: '#assets'
 };
 
@@ -131,7 +139,7 @@ const MODE_HASHES: Record<Mode, string> = {
 let planet: PlanetView | null = null;
 let inspect: PlanetInspect | null = null;
 let fly: FlyView | null = null;
-let currentMode: Mode = 'planet';
+let currentMode: Mode = 'fly';
 
 /**
  * The world's modules, fetched once. `planet-view` and `planet-inspect` share three.js and
@@ -250,7 +258,13 @@ async function setMode(mode: Mode) {
     fly ??= createFlyView(flyCanvas, {
       quality: quality(),
       speedLabel: flySpeed,
-      altitudeLabel: flyAltitude
+      altitudeLabel: flyAltitude,
+      planeMarker: flyMarker,
+      ufoMarker: flyContact,
+      postMarker: flyPost,
+      reticle: flyReticle,
+      landerLayer: flyPaths,
+      alertPanel: flyAlerts
     });
     fly.start();
   }
@@ -277,10 +291,10 @@ flyCanvas.addEventListener('webglcontextlost', () => {
 
 modeSelect.addEventListener('change', () => goTo(modeSelect.value as Mode));
 
-// Planet view is what the site opens on; the inspector and asset view are one hash away.
-// Note that a bare URL has an empty `location.hash`, not "#", so the lookup below misses and
-// the `??` supplies the same answer.
+// Flight view is what the site opens on; the station, the inspector and the asset view are
+// one hash away. Note that a bare URL has an empty `location.hash`, not "#", so the lookup
+// below misses and the `??` supplies the same answer.
 const startMode: Mode =
   (Object.keys(MODE_HASHES) as Mode[]).find((mode) => MODE_HASHES[mode] === window.location.hash) ??
-  'planet';
+  'fly';
 void setMode(startMode);

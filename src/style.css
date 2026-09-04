@@ -187,12 +187,356 @@ body {
   text-align: right;
 }
 
-#fly-controls kbd {
+/* --- the bottom right corner ----------------------------------------------------------------
+   The legend and the minimap in one column, right-aligned, so neither has to be told the
+   other's height and the pair moves as one. That corner is the free one — the mode switcher
+   owns the top right, the map credit the bottom left, and the readout pill the middle. */
+#fly-corner {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+/* --- the control legend --------------------------------------------------------------------
+   What the keys do, deliberately small and dim: a reminder you can glance at, not part of the
+   picture. Positioned by whatever corner it is dropped into, so it can be reused. The readout
+   pill is the *instruments* (what the aircraft is doing); this is the *stick*. */
+.control-legend {
+  margin: 0;
+  /* Two columns, keys right-aligned against their labels, so it reads as a column of keys and
+     a column of verbs rather than as four ragged lines. */
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.2rem 0.5rem;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  opacity: 0.8;
+  /* Whatever is behind this corner is the scene: empty space one moment, the sunlit limb the
+     next. So the text carries its own shadow and the keys their own ground — the crosshair's
+     trick. Without them the legend disappears every time the planet swings underneath it. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.control-legend .legend-keys {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.control-legend kbd {
   padding: 0 0.25rem;
   font: inherit;
   color: var(--text);
+  background: rgba(12, 14, 18, 0.55);
   border: 1px solid var(--border);
   border-radius: 3px;
+}
+
+.control-legend kbd + kbd {
+  margin-left: 0.2rem;
+}
+
+/* Flight view is flown from the keyboard alone, so on a touchscreen the legend has nothing to
+   say — the pill carries "needs a keyboard" instead. */
+@media (pointer: coarse) {
+  #fly-keys {
+    display: none;
+  }
+}
+
+/* --- the incoming bars ---------------------------------------------------------------------
+   One bar per landing ship on its way down, stacked at the top of the screen: what it is coming
+   down on, how long it has left, and a fill that drains as it descends. Loud on purpose — this
+   is the one thing in the flight view with a deadline on it, and the whole reason to break off
+   what you were doing. Everything else here is a dim pill in a corner; these shout.
+
+   Top left, not centred: dead centre is where you are actually looking while flying, and three
+   stacked bars there sit on top of the game. In the corner they are still the first thing you
+   see and no longer the only thing. */
+#fly-alerts {
+  position: absolute;
+  top: 1rem;
+  left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  pointer-events: none;
+}
+
+/* Author `display: flex` above otherwise beats the UA stylesheet's [hidden] rule. */
+#fly-alerts[hidden] {
+  display: none;
+}
+
+.alert-caption {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(98, 255, 208, 0.75);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.fly-alert {
+  width: 16rem;
+  padding: 0.35rem 0.65rem 0.45rem;
+  background: linear-gradient(rgba(6, 12, 16, 0.92), rgba(6, 12, 16, 0.78));
+  border: 1px solid rgba(98, 255, 208, 0.4);
+  border-radius: 4px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.alert-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8fe8cd;
+}
+
+/* The same square as the ship's mark on the map, so a bar and a mark are one thing. */
+.timer-mark {
+  align-self: center;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: #62ffd0;
+  box-shadow: 0 0 6px rgba(90, 255, 205, 0.8);
+}
+
+/* The seconds sit at the right end of the head, over the end of the bar they belong to. */
+.timer-place {
+  flex: 1;
+}
+
+.timer-value {
+  /* Not uppercased with the rest of the head: "38S" reads as a coordinate, "38s" as a clock. */
+  text-transform: none;
+  /* Tabular, or the number twitches sideways every time the count crosses ten. */
+  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem;
+  color: #f2fffb;
+}
+
+.alert-track {
+  margin-top: 0.3rem;
+  height: 0.35rem;
+  background: rgba(98, 255, 208, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* No transition: the width is written every frame, and easing it would only make the bar lag
+   the number above it. */
+.alert-fill {
+  height: 100%;
+  width: 100%;
+  background: #62ffd0;
+  box-shadow: 0 0 8px rgba(90, 255, 205, 0.7);
+}
+
+/* The last ten seconds. Warm, and pulsing: by then it is your problem rather than information. */
+.fly-alert.urgent {
+  border-color: rgba(255, 181, 107, 0.75);
+  animation: alert-pulse 0.7s ease-in-out infinite;
+}
+
+.fly-alert.urgent .alert-head {
+  color: #ffb56b;
+}
+
+.fly-alert.urgent .timer-value {
+  color: #fff1de;
+}
+
+.fly-alert.urgent .timer-mark,
+.fly-alert.urgent .alert-fill {
+  background: #ffb56b;
+  box-shadow: 0 0 8px rgba(255, 181, 107, 0.9);
+}
+
+@keyframes alert-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* --- the minimap ----------------------------------------------------------------------------
+   A flat equirectangular Earth — the same NASA day map the planet itself is wearing, at
+   1024x512 and 59 KB — with the aircraft's ground track marked on it.
+
+   **The map is static and the marker moves**, which is the whole design: a map that turned
+   under the aeroplane would be unreadable at this size and would throw away the one thing a
+   world map is good for, which is that you already know the shape of it. So there is no
+   rotation, no panning and no zoom, and the marker's position on the panel *is* its longitude
+   and latitude.
+
+   `aspect-ratio: 2 / 1` is therefore not cosmetic: the map is 360° by 180°, anything else
+   stretches it, and `updateMinimap()` reads these very proportions back out of the panel to
+   point the marker along its own track. */
+#minimap {
+  position: relative;
+  width: min(17rem, 30vw);
+  aspect-ratio: 2 / 1;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  /* Behind the map rather than beside it: the WebP has no alpha, but a dark ground means a
+     failed image degrades to an empty panel rather than to a hole in the HUD. */
+  background: #060a10;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+/* The map sits on a pseudo-element rather than on the panel itself, so it can be knocked back
+   without taking the marker down with it — `opacity` on the panel would fade its children too. */
+#minimap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('./textures/planet-minimap-1024.webp') center / 100% 100% no-repeat;
+  opacity: 0.88;
+}
+
+/* Placed by `updateMinimap()` in percentages of the panel, so the marker lands on the right
+   coastline whatever size the panel happens to be. */
+#minimap-plane {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  fill: #ffcf7a;
+  /* The map runs from black ocean to white ice, so the marker carries its own outline.
+     `paint-order` puts the stroke *under* the fill — without it a dart this small is all
+     outline and no colour. */
+  stroke: rgba(4, 6, 10, 0.9);
+  stroke-width: 1.6;
+  paint-order: stroke;
+  filter: drop-shadow(0 0 3px rgba(255, 190, 110, 0.5));
+}
+
+/* The command post's ground track. Warm, like everything of the player's, and hollow — it is a
+   place that is always there rather than a contact that comes and goes, so it is drawn as a ring
+   and never pulses. */
+#minimap-post {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  fill: none;
+  stroke: #ffcf7a;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 3px rgba(4, 6, 10, 0.95));
+}
+
+/* The saucer's contact on the same map. A place rather than a heading, so a circle rather than
+   a dart — and cold against the aircraft's warm amber, which is the same division the scene
+   itself uses. It pulses because a contact you have to hunt for on a 272 px map is a contact
+   you will miss; opacity only, so it cannot fight the position JS writes. */
+#minimap-ufo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  fill: #62ffd0;
+  stroke: rgba(4, 6, 10, 0.9);
+  stroke-width: 1.4;
+  paint-order: stroke;
+  filter: drop-shadow(0 0 4px rgba(90, 255, 205, 0.65));
+  animation: contact-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes contact-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* --- the landing ships' approaches ----------------------------------------------------------
+   Drawn in the overlay's own coordinates (100 x 50 = the whole map), so every width here scales
+   with the panel. The line is the whole point: a mark says where something *is*, a line says
+   where it is *going*, which is what decides whether it is worth flying after. */
+#minimap-paths {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Dashed, because it is a plan rather than a track — the ship has not been along it yet. */
+.lander-path {
+  stroke: rgba(98, 255, 208, 0.62);
+  stroke-width: 0.55;
+  stroke-dasharray: 2 1.6;
+}
+
+/* The landing site: a ring, which is to say a place, at the end of the line. */
+.lander-site {
+  fill: none;
+  stroke: rgba(98, 255, 208, 0.8);
+  stroke-width: 0.5;
+}
+
+/* And the ship on its way down it — a square, so that at three pixels across it cannot be
+   mistaken for the saucer's circle. */
+.lander-ship {
+  fill: #62ffd0;
+  stroke: rgba(4, 6, 10, 0.9);
+  stroke-width: 0.6;
+  paint-order: stroke;
+}
+
+/* --- the aiming reticle ---------------------------------------------------------------------
+   The guns fire along the nose, and the chase camera does not look along the nose — it is aimed
+   a little under it so the planet stays in the picture. So the middle of the screen is not
+   where the shots go, and without this the laser is a guess. Faint on purpose: it marks the
+   aim, it is not a crosshair to stare at. */
+#fly-reticle {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  /* Placed by its top left corner (fly-view.ts writes `left`/`top` only, leaving `transform`
+     free), so it is pulled back onto its own centre with a margin. */
+  margin: -13px 0 0 -13px;
+  border: 1px solid rgba(255, 207, 122, 0.45);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+#fly-reticle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 50%;
+  background: rgba(255, 207, 122, 0.75);
+}
+
+/* Below this the readout pill and the corner stack start to overlap — and a viewport this
+   narrow is a phone, which has no keyboard to fly with in the first place. */
+@media (max-width: 560px) {
+  #minimap {
+    display: none;
+  }
 }
 
 #inspect-canvas:active {

@@ -7,10 +7,26 @@
 
 ## What this is
 
-A **GitHub Pages site with three Three.js scenes**, picked from a fixed dropdown in the
+A **GitHub Pages site with four Three.js scenes**, picked from a fixed dropdown in the
 top-right corner (`#mode-switcher`).
 
-**Planet view** (`…/#`, what the site opens on) is a space station in orbit around Earth, with a
+**Flight view** (`…/#`, what the site opens on) is a small aeroplane you fly around the same
+planet from a chase camera: the arrows pitch and bank it, `A`/`D` are the rudder and `W`/`S` the
+throttle, `Space` the laser, with speed and altitude in the centre pill and the bottom right
+corner carrying the key legend over a minimap of the whole world with the aircraft's ground
+track on it. Somewhere over the planet there is one alien saucer, drifting slowly and marked on
+that map, and a few alien landing ships on their way down — each drawn on the map as the line of
+its approach, with forty seconds from appearing to touchdown. None of them is armed. Land, and a
+ship is simply gone; get there first and it can be shot down. Higher up, an Earth defence command
+post goes round the planet on a fixed orbit, warm-lit and ringed on the map. It is deliberately the *minimum* that reads as flying — no lift, no drag, no
+stall, no gravity and no ground, only an orientation, a speed along the nose, a bank *command*
+rather than a roll rate, and a level-hold that bends the path round the globe instead of letting
+it fly off on a tangent. See the header of `src/fly-view.ts`, which carries the reasoning for
+each of those. Keyboard only, so a touchscreen is told as much rather than given a stick it
+cannot fly with. Like the inspector it builds its own `buildSpace()`, so it shares no GPU
+resources — and no sun — with the other scenes.
+
+**Planet view** (`…/#planet`) is a space station in orbit around Earth, with a
 first-person camera you walk around inside it — click to lock the pointer, WASD/arrows to move,
 Esc to release on a desktop; drag to look and push the on-screen stick to move on a tablet.
 There's no astronaut body and no game logic — it's a place to stand and look out of the window.
@@ -120,11 +136,14 @@ under review, unlicensed, or otherwise not cleared for public release.
 
 ```
 index.html            #mode-switcher (mode + surface-resolution selects), then
-                      #asset-view (gallery + #viewport canvas); each planet view carries a
-                      .hud control pill (#planet-controls: how to move; #inspect-controls: sun),
-                      #planet-view (#planet-canvas + #crosshair + #interact-prompt) and
-                      #inspect-view (#inspect-canvas + the #sun-azimuth slider),
-                      loads /src/main.ts
+                      #asset-view (gallery + #viewport canvas); each 3D view carries a
+                      .hud control pill (#planet-controls: how to move; #inspect-controls: sun;
+                      #fly-controls: speed and altitude), #planet-view (#planet-canvas +
+                      #crosshair + #interact-prompt), #inspect-view (#inspect-canvas + the
+                      #sun-azimuth slider) and #fly-view (#fly-canvas + #fly-reticle +
+                      #fly-corner, which stacks the #fly-keys legend over the #minimap, its two
+                      markers #minimap-plane and #minimap-ufo, and #minimap-paths, the empty
+                      SVG layer the landing ships are drawn into), loads /src/main.ts
 vite.config.ts         publicDir -> ai-assets/ (served as-is, copied into dist/ on
                        build); modelManifest() Vite plugin scans ai-assets/ at
                        dev/build time and exposes virtual:model-manifest
@@ -140,6 +159,24 @@ src/
                        the orbit from flight.ts, owns the bloom composer and the render loop
   planet-inspect.ts    planet inspector. createPlanetInspect(canvas) — the same space with
                        an OrbitControls camera outside it, plus the sun-azimuth control
+  fly-view.ts          flight view. createFlyView(canvas) — the aeroplane, the four-key flight
+                       model (bank command, level-hold), the chase camera, the trigger and the
+                       aiming reticle, and updateMinimap(), which puts both the ground track and
+                       the saucer on the flat map in the corner. Its header carries the
+                       reasoning for every constant in it
+  fly/ufo.ts           createUfo() — the saucer: how it is built, where it spawns, how it
+                       drifts, and what happens when it is hit. Unarmed, deliberately
+  fly/landers.ts       createLanders() — the landing ships: three of them, each appearing,
+                       descending a straight approach for 40 s, and going the moment it lands.
+                       LANDER_COUNT lives here, which is why the map's marks are built in code
+  fly/places.ts        LAND_TARGETS — every place a landing ship may come down: a country, and
+                       a coordinate well inside it. A table rather than a land mask, which is
+                       what makes "never in the ocean" true by construction
+  fly/command-post.ts  createCommandPost() — the Earth defence station: one circular orbit in
+                       space.ts's own inclined plane, a hub-ring-and-solar-wings model, and
+                       nothing else. Not the station in station/ — see the file's header
+  fly/bolts.ts         createBolts() — the laser: a fixed pool of bolts, the cadence, and the
+                       swept hit test that stops a fast bolt tunnelling through the target
   flight.ts            createFlight() — the station's altitude, attitude, orbit mode and clock.
                        Written by the navigation console, read by the rig and the globe. Owns
                        pitchFor() and the detent tables
@@ -198,8 +235,9 @@ src/
   space.ts             the planet, its two atmosphere shells, the moon, the starfield and
                        the nebula skydome. Owns the shared simplex-noise GLSL, the planet
                        shader that lights the NASA maps, MAP_SETS / the page-wide map cache
-                       behind the 4K/8K switch, and the orbital plane both the pod and the
-                       moon fly in (SUN_BETA / ORBIT_NORMAL / ORBIT_NOON / ORBIT_DAWN)
+                       behind the 4K/8K switch, the orbital plane both the pod and the
+                       moon fly in (SUN_BETA / ORBIT_NORMAL / ORBIT_NOON / ORBIT_DAWN), and
+                       surfaceUv(), which answers where a point in space sits on those maps
   fpv-controls.ts      createFpvControls() — two input paths (pointer-lock mouse look, and
                        touch drag-to-look plus an on-screen stick) feeding walk-on-the-floor
                        movement clamped to the `decks` of the storey you are on and pushed out
@@ -214,7 +252,7 @@ src/
 Only one mode renders at a time: `setMode()` hides the other containers and calls
 `viewer.setActive(false)` / `planetView.stop()` / `inspect.stop()` to park their
 `requestAnimationFrame` loops, so the WebGL contexts never compete. `MODE_HASHES` in
-`main.ts` maps each mode to its URL hash in both directions (planet view, the default, gets
+`main.ts` maps each mode to its URL hash in both directions (flight view, the default, gets
 the bare `#`). `setMode()` is `async`, because every scene arrives through a dynamic
 `import()` — three.js never has to be fetched by a browser that only ever looks at one mode.
 
@@ -788,7 +826,7 @@ Conventions worth knowing before touching it:
 - **The limb haze is remapped, not raw.** `grazing` never drops below ~0.62 anywhere in
   view at this altitude, so feeding it straight to `pow()` hazes the entire visible strip
   into a pale smear. It runs through a `smoothstep(0.62, 1.0, …)` first.
-- **The planet must never be a black sphere on load.** Planet view is the site's landing
+- **The planet must never be a black sphere on load.** Flight view is the site's landing
   view and the maps take a moment, so the shader carries a procedural fallback selected by
   the `uHasMaps` uniform, faded in over ~0.4s once the textures resolve.
 - **Bloom does the glowing.** The high LED strips, the globe and the atmosphere are authored with
@@ -831,6 +869,159 @@ things that make that true, all of which are easy to undo by accident:
   retina tablet is four times the fragment cost for a difference nobody can see at arm's
   length.
 
+### The flight view's minimap
+
+Bottom right, under the key legend, in `#minimap`: a flat equirectangular Earth with the
+aeroplane on it. Built from three pieces — `Space.surfaceUv()` in `space.ts`, `updateMinimap()`
+in `fly-view.ts`, and the panel in `style.css` — so it is worth having the reasoning in one
+place.
+
+- **The map is static and the marker moves.** No rotation, no panning, no zoom. A map that
+  turned under the aircraft would be illegible at 272 px wide and would throw away the one thing
+  a world map has going for it, which is that you already know the shape of it. So the marker's
+  position on the panel *is* its longitude and latitude, and you can read them off it.
+- **`aspect-ratio: 2 / 1` is load-bearing twice.** The map is 360° by 180°, so any other shape
+  stretches it — and `updateMinimap()` reads the panel's own proportions back out to point the
+  marker along its track. That read happens in `resize()`, not per frame: touching
+  `clientWidth` forces layout, and `resize()` is already the one place that knows the window
+  changed.
+- **The mapping is derived from `SphereGeometry`, not guessed at.** `surfaceUv()` inverts
+  three's own sphere parameterisation, which is what fixes u = 0 on the left edge of the map
+  (180° W) and puts +X at 0°, +Z at 90° W and -X at 180°. Verified by dropping the aircraft on
+  seven landmarks — the Gulf of Guinea, London, Sydney, Cape Horn, the Sahara, Queen Maud Land
+  and the dateline — and reading the marker back: all within a degree, the residual being the
+  frame of flight between setting the position and reading it.
+- **It asks in the planet's *local* frame**, so the slow axial spin is in the answer. Asked in
+  world space the marker would drift against the terrain it is supposed to be over.
+- **It is called after `space.update()`**, which is where the frame's spin lands on the planet.
+  Same "the matrices have to be current" trap as raycasting from a rig that has already moved.
+- **The heading is finite-differenced in map space, not taken from the aircraft's nose.** The
+  marker sits on a projection: due north over Greenland is drawn as a run along the top of the
+  map, and a marker pointing up there would disagree with the track it is leaving. `du` is
+  wrapped at ±0.5, or the single frame that crosses the antimeridian reads as a sprint the whole
+  way back across the map and snaps the dart round on the spot. Smoothed over `TRACK_LAG`,
+  because a difference between two frames over a variable `dt` jitters.
+- **The marker carries its own outline**, with `paint-order: stroke` so the stroke paints under
+  the fill rather than eating it. The map runs from black ocean to white ice; nothing that is
+  one flat colour is legible against both.
+- **The panel is dropped below 560 px of viewport**, where it would start to collide with the
+  readout pill — and a viewport that narrow is a phone, which has no keyboard to fly with in the
+  first place.
+- **The saucer is on the same map by the same means**, as a circle rather than a dart: a contact
+  is a *place*, and at eight units per second a heading arrow would be a lie at this scale. It
+  pulses (opacity only, so it cannot fight the position JS writes) because a 6 px contact on a
+  272 px map is one you will otherwise miss, and it is hidden outright between one being shot
+  down and the next appearing.
+- **A landing ship gets a line, not a mark**, from where it came in to where it will touch down,
+  with a ring on the site and a square on the ship. A mark says where something is; a line says
+  where it is *going*, which is the thing you need in order to decide whether to fly after it.
+  Its four nodes per ship are built in `fly-view.ts` rather than written into `index.html`,
+  because how many there are is `LANDER_COUNT`'s business.
+- **The overlay is its own coordinate space**, `viewBox="0 0 100 50"` with
+  `preserveAspectRatio="none"`: the numbers in it are map fractions, so a longitude is an x and
+  a latitude is a y with nothing in between, and every stroke width scales with the panel.
+- **A path whose ends are more than half a map apart is going round the back of the world**, and
+  drawn as one line it streaks all the way across the front instead. It is drawn twice, a map
+  width apart, and the panel's own clipping leaves exactly the two halves you should see.
+- **The paths are redrawn every frame, not once at spawn**, because the planet turns underneath
+  them: both ends are fixed in space, so on the map they creep west together with the ground
+  they are over.
+
+### The saucer, the landing ships and the laser
+
+`fly/ufo.ts` and `fly/bolts.ts`, wired together in `fly-view.ts`. **This is the one place in the
+repo with any game in it**, and it stays as small as that can be: there is no score, no timer and
+no objective — the "no score, no timers, no objectives" line under "Where this is going" is about
+the station, which is a place to be rather than a thing to do. Here there is something to fly to
+and something to shoot, and that is all.
+
+- **The saucer is unarmed, and that is a decision rather than an omission.** It has no weapon and
+  no knowledge of where the aircraft is beyond the point it was told to spawn away from. If it is
+  ever given a gun, `update()` in `fly/ufo.ts` is where it would have to start caring.
+- **It is slower than the aeroplane can fly**, 8 units per second against a `MIN_SPEED` of 12, so
+  it can always be caught and the contact reads as a place to go rather than as a chase.
+- **It spawns in a band, not anywhere.** A random bearing and 1.0–2.4 radians of arc from the
+  aircraft — a quarter of the way round the planet to most of the way to the far side — at an
+  altitude of 45 to 130, inside the aeroplane's own range. Anywhere-on-the-globe would be a
+  needle in a haystack even with the map; on top of you would be a jump scare. Turning the local
+  vertical about a horizontal axis is what makes "that far away" mean an arc rather than a chord.
+- **Shooting it down is a pop and a respawn, six seconds later, somewhere else.** No debris, no
+  sound, no score popup. The flash is an additive shell that expands from 2 to 34 units over 0.7s
+  with an `(1-t)²` fade, so it is bright for the first fifth of a second and then gone.
+- **The hit test is swept, not a point.** A bolt covers about six units a frame at 60 fps and
+  more on a slow one, against a target 11 across — a point test would let it through the middle
+  of the saucer often enough to feel broken. The closest approach of the segment it travelled
+  this frame is the honest question, and it is the same cost.
+- **The bolt pool never allocates.** Twenty-four meshes made once and parked invisible; `fire()`
+  wakes one, expiry parks it again. The cadence lives in `bolts` rather than in the caller, so
+  holding the key down is all `fly-view.ts` has to know.
+- **Bolts do not inherit the aeroplane's speed**, which is both what light would do and 13% of
+  the answer at cruise. They die on expiry or on reaching the planet.
+- **The reticle is not decoration, for the same reason the station's crosshair is not.** The
+  chase camera is aimed a little below the nose so the planet stays in frame, so the middle of
+  the screen is *not* where the shots go. It is boresighted at `RETICLE_RANGE` because the camera
+  sits above the nose line and no single ring can be right at every range — see the constant.
+- **It is placed after the render**, like the station's raycast and for the same reason:
+  `Vector3.project` reads `camera.matrixWorldInverse` without updating it, and the camera has
+  just moved.
+- **`Space` is `preventDefault`ed** along with the arrows, or the browser scrolls the page a
+  screenful every time you fire.
+
+And the command post, in `fly/command-post.ts`:
+
+- **It is scenery with a job description**: no interior, no docking, nothing to shoot, nothing
+  run from it. What it is for is that the saucers now read as being *answered* rather than only
+  watched — and it is the biggest warm thing in a scene whose alien half is all cold green.
+- **It is not the station in `src/station/`.** That one is 15.6 m and modelled in metres for a
+  first-person interior; this view is arcade-scaled (an 8-unit aeroplane against a 300-unit
+  Earth), where the same building would be far under a pixel. This is a *symbol* of a station,
+  built from primitives like the aeroplane and the saucer.
+- **The orbit is a circle in `space.ts`'s own `(ORBIT_NOON, ORBIT_DAWN)` basis**, the inclined
+  plane the moon already flies in — so it is evaluated rather than integrated (nothing to drift)
+  and its ground track crosses latitudes instead of tracing the equator. A lap takes 150 s at
+  altitude 220: above the saucer's band, above the landing ships' entry altitude, and well inside
+  the aeroplane's ceiling, so it can be climbed to.
+- **`SUN_BETA` means it is never eclipsed and never fully front-lit**: the sun sits 74° out of
+  that plane, so the dot of the sun with its position never exceeds ~0.28. Permanent daylight,
+  always from the side.
+- **Its lamps are sized for distance, not for the model.** At 250 units a half-unit sphere is one
+  pixel and blooms into nothing; over the night side the lamps are the only part of it there is.
+- **The ring turns and its lamps turn with it.** A bare torus is rotationally symmetric, so a
+  spin nobody can see is a spin that need not exist.
+
+And the landing ships, in `fly/landers.ts`:
+
+- **Forty seconds from appearing to touchdown, and that clock is the whole of them.** Land and
+  the ship is gone; shoot it first and it is gone. Nothing is scored either way *yet* — the
+  intention is that letting them land eventually costs you the game, which is why the countdown
+  is the loudest thing on screen.
+- **The alert bar across the top is that clock, and it is the one thing here that shouts.**
+  One row per ship — its mark, the country it is coming down on, the seconds left — bold,
+  uppercase and green, turning warm amber and pulsing under ten seconds. The bar hides itself
+  when nothing is inbound, and its right end is padded clear of the mode switcher, which floats
+  over it. Everything else in this view is a dim pill in a corner on purpose; this is not.
+- **A ship never comes down in the ocean, and that is structural rather than checked.** The site
+  is a row out of `fly/places.ts` — a country and a coordinate well inside it — so there is no
+  land mask to consult and no random point that might turn out to be sea. The name on the
+  countdown comes from the same row, so the label cannot disagree with the place.
+- **Both ends of the approach are places on the ground, not points in space.** They are stored
+  as latitude and longitude and turned back into world positions every frame through
+  `Space.worldFromLatLon()`, the inverse of `surfaceUv`. Held in world space instead, the target
+  would drift about nine degrees west of its own country over a forty-second descent, and the
+  ring on the map would slide off the coastline it was aimed at.
+- **Nothing is animated**, which was the brief. No landing sequence, no touchdown, no explosion
+  and no flash: a ship on the ground is a ship that is not there any more. The saucer keeps its
+  pop because it had one already.
+- **The approach is a straight line and a linear descent** — `lerp` between the two directions
+  then `normalize`, rather than a proper slerp, which over the two thirds of a radian this
+  covers agree to well under the ship's own width — from 150 units of altitude down to 1.5.
+- **Three of them, staggered nine seconds apart on the first pass**, each with its own 8-20 s
+  wait before the next appearance, so the map usually has one or two paths on it and they do not
+  all arrive at once.
+- **The bolt pool takes a list of targets now**, walked per bolt: a couple of dozen bolts against
+  a handful of targets is cheaper than any structure that would avoid the loop. Each target's
+  `hit()` has to tolerate being called twice, because two bolts can land in the same frame.
+
 ### Planet inspector behaviour
 Shares `space.ts` with planet view, so everything above about the planet shader still
 applies. What differs:
@@ -872,8 +1063,17 @@ after the day map's width, which is the file the choice is really about:
 | `planet-night-2k.webp` (2048×1024, 101 KB) | 4k | [Night Lights 2012](https://visibleearth.nasa.gov/images/79765) | `dnb_land_ocean_ice.2012.3600x1800.jpg` |
 | `planet-night-4k.webp` (4096×2048, 291 KB) | 8k | same image record | `dnb_land_ocean_ice.2012.13500x6750.jpg` (7.8 MB) |
 | `planet-clouds-2k.webp` (2048×1024, 430 KB) | both | [Blue Marble clouds](https://visibleearth.nasa.gov/images/57747) | `cloud_combined_2048.jpg` |
+| `planet-minimap-1024.webp` (1024×512, 59 KB) | — | same day-map record | downscaled from `planet-day-8k.webp` |
 
-So the 4k set is 1.2 MB and the 8k set 2.9 MB. **Clouds have no larger version** — NASA
+So the 4k set is 1.2 MB and the 8k set 2.9 MB.
+
+The minimap file is in no set and is not a `MAP_SETS` entry: it is the flight view's flat map of
+the world, and it is the one texture here reached from **CSS** (`url()` in `#minimap::before`)
+rather than imported from TS. Vite content-hashes and rewrites a CSS `url()` exactly as it does
+a TS import, so the deployed `/games/` sub-path still works; it is loaded that way because
+nothing in the TypeScript ever needs to know the file exists. It is deliberately independent of
+the 4K/8K switch — a 272 px panel has no use for a bigger map, and the minimap should not change
+under someone who was only choosing how much of the *planet* to download. **Clouds have no larger version** — NASA
 publishes that composite at 2048 only — which is fine: it is a soft mask over everything
 else rather than something you read detail from, so both sets share the one file.
 
@@ -1001,7 +1201,8 @@ reverse them.
 on board, and eventually go outside in a suit on a tether — but never really leave. The design
 goal is *presence*. **No score, no timers, no objectives, no collectibles.** Those would work
 against the only thing that makes a place worth standing in. (The asset view is unaffected —
-it stays the plain preview tool it has always been.)
+it stays the plain preview tool it has always been. So is the flight view, which is not the
+station and does have a saucer to shoot at — but even there, no score and no timer.)
 
 **Real outside, warm inside.** The NASA Earth stays photoreal in the window; the warmth and
 softness go into the station, not onto the planet. The contrast is the point — a cluttered
