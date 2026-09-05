@@ -7,11 +7,13 @@ import type { createViewer } from './viewer';
 import type { createPlanetView } from './planet-view';
 import type { createPlanetInspect } from './planet-inspect';
 import type { createFlyView } from './fly-view';
+import type { createParkView } from './park-view';
 
 type Viewer = ReturnType<typeof createViewer>;
 type PlanetView = ReturnType<typeof createPlanetView>;
 type PlanetInspect = ReturnType<typeof createPlanetInspect>;
 type FlyView = ReturnType<typeof createFlyView>;
+type ParkView = ReturnType<typeof createParkView>;
 type PlanetModule = typeof import('./planet-view');
 
 const canvas = document.querySelector<HTMLCanvasElement>('#viewport')!;
@@ -30,14 +32,21 @@ const flyView = document.querySelector<HTMLDivElement>('#fly-view')!;
 const flyCanvas = document.querySelector<HTMLCanvasElement>('#fly-canvas')!;
 const flySpeed = document.querySelector<HTMLSpanElement>('#fly-speed')!;
 const flyAltitude = document.querySelector<HTMLSpanElement>('#fly-altitude')!;
+const flyDowned = document.querySelector<HTMLSpanElement>('#fly-downed')!;
 const flyMarker = document.querySelector<SVGSVGElement>('#minimap-plane')!;
 const flyContact = document.querySelector<SVGSVGElement>('#minimap-ufo')!;
 const flyPost = document.querySelector<SVGSVGElement>('#minimap-post')!;
 const flyReticle = document.querySelector<HTMLDivElement>('#fly-reticle')!;
 const flyPaths = document.querySelector<SVGSVGElement>('#minimap-paths')!;
 const flyAlerts = document.querySelector<HTMLDivElement>('#fly-alerts')!;
+const flyLanderHealth = document.querySelector<HTMLDivElement>('#fly-lander-health')!;
+const flyPlaneHealth = document.querySelector<HTMLDivElement>('#fly-plane-health')!;
+const flySpaceLabel = document.querySelector<HTMLSpanElement>('#fly-space-label')!;
+const flyPlaneHealthFill = document.querySelector<HTMLDivElement>('#fly-plane-health-fill')!;
 const flyMessage = document.querySelector<HTMLDivElement>('#fly-message')!;
 const flyMessageText = document.querySelector<HTMLSpanElement>('#fly-message .message-text')!;
+const parkView = document.querySelector<HTMLDivElement>('#park-view')!;
+const parkCanvas = document.querySelector<HTMLCanvasElement>('#park-canvas')!;
 const qualitySelect = document.querySelector<HTMLSelectElement>('#texture-quality')!;
 const moveStick = document.querySelector<HTMLDivElement>('#move-stick')!;
 
@@ -123,13 +132,15 @@ async function selectModel(index: number) {
   await viewer?.load(model.url);
 }
 
-type Mode = 'asset' | 'planet' | 'inspect' | 'fly';
+type Mode = 'asset' | 'planet' | 'inspect' | 'fly' | 'park';
 
-/** Flight view is what the site opens on now, so it takes the bare hash. Listed in the
- *  dropdown's own order, which is not load-bearing — the hashes are unique, so the reverse
- *  lookup below cannot care. */
+/** Precision Parking is what the site opens on, so it takes the bare hash. It is also the one
+ *  scene with no three.js in it, so a visitor who only ever looks at the landing view downloads
+ *  a few kilobytes rather than half a megabyte of renderer. Listed in the dropdown's own order,
+ *  which is not load-bearing — the hashes are unique, so the reverse lookup below cannot care. */
 const MODE_HASHES: Record<Mode, string> = {
-  fly: '#',
+  park: '#',
+  fly: '#fly',
   planet: '#planet',
   inspect: '#inspect',
   asset: '#assets'
@@ -141,7 +152,8 @@ const MODE_HASHES: Record<Mode, string> = {
 let planet: PlanetView | null = null;
 let inspect: PlanetInspect | null = null;
 let fly: FlyView | null = null;
-let currentMode: Mode = 'fly';
+let park: ParkView | null = null;
+let currentMode: Mode = 'park';
 
 /**
  * The world's modules, fetched once. `planet-view` and `planet-inspect` share three.js and
@@ -233,8 +245,9 @@ async function setMode(mode: Mode) {
   planetView.hidden = mode !== 'planet';
   inspectView.hidden = mode !== 'inspect';
   flyView.hidden = mode !== 'fly';
-  // Nothing in the asset view has a surface map.
-  qualitySelect.hidden = mode === 'asset';
+  parkView.hidden = mode !== 'park';
+  // Nothing in the asset view or the parking game has a surface map.
+  qualitySelect.hidden = mode === 'asset' || mode === 'park';
   modeSelect.value = mode;
 
   // Park every other view's render loop, so no two WebGL scenes compete for the GPU.
@@ -242,6 +255,7 @@ async function setMode(mode: Mode) {
   if (mode !== 'planet') planet?.stop();
   if (mode !== 'inspect') inspect?.stop();
   if (mode !== 'fly') fly?.stop();
+  if (mode !== 'park') park?.stop();
 
   if (mode === 'asset') {
     await ensureViewer();
@@ -261,16 +275,27 @@ async function setMode(mode: Mode) {
       quality: quality(),
       speedLabel: flySpeed,
       altitudeLabel: flyAltitude,
+      downedLabel: flyDowned,
       planeMarker: flyMarker,
       ufoMarker: flyContact,
       postMarker: flyPost,
       reticle: flyReticle,
-      landerLayer: flyPaths,
+      mapOverlay: flyPaths,
       alertPanel: flyAlerts,
+      landerHealthLayer: flyLanderHealth,
+      planeHealthBar: flyPlaneHealth,
+      planeHealthFill: flyPlaneHealthFill,
+      spaceLabel: flySpaceLabel,
       messagePanel: flyMessage,
       messageText: flyMessageText
     });
     fly.start();
+  } else if (mode === 'park') {
+    // The one scene with no WebGL in it, so no context to lose and no map set to fetch — it
+    // takes no part in the quality fan-out above.
+    const { createParkView } = await import('./park-view');
+    park ??= createParkView(parkCanvas);
+    park.start();
   }
 }
 
@@ -295,10 +320,10 @@ flyCanvas.addEventListener('webglcontextlost', () => {
 
 modeSelect.addEventListener('change', () => goTo(modeSelect.value as Mode));
 
-// Flight view is what the site opens on; the station, the inspector and the asset view are
-// one hash away. Note that a bare URL has an empty `location.hash`, not "#", so the lookup
-// below misses and the `??` supplies the same answer.
+// Precision Parking is what the site opens on; the flight view, the station, the inspector and
+// the asset view are one hash away. Note that a bare URL has an empty `location.hash`, not "#",
+// so the lookup below misses and the `??` supplies the same answer.
 const startMode: Mode =
   (Object.keys(MODE_HASHES) as Mode[]).find((mode) => MODE_HASHES[mode] === window.location.hash) ??
-  'fly';
+  'park';
 void setMode(startMode);

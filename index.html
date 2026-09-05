@@ -9,6 +9,7 @@
   <body>
     <div id="mode-switcher">
       <select id="mode-select">
+        <option value="park">Precision Parking</option>
         <option value="fly">Flight View</option>
         <option value="planet">Planet View</option>
         <option value="inspect">Planet Inspector</option>
@@ -91,11 +92,21 @@
              is aimed a little below the nose so the planet stays in frame. Placed every frame
              by fly-view.ts, which also hides it when the nose swings behind the camera. -->
         <div id="fly-reticle" aria-hidden="true"></div>
+        <!-- One floating health bar per landing ship, positioned over the ship itself every
+             frame by fly-view.ts (updateLanderHealthBars()) — not a corner panel, because a
+             ship you are aiming at is not something you want to read a bar for somewhere else
+             on screen. Empty; how many bars exist is fly/landers.ts's business. -->
+        <div id="fly-lander-health" aria-hidden="true"></div>
+        <!-- The player's own health bar, floating over the aeroplane in the chase view by the
+             same means as the landing ships' bars (updatePlaneHealthBar() in fly-view.ts). Only
+             one of these ever exists, so it is markup rather than something built in JS. -->
+        <div id="fly-plane-health" aria-hidden="true"><div id="fly-plane-health-fill"></div></div>
         <!-- The pill is the instruments — what the aircraft is doing. The stick lives in the
              corner legend below, which is why the two are not the same element. -->
         <div id="fly-controls" class="hud">
           <span><span id="fly-speed" class="hud-value">45</span> u/s</span>
           <span><span id="fly-altitude" class="hud-value">120</span> alt</span>
+          <span><span id="fly-downed" class="hud-value">0</span> down</span>
           <span class="hud-note coarse-only">Needs a keyboard</span>
         </div>
         <!--
@@ -111,7 +122,10 @@
             <span class="legend-keys"><kbd>←</kbd><kbd>→</kbd></span><span>bank &amp; turn</span>
             <span class="legend-keys"><kbd>A</kbd><kbd>D</kbd></span><span>rudder</span>
             <span class="legend-keys"><kbd>W</kbd><kbd>S</kbd></span><span>throttle</span>
-            <span class="legend-keys"><kbd>Space</kbd></span><span>laser</span>
+            <!-- Its own id, not just text, because fly-view.ts swaps this one word for
+                 "restart" once the aircraft is destroyed — the same key does a different job
+                 then, and the legend has to say so. -->
+            <span class="legend-keys"><kbd>Space</kbd></span><span id="fly-space-label">laser</span>
           </div>
           <!--
             The minimap. The map is static and the marker moves — see `#minimap` in style.css
@@ -143,6 +157,17 @@
           <a href="https://visibleearth.nasa.gov/" target="_blank" rel="noopener">NASA Visible Earth</a>
           (public domain), downscaled.
         </p>
+      </div>
+      <!--
+        Precision Parking. The one 2D scene here, and the only one that is a game: a toy car, a
+        tap, and how close it stopped. Nothing but a canvas — the score, the level, the ruler and
+        the prompt are all drawn *inside* the letterboxed 360x640 board, in board units, where a
+        `.hud` pill pinned to the viewport could not follow them. That includes the
+        "Tap" / "Press Space" split the rest of the site does with .fine-only/.coarse-only: this
+        one is made from matchMedia in park-view.ts and drawn.
+      -->
+      <div id="park-view" class="view" hidden>
+        <canvas id="park-canvas"></canvas>
       </div>
       <div id="inspect-view" class="view" hidden>
         <canvas id="inspect-canvas"></canvas>

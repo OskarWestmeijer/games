@@ -78,7 +78,8 @@ body {
 
 #planet-view,
 #inspect-view,
-#fly-view {
+#fly-view,
+#park-view {
   position: relative;
   width: 100%;
 }
@@ -88,7 +89,8 @@ body {
 #asset-view[hidden],
 #planet-view[hidden],
 #inspect-view[hidden],
-#fly-view[hidden] {
+#fly-view[hidden],
+#park-view[hidden] {
   display: none;
 }
 
@@ -180,11 +182,35 @@ body {
   height: 100%;
 }
 
+/* Precision Parking. `touch-action: none` for the reason given on #planet-canvas — and here
+   also because the whole game is tapping, and Safari reads a quick second tap as a request to
+   zoom the page. The board letterboxes itself inside whatever shape this ends up; the surround
+   is painted by the canvas, not by CSS, so there is nothing here to keep in step with it. */
+#park-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  touch-action: none;
+}
+
 /* The two readouts sit next to each other in the pill; the unit follows the number. */
 #fly-controls .hud-value {
   min-width: 2.2rem;
   display: inline-block;
   text-align: right;
+}
+
+/* The speed readout while a boost ring is still paying out. The wake behind the wings says the
+   same thing at the aeroplane; this says it at the number. Transitioned, so it warms up with
+   the boost and cools off with it rather than blinking. */
+#fly-speed.boosting {
+  color: #ffcf7a;
+  text-shadow: 0 0 8px rgba(255, 190, 110, 0.55);
+}
+
+#fly-speed {
+  transition: color 220ms ease, text-shadow 220ms ease;
 }
 
 /* --- the bottom right corner ----------------------------------------------------------------
@@ -316,7 +342,8 @@ body {
 
 /* --- the incoming bars ---------------------------------------------------------------------
    One bar per landing ship on its way down, stacked at the top of the screen: what it is coming
-   down on, how long it has left, and a fill that drains as it descends. Loud on purpose — this
+   down on, how long it has left, and a fill that drains as it descends. Its own health bar
+   floats over the ship instead — see #fly-lander-health below. Loud on purpose — this
    is the one thing in the flight view with a deadline on it, and the whole reason to break off
    what you were doing. Everything else here is a dim pill in a corner; these shout.
 
@@ -408,6 +435,7 @@ body {
   box-shadow: 0 0 8px rgba(90, 255, 205, 0.7);
 }
 
+
 /* The last ten seconds. Warm, and pulsing: by then it is your problem rather than information. */
 .fly-alert.urgent {
   border-color: rgba(255, 181, 107, 0.75);
@@ -421,6 +449,7 @@ body {
 .fly-alert.urgent .timer-value {
   color: #fff1de;
 }
+
 
 .fly-alert.urgent .timer-mark,
 .fly-alert.urgent .alert-fill {
@@ -581,6 +610,58 @@ body {
   border: 1px solid rgba(255, 207, 122, 0.45);
   border-radius: 50%;
   pointer-events: none;
+}
+
+/* One floating health bar per landing ship, positioned over its own model every frame by
+   `updateLanderHealthBars()` in fly-view.ts. Plain on purpose — no glow, no box-shadow, no
+   animation — so it reads as a status readout and does not compete with the ship, the burst, or
+   the alert bar's own countdown fill, which is the one thing here that is meant to shout. */
+/* Filled out to the full view — not just given `position: absolute` and left to shrink-to-fit,
+   which is the bug this had: an absolutely positioned box with no size and no inset collapses
+   to nothing, and every bar's percentage `left`/`top` (see `updateLanderHealthBars()`) is
+   resolved against *this* box, not `#fly-view` — so every bar landed pinned to a single point
+   instead of tracking its own ship. `inset: 0` is what makes the percentages mean what they say. */
+#fly-lander-health {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.lander-health {
+  position: absolute;
+  width: 3.4rem;
+  height: 0.22rem;
+  /* Anchored by its own top-left, like the reticle, then pulled back onto its centre and lifted
+     clear of the point it is projected from — which is already above the ship, but a bar drawn
+     *at* that point would still sit on top of the anchor rather than above it. */
+  transform: translate(-50%, -100%);
+  background: rgba(6, 12, 16, 0.55);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.lander-health-fill {
+  height: 100%;
+  background: rgba(143, 232, 205, 0.65);
+}
+
+/* The player's own health bar. Same shape and the same restraint as a landing ship's — plain,
+   no glow, no animation — but warm rather than the cool green of a ship that isn't yours, the
+   same "ours is warm, theirs is cold" convention the nav lights and the laser already use. */
+#fly-plane-health {
+  position: absolute;
+  width: 3.4rem;
+  height: 0.22rem;
+  transform: translate(-50%, -100%);
+  background: rgba(6, 12, 16, 0.55);
+  border-radius: 1px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#fly-plane-health-fill {
+  height: 100%;
+  background: rgba(255, 207, 122, 0.65);
 }
 
 #fly-reticle::after {

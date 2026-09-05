@@ -7,18 +7,30 @@
 
 ## What this is
 
-A **GitHub Pages site with four Three.js scenes**, picked from a fixed dropdown in the
-top-right corner (`#mode-switcher`).
+A **GitHub Pages site with five scenes**, picked from a fixed dropdown in the top-right corner
+(`#mode-switcher`). Four are Three.js and share one world; the fifth, **Precision Parking**, is a
+plain 2D canvas game and shares nothing with them at all.
 
-**Flight view** (`…/#`, what the site opens on) is a small aeroplane you fly around the same
+**Flight view** (`…/#fly`) is a small aeroplane you fly around the same
 planet from a chase camera: the arrows pitch and bank it, `A`/`D` are the rudder and `W`/`S` the
 throttle, `Space` the laser, with speed and altitude in the centre pill and the bottom right
 corner carrying the key legend over a minimap of the whole world with the aircraft's ground
-track on it. Somewhere over the planet there is one alien saucer, drifting slowly and marked on
-that map, and a few alien landing ships on their way down — each drawn on the map as the line of
-its approach, with forty seconds from appearing to touchdown. None of them is armed. Land, and a
-ship is simply gone; get there first and it can be shot down. Higher up, an Earth defence command
-post goes round the planet on a fixed orbit, warm-lit and ringed on the map. It is deliberately the *minimum* that reads as flying — no lift, no drag, no
+track on it. Twelve places around the globe carry a stack of three boost rings each — low, middle and high
+orbit over the same patch of ground — which are how you go fast: the throttle's own ceiling is
+deliberately modest, and flying through a hoop adds a burst on top of it that the wingtips drag a
+pair of glowing ribbons behind, and heals the aircraft besides, quietly. The sites never move, so a run between three of them is a route you can
+fly twice — they are not on the minimap, which is kept for the things that are happening.
+Somewhere over the planet there is one alien saucer, drifting slowly and marked on that map, and
+a few alien landing ships on their way down — each drawn on the map as the line of its approach,
+with forty seconds from appearing to touchdown, and shooting back while they are in the air.
+Land, and a ship is simply gone; get there first and it can be shot down — twelve hits, a health
+bar of its own floating above it — and it leaves a repair pack falling where it died, gone in ten
+seconds, that comes to you on its own once you are close enough (a tether between it and the
+aircraft the only sign) and undoes some of whatever the return fire has taken off the aircraft's
+own health, shown the same way. The saucer stays unarmed. Take enough of that fire yourself and the aircraft
+explodes and the flight stops there, with a line from the command post that the fight for Earth
+has been lost, until Space brings it back. Higher up, an Earth defence command post goes round
+the planet on a fixed orbit, warm-lit and ringed on the map. It is deliberately the *minimum* that reads as flying — no lift, no drag, no
 stall, no gravity and no ground, only an orientation, a speed along the nose, a bank *command*
 rather than a roll rate, and a level-hold that bends the path round the globe instead of letting
 it fly off on a tangent. See the header of `src/fly-view.ts`, which carries the reasoning for
@@ -104,6 +116,23 @@ around the equator and light whichever face you want to look at. Planet view is 
 stand and look out of a window; this is the view for actually studying the planet. It builds
 its own `buildSpace()`, so it shares no GPU resources — and no sun — with planet view.
 
+**Precision Parking** (`…/#`, what the site opens on) is the odd one out and deliberately so:
+no three.js, no planet, no shared anything. A chunky toy car rolls left to right along a plain street towards a
+painted parking zone; one tap stops it dead; the score is how close its centre landed to the
+bay's centre. **Parked means both tyres between the bay's two lines** — the car's own size is
+part of the question, which is what makes it parking rather than target practice. A session is
+**five fixed bays, the same five for everybody, and you always play all five**: putting a tyre
+over a line or running into the block costs a flat penalty and the session carries on. At the end
+you get one number, the total distance off centre, which is the point of the whole thing — a
+score two strangers can hold up against each other. There is nothing else on the street, on
+purpose.
+Overshoot and the bumper meets a wooden buffer block and the run is over. It is drawn on a plain
+2D canvas onto a **fixed 360 x 640 portrait board that is letterboxed into whatever viewport it
+lands in** — which is not decoration but the load-bearing decision of the whole scene, because a
+board that stretched to the window would make "you stopped 4 units off centre" mean a different
+thing on every device, and the per-stage comparison this game is shaped around could never be
+made. See "The parking game" below, and the header of `src/park-view.ts`.
+
 **Asset view** visualizes AI-generated 3D assets, and is one hash away at `…/#assets`. The
 assets — `.glb` models produced by tools like [Meshy](https://www.meshy.ai/) and
 [Tripo3D](https://www.tripo3d.ai/), plus their reference/preview PNGs — live in
@@ -141,9 +170,13 @@ index.html            #mode-switcher (mode + surface-resolution selects), then
                       #fly-controls: speed and altitude), #planet-view (#planet-canvas +
                       #crosshair + #interact-prompt), #inspect-view (#inspect-canvas + the
                       #sun-azimuth slider) and #fly-view (#fly-canvas + #fly-reticle +
-                      #fly-corner, which stacks the #fly-keys legend over the #minimap, its two
-                      markers #minimap-plane and #minimap-ufo, and #minimap-paths, the empty
-                      SVG layer the landing ships are drawn into), loads /src/main.ts
+                      #fly-lander-health, one floating bar per landing ship + #fly-corner,
+                      which stacks the #fly-keys legend over the #minimap, its two markers
+                      #minimap-plane and #minimap-ufo, and #minimap-paths, the empty SVG layer
+                      the landing ships' paths are drawn into) and #park-view, which is one
+                      #park-canvas and nothing else — every readout in the parking game is drawn
+                      inside its own letterboxed board, where a .hud pill could not follow it;
+                      loads /src/main.ts
 vite.config.ts         publicDir -> ai-assets/ (served as-is, copied into dist/ on
                        build); modelManifest() Vite plugin scans ai-assets/ at
                        dev/build time and exposes virtual:model-manifest
@@ -167,16 +200,52 @@ src/
   fly/ufo.ts           createUfo() — the saucer: how it is built, where it spawns, how it
                        drifts, and what happens when it is hit. Unarmed, deliberately
   fly/landers.ts       createLanders() — the landing ships: three of them, each appearing,
-                       descending a straight approach for 40 s, and going the moment it lands.
-                       LANDER_COUNT lives here, which is why the map's marks are built in code
+                       descending a straight approach for 40 s, taking LANDER_MAX_HEALTH hits to
+                       bring down, shooting back the whole time through a second Bolts pool, and
+                       going the moment it lands or dies. LANDER_COUNT lives here, which is why
+                       the map's marks are built in code
+  fly/burst.ts         createBurst() — the explosion: an expanding shell and a handful of
+                       thrown shards, parametrised by colour and scale. A landing ship's kill and
+                       the aircraft's own destruction (fly-view.ts) are two instances of it
   fly/places.ts        LAND_TARGETS — every place a landing ship may come down: a country, and
                        a coordinate well inside it. A table rather than a land mask, which is
                        what makes "never in the ocean" true by construction
+  fly/rings.ts         createRings() — the boost rings: twelve sites on a Fibonacci sphere with
+                       three hoops stacked over each, the swept pass test, the tracking that
+                       turns every hoop to face the aeroplane, and a quiet heal on top of the
+                       boost. No collision of any kind, and no mark for the heal either — see the
+                       file's own header for what was tried there and pulled
+  fly/packs.ts         createPacks() — the repair packs a shot-down landing ship leaves behind:
+                       a pool of crates, ten seconds each, a magnet pull and tether once the
+                       aircraft is close, and the swept pickup test. Heals the aircraft in
+                       fly-view.ts, now that a landing ship's return fire can hurt it
+  fly/trail.ts         createTrail() — the wingtip ribbons dragged behind while boosting: two
+                       camera-facing strips of a fixed length, tapered by distance along the wake
   fly/command-post.ts  createCommandPost() — the Earth defence station: one circular orbit in
                        space.ts's own inclined plane, a hub-ring-and-solar-wings model, and
                        nothing else. Not the station in station/ — see the file's header
-  fly/bolts.ts         createBolts() — the laser: a fixed pool of bolts, the cadence, and the
-                       swept hit test that stops a fast bolt tunnelling through the target
+  fly/bolts.ts         createBolts() — a fixed pool of bolts, the cadence, and the swept hit test
+                       that stops a fast bolt tunnelling through the target. Parametrised via
+                       BoltsOptions (colour, pool size, speed, lifetime, interval) so it is both
+                       the player's own laser and, a second instance, the landing ships' return
+                       fire — a bolt does not care who fired it
+  park-view.ts         Precision Parking. createParkView(canvas) — the 2D board transform, the
+                       ready/rolling/judging/over state machine, the tap (back-dated to the
+                       event's own timestamp, which is the whole reason the game is fair), the
+                       scoring and the render loop. The only scene here with no three.js in it
+  park/board.ts        the board as constants: the 360x640 field, the vertical bands, the track
+                       geometry, the warm palette, and rrect(). Stated once because three files
+                       draw into it
+  park/levels.ts       levelSpec(n) — the deterministic ladder: two curves and an integer hash of
+                       the level number, and **no Math.random anywhere**, which is what makes
+                       everybody's level 7 the same level 7. One bay per level, sized as the car's
+                       own CAR_HALF plus the round's clearance, and nothing else on the street
+  park/draw.ts         every 2D drawing routine, in board units: mat, street, the parking bay, the
+                       buffer block, the car, the header and the verdict
+  park/effects.ts      createEffects() — one fixed particle pool (dust, tyre smoke, confetti,
+                       debris) plus the screen shake, allocated once and parked
+  park/best.ts         the only persistence in the repo: a versioned localStorage record holding
+                       the best run and the smallest error achieved on each level
   flight.ts            createFlight() — the station's altitude, attitude, orbit mode and clock.
                        Written by the navigation console, read by the rig and the globe. Owns
                        pitchFor() and the detent tables
@@ -250,15 +319,21 @@ src/
 ```
 
 Only one mode renders at a time: `setMode()` hides the other containers and calls
-`viewer.setActive(false)` / `planetView.stop()` / `inspect.stop()` to park their
-`requestAnimationFrame` loops, so the WebGL contexts never compete. `MODE_HASHES` in
-`main.ts` maps each mode to its URL hash in both directions (flight view, the default, gets
-the bare `#`). `setMode()` is `async`, because every scene arrives through a dynamic
+`viewer.setActive(false)` / `planetView.stop()` / `inspect.stop()` / `fly.stop()` / `park.stop()`
+to park their `requestAnimationFrame` loops, so the WebGL contexts never compete. Parking has no
+WebGL to compete with, and so also no `webglcontextlost` handler and no part in the
+texture-quality fan-out — its `qualitySelect.hidden` case is the same one the asset view takes. `MODE_HASHES` in
+`main.ts` maps each mode to its URL hash in both directions (Precision Parking, the default,
+gets the bare `#`). `setMode()` is `async`, because every scene arrives through a dynamic
 `import()` — three.js never has to be fetched by a browser that only ever looks at one mode.
 
-All three scenes are constructed lazily on first use — each is a whole WebGL scene, and the
+Every scene is constructed lazily on first use — four of them are a whole WebGL world, and the
 gallery additionally fetches a `.glb` that runs to tens of megabytes, so none of them is
-paid for until someone actually looks. Construction must happen *after* the container is
+paid for until someone actually looks. Parking is cheap either way (its chunk is a few kilobytes
+and pulls in no three.js at all), but it is loaded the same way for the sake of one rule rather
+than four. **Since it is also the landing view, a visitor who never touches the dropdown
+downloads no renderer at all** — three.js is half a megabyte and is now reached only by asking
+for one of the scenes that needs it. Construction must happen *after* the container is
 unhidden: the renderer sizes itself from `canvas.clientWidth`, which is 0 while the
 container is `hidden`. That's why `setMode()` sets the `hidden` flags first. The gallery
 list itself is still built eagerly (it's just DOM), and `selectModel()` tolerates being
@@ -469,6 +544,13 @@ Chromium; neither is wired into `npm run build`.
   the rig, so standing 20 m off the hull costs nothing. The flat-bottomed half-egg was the first
   thing the first exterior frame showed. **Don't edit the source while the harness is running** —
   Vite hot-reloads the page mid-shot and the screenshot times out.
+- **Every harness names its hash explicitly**, and `walk.mjs` and `shots.mjs` say `#planet`
+  rather than the bare `#`. They used to open the bare hash because the station was reachable
+  that way; the site's landing view is Precision Parking now, and a harness left on `#` sits
+  waiting sixty seconds for a `window.__station` that never arrives.
+- **`node dev/park.mjs`** is the parking game's, and belongs to a different scene entirely — see
+  "The parking game" below. It checks the two things about that game which are invisible in any
+  frame: that the level ladder is deterministic, and that a stop is back-dated to the tap.
 - **`node dev/walk.mjs`** replays the exact floor logic of `fpv-controls.ts` — clamp, obstacle
   push-out, first-match `deckAt`, step guard — over a route round the lounge, in through the
   mouth of the U, round the table, up the stairs, round the bridge and back, at the 0.1 s dt cap.
@@ -534,7 +616,7 @@ Conventions worth knowing before touching it:
   11 m back from the tip) the same 9.4° puts it up in the roof of the nose. The console's own
   horizon key brings it back down. Don't "fix" this by moving the bridge or stretching the glass; the control is
   the answer, and having a reason to touch it is worth more than never needing to.
-  **The spawn is up here now**, so the bridge framing is what the site opens on: the limb sits
+  **The spawn is up here now**, so the bridge framing is what planet view opens on: the limb sits
   high in the nose and almost the whole cap window is planet, which is the right opening frame
   even though it is not where the default 9.4° was tuned. The key is still the answer for
   anyone who wants it lower.
@@ -826,9 +908,10 @@ Conventions worth knowing before touching it:
 - **The limb haze is remapped, not raw.** `grazing` never drops below ~0.62 anywhere in
   view at this altitude, so feeding it straight to `pow()` hazes the entire visible strip
   into a pale smear. It runs through a `smoothstep(0.62, 1.0, …)` first.
-- **The planet must never be a black sphere on load.** Flight view is the site's landing
-  view and the maps take a moment, so the shader carries a procedural fallback selected by
-  the `uHasMaps` uniform, faded in over ~0.4s once the textures resolve.
+- **The planet must never be a black sphere on load.** The maps take a moment, so the shader
+  carries a procedural fallback selected by the `uHasMaps` uniform, faded in over ~0.4s once the
+  textures resolve. This mattered most when flight view was the site's landing view; it is one
+  hash away now, but a mode switch is still a moment where the maps may not have arrived.
 - **Bloom does the glowing.** The high LED strips, the globe and the atmosphere are authored with
   colour channels deliberately over 1.0 and `UnrealBloomPass` has a threshold just above 1.0, so
   only those pick up a halo. **Which side of that threshold a strip sits on is a design decision,
@@ -912,6 +995,11 @@ place.
   pulses (opacity only, so it cannot fight the position JS writes) because a 6 px contact on a
   272 px map is one you will otherwise miss, and it is hidden outright between one being shot
   down and the next appearing.
+- **The boost rings are deliberately not on the map**, though they were briefly, one mark per
+  site. The map is for the things that are *happening* — where a ship is coming down and how long
+  it has — and a fixed constellation of thirty-six hoops turned it into a scatter of warm rings
+  with the green marks that matter lost among them. The rings are big, lit and three deep; you
+  find them by looking out of the window.
 - **A landing ship gets a line, not a mark**, from where it came in to where it will touch down,
   with a ring on the site and a square on the ship. A mark says where something is; a line says
   where it is *going*, which is the thing you need in order to decide whether to fly after it.
@@ -926,6 +1014,120 @@ place.
 - **The paths are redrawn every frame, not once at spawn**, because the planet turns underneath
   them: both ends are fixed in space, so on the map they creep west together with the ground
   they are over.
+
+### The boost rings, and the wake behind the wings
+
+`fly/rings.ts` and `fly/trail.ts`, wired together in `fly-view.ts`.
+
+- **They are the reason the throttle ceiling came down**, from `MAX_SPEED` 130 to 70 and then to
+  30. At 130 the throttle alone got you anywhere and a ring would have been a curiosity. Under
+  its own power the aeroplane now loafs — four minutes to a lap, terrain close enough to read —
+  and everything fast in this view is a ring: boosted it does 120, four times what the throttle
+  alone will give. One ring is worth half as much again as the whole throttle range, which is
+  deliberate, because a boost you can barely feel is not worth flying to.
+- **`THROTTLE_UP`/`THROTTLE_DOWN` came down with it**, 34/70 to 12/24. The usable range is 18
+  units wide now against 118 at the original ceiling, and the old authority crossed the whole of
+  it in half a second — a lever that became a switch.
+- **The boost is its own term, not a change to the throttle.** `speed` is what the throttle is
+  set to; `boost` sits on top of it and decays exponentially (`BOOST_DECAY` 2.6, a half-life just
+  under two seconds), so the aeroplane surges, coasts back down and is still cruising at exactly
+  what you left it on. Rings stack up to `BOOST_MAX`, so a run through a stack is worth chaining.
+  The readout shows the total and goes warm while there is a boost on it.
+- **Nothing about a ring is solid.** No collision, no deflection, no slow-down for clipping the
+  rim: the only question ever asked is whether the segment the aeroplane flew this frame crossed
+  the disc. This scene has no ground and no walls, and a gate that could swat you out of the sky
+  would be the first solid thing in it.
+- **The test is swept, for the same reason the laser's is.** A boosted frame is three units and a
+  slow one sixteen; "is the aircraft inside the hoop right now" would miss most passes.
+- **The sites are fixed to the ground, not spawned near you.** Twelve places from a Fibonacci
+  sphere — even spacing by construction, where random latitudes and longitudes bunch at the poles
+  and pile up on each other — each holding three hoops at 50, 110 and 170. Fly through one and
+  the same hoop is back over the same country six seconds later. An earlier pass put each ring
+  out at a random bearing from the aircraft and recycled it whenever it fell behind, which made
+  the minimap a list of things that happened to be near you rather than a map you could aim at
+  twice.
+- **Three hoops per site, not one, so a site is reachable at whatever altitude you are flying.**
+  It also gives the view its best thing to fly: having found a stack, the obvious move is to take
+  all three, which is a climb. A single hoop per site made one height right and the rest of the
+  aeroplane's band a place you passed through.
+- **A hoop is a lit object, not a light**, and that is a correction. It was one material
+  authored well over 1.0, which put a whole 20-unit torus through the bloom threshold: from any
+  distance a ring was a white-hot circle, and with thirty-six of them the loudest thing in the
+  scene was its scenery — the alien landing ships, the one thing here with a clock on it, were
+  outshouted by the furniture. The hoop is warm metal now, lit by the same sun and earthshine as
+  the aeroplane, with a low emissive so it still reads over the night side. What blooms is the
+  six lamps, which are spheres under a metre across: six points of light, not a glare.
+- **Every hoop turns to face the aeroplane, and that is a mechanic rather than a flourish.** Left
+  on a fixed heading most of the hoops you found were edge-on, and flying through one meant
+  spotting its facing from several hundred units out, overflying it and coming back round. It is
+  aimed halfway between the bearing to you and the reverse of your heading — lined up, the two
+  agree and the hoop is square to your approach; off to one side, it leans towards the path you
+  would fly to reach it. Rate-limited (`FACE_RATE`), because a ring that tracks exactly reads as
+  a decal pinned to the camera, and because the bearing changes faster than any object could turn
+  when you shoot past a near miss.
+- **The wake is capped at a length shorter than the chase camera's standoff, and that is the
+  whole of why it looks like a wake.** Drawn as "however far `SAMPLES` frames of history reach",
+  it is 75 units at boosted speed against a camera 15 units behind — so its widest, brightest end
+  sweeps straight past the lens, and two half-metre ribbons at three metres from the eye fill a
+  third of the screen each. The first version looked like the aeroplane was towing two
+  searchlights. `MAX_LENGTH` is 12, under the standoff, and everything past the cut is collapsed
+  onto it.
+- **The ribbons taper by distance along the wake, not by sample index.** Index is the tempting
+  shortcut because then the colour attribute is static — but samples are *frames* and the cut is
+  a *length*, so at speed the whole visible ribbon is the first three or four samples of
+  twenty-four, and tapering by index gives a uniformly bright square-ended paddle.
+- **They are camera-facing strips, not lines.** `LineBasicMaterial.linewidth` is one pixel
+  everywhere that matters. Spanning the width by `cross(direction of travel, direction to the
+  camera)` is what keeps a ribbon full-width in a bank, where one spanned by the wing axis or by
+  the aircraft's up would collapse to an edge.
+- **The wake lives in world space, beside the aeroplane rather than under it** — parented to the
+  aircraft it would turn with it — and its history is dropped whenever the boost falls to nothing
+  or the view is parked, so the next boost cannot draw a streak from wherever the last one ended.
+- **A ring repairs as well as boosts, and it is deliberately not marked.** `RING_HEAL_AMOUNT`
+  (see "Losing" below) is a quarter of the aircraft's health per hoop, on top of the speed the
+  ring already gives — the two are the same errand now rather than separate things to fly to. A
+  mark was tried in the middle of every hoop to say so — first a plain cross, which read as a
+  target reticle rather than as "repair", then the repair pack itself (`buildPackMesh()` from
+  `fly/packs.ts`), scaled up and tumbling. Both were pulled: the heal is a quiet bonus on top of
+  a boost you were already flying to the ring for, not a second landmark competing with the
+  ring's own six lamps and the real falling packs for attention, and a ring at full health simply
+  does nothing you would notice, the same as one you did not need to boost from either.
+
+### The repair packs
+
+`fly/packs.ts`, dropped from `fly/landers.ts` through its `onShotDown` callback.
+
+- **A pack is what a landing ship leaves when you shoot it down**, and only then — a ship that
+  lands is nobody's doing and leaves nothing. It sinks slowly down the local vertical for ten
+  seconds, fading over the last two and a half, and is gone whether or not anyone came for it.
+- **There was nothing to repair for a while, and the file said so.** The saucer stayed unarmed
+  (still is), and there was no ground to hit, so a pack was *a reason to fly at the wreck* — ten
+  seconds short enough that taking one means committing to the kill before you have made it —
+  rather than a resource, and `Packs.taken` was a number waiting for a use. A landing ship now
+  shoots back on the way down (see "And the landing ships" below), so a recovered pack finally
+  does something: it heals the aircraft by `PACK_HEAL_AMOUNT` in `fly-view.ts`, capped at
+  `PLANE_MAX_HEALTH`.
+- **It is not a score.** The count exists so the command post can say a line when you take one.
+  Taking one is worth a sentence and nothing else — see the "no score, no timers, no objectives"
+  line above.
+- **The pickup test is swept**, like the rings' and the laser's, over the segment the aeroplane
+  flew: at speed a 9-unit crate fits between two frames.
+- **The pool is four and `drop()` tolerates a full one.** That needs four kills inside ten
+  seconds, and silently dropping the fifth is cheaper than any bookkeeping that would avoid it.
+- **Packs are cleared when the view is parked**, not left hanging: their ten seconds do not run
+  while nothing is rendering, so one left behind would still be there — with its clock restarted
+  — on the way back in.
+- **Inside `MAGNET_RANGE` (40 units) a pack stops sinking and comes to you, slow at first and
+  then fast.** `pullTime` counts seconds spent inside range without a break — reset the instant
+  the aircraft leaves it — and the pull speed is `min(MAGNET_MAX_SPEED, pullTime / MAGNET_RAMP_TIME * MAGNET_MAX_SPEED)`:
+  the ramp, not the top speed, is what makes it read as a *magnet* rather than a snap. A pack
+  that only ever sank would be easy to lose the moment you broke off to keep fighting rather than
+  babysit the wreck; the magnet is what makes "come back for it in a few seconds" actually work.
+- **A thin tether is the only sign the magnet is live**, a box stretched between the pack and the
+  aircraft by the same `setFromUnitVectors` technique `fly/bolts.ts` uses to aim its own boxes,
+  recomputed *after* the pack moves each frame — computed against where it started, the tether
+  would visibly lag a step behind the crate it is attached to. It fades with the pack's own
+  fade rather than on its own clock, so the two always disappear together.
 
 ### The saucer, the landing ships and the laser
 
@@ -992,9 +1194,64 @@ And the command post, in `fly/command-post.ts`:
 And the landing ships, in `fly/landers.ts`:
 
 - **Forty seconds from appearing to touchdown, and that clock is the whole of them.** Land and
-  the ship is gone; shoot it first and it is gone. Nothing is scored either way *yet* — the
-  intention is that letting them land eventually costs you the game, which is why the countdown
-  is the loudest thing on screen.
+  the ship is gone; shoot it first and it explodes. The intention is still that letting them land
+  eventually costs you the game, which is why the countdown is the loudest thing on screen.
+- **It now takes `LANDER_MAX_HEALTH` hits, not one — twelve.** The laser fires six times a
+  second and a ship on a straight approach was an easy thing to keep pointed at, so a single hit
+  made the forty-second clock really mean "forty seconds to notice it exists". Twelve is two
+  seconds of sustained fire at the laser's own cadence: against a forty-second approach that is
+  real commitment, not a click in passing, without being the grind twenty was when it was tried.
+  `hit()` tolerates being called any number of times past zero, the same guard it always needed
+  for two bolts landing in one frame.
+- **The health bar floats over the ship, not in the corner alert panel.** It was there first,
+  under the countdown, and that put it somewhere you were not looking: a ship you are actually
+  aiming at is on screen, not in the top-left panel. `updateLanderHealthBars()` projects a point
+  `LANDER_BAR_OFFSET` above each live ship — along its own local vertical, not its mesh's "up",
+  which on a descending ship points at the ground — the same load-bearing after-the-render
+  ordering as the reticle. Plain on purpose: no glow, no box-shadow, no animation. The alert
+  bar's own countdown fill is the thing here that is meant to shout; this only has to say the
+  hits are landing.
+- **Kills are counted; landings are not.** `Landers.downed` is a tally of what the *player* did,
+  so a ship that reaches the ground does not touch it, and `reset()` zeroes it with everything
+  else. It shows as `N down` in the instrument pill beside speed and altitude — deliberately in
+  the dim corner readout rather than anywhere near the alert bar, because it is a fact about the
+  session rather than something to play against. There is still no score in the sense the
+  "no score, no timers" line means: nothing rewards it, nothing is lost by it, and it does not
+  gate anything. The HUD is written only when the number changes.
+- **They shoot back, and this reverses the "unarmed" note that used to sit here.** The saucer
+  stays unarmed on purpose (see below); a landing ship under fire returns it while it is still in
+  the air, through the same `fly/bolts.ts` pool the player's own laser is — a second `createBolts`
+  instance, cold green instead of warm, tuned slower and sparser via `BoltsOptions`. A ship's own
+  `FIRE_INTERVAL` is currently 0.9 s — under a second, so lingering in front of one is genuinely
+  costly — but the *combined* rate from every ship in the air is separately capped by that pool's
+  own `interval` (0.28 s), which is what keeps three inbound ships from tripling the incoming
+  fire. `FIRE_RANGE` (220) keeps a ship from sniping across a hemisphere, and a random initial
+  `fireCooldown` on spawn stops a ship opening up the instant it appears.
+- **`LANDER_HIT_DAMAGE` is 15, not the 7 it launched at.** Seven read as sniping rather than
+  fighting back, especially next to the fast cadence above; at 15 seven hits brings a fresh
+  aircraft down, which is real stakes for standing in front of a ship and trading shots. The
+  aircraft's own health, `PLANE_MAX_HEALTH` (100) and its floating bar, live in `fly-view.ts`
+  (see "The player's own health bar" below) — this is the file that first gave that bar a reason
+  to move.
+- **A recovered repair pack is what undoes this**, which is the "if damage is ever added" that
+  `fly/packs.ts`'s header was written for before there was any. `PACK_HEAL_AMOUNT` is 60, so two
+  packs make a fresh aircraft whole exactly — matched to how much harder the fire that damages
+  you got, not to the old 7-damage number, and kept a clean multiple of `PLANE_MAX_HEALTH` when
+  that went up 20% (100 to 120).
+- **A boost ring heals too, `RING_HEAL_AMOUNT` a hoop — a quarter of the tank — and unmarked.**
+  It is on top of the boost the ring already gave, not instead of it: going fast and staying in
+  the fight are the same errand now. Four rings, a third of one stack, make a fresh aircraft
+  whole. Two things were tried to say so in the hoop itself — a plain cross, then the repair pack
+  scaled up and tumbling — and both were pulled: the heal reads better as a quiet bonus on a ring
+  you were already flying to, not a second thing competing for attention with the ring's own
+  lamps. It happens whether you were damaged or not; healing at full health just clamps there.
+- **There is no lead prediction, on either side of this fight.** A bolt travels in the straight
+  line it was fired along; it does not re-aim at where the target will be. That is consistent
+  with the player's own gun, which does not lead the saucer either, and it is also honestly the
+  reason a lingering, drifting aircraft under autopilot alone can go untouched for a long
+  time — the shots that land are the ones taken at a target that is not moving much *across* the
+  line of fire, which in practice means close range and a head-on approach: exactly the geometry
+  of actually finishing off a kill.
 - **The alert bar across the top is that clock, and it is the one thing here that shouts.**
   One row per ship — its mark, the country it is coming down on, the seconds left — bold,
   uppercase and green, turning warm amber and pulsing under ten seconds. The bar hides itself
@@ -1009,9 +1266,20 @@ And the landing ships, in `fly/landers.ts`:
   `Space.worldFromLatLon()`, the inverse of `surfaceUv`. Held in world space instead, the target
   would drift about nine degrees west of its own country over a forty-second descent, and the
   ring on the map would slide off the coastline it was aimed at.
-- **Nothing is animated**, which was the brief. No landing sequence, no touchdown, no explosion
-  and no flash: a ship on the ground is a ship that is not there any more. The saucer keeps its
-  pop because it had one already.
+- **A ship you shoot leaves a repair pack; a ship that lands leaves nothing.** The callback fires
+  from `hit()` and not from the landing branch, which is the same distinction the kill counter
+  draws — see `fly/packs.ts`.
+- **Landing is not animated; being shot is.** A ship that reaches the ground is simply not there
+  any more — no landing sequence, no touchdown, no flash — because nothing you did caused it. A
+  ship you *shoot* explodes: `createBurst()` in `landers.ts` throws an additive shell out to 26
+  units over 1.1 s with fourteen tumbling shards inside it. It is deliberately bigger and longer
+  than the saucer's pop (0.7 s, and no debris at all) over a hull half the size, because the
+  saucer is a target of opportunity and a lander is the payoff for a flight across a continent.
+  This reverses the original "no explosion" note, which had the two events sharing one treatment;
+  they are not the same event.
+- **A burst outlives the ship that made it**, so it is built per ship, parked invisible like the
+  bolt pool, and ticked from `update()` *outside* the active check — otherwise it would freeze
+  mid-expansion the instant the ship it belongs to stopped existing, which is immediately.
 - **The approach is a straight line and a linear descent** — `lerp` between the two directions
   then `normalize`, rather than a proper slerp, which over the two thirds of a radian this
   covers agree to well under the ship's own width — from 150 units of altitude down to 1.5.
@@ -1021,6 +1289,323 @@ And the landing ships, in `fly/landers.ts`:
 - **The bolt pool takes a list of targets now**, walked per bolt: a couple of dozen bolts against
   a handful of targets is cheaper than any structure that would avoid the loop. Each target's
   `hit()` has to tolerate being called twice, because two bolts can land in the same frame.
+
+### The player's own health bar
+
+`PLANE_MAX_HEALTH`, `updatePlaneHealthBar()` and the `#fly-plane-health` markup, all in
+`fly-view.ts` / `index.html`.
+
+- **It floats over the aeroplane, the same way a landing ship's floats over it** — a HUD element
+  in a corner would put your own condition somewhere you are not looking while you are the thing
+  being shot at. Only one aircraft ever exists, so unlike the landing ships' bars (one array,
+  built per ship) this one is markup, `#fly-plane-health`, written directly rather than
+  constructed in JS.
+- **It is anchored to the aircraft's *own* up, not the local vertical.** A landing ship sits
+  still relative to the ground it is over, so anchoring its bar to the radial "up" at its
+  position is enough. The aeroplane banks constantly; anchoring to world "up" would swing the bar
+  out to one side of the fuselage in every turn instead of staying parked over it the way the
+  chase camera expects. `PLANE_BAR_OFFSET` (3 units) clears the tail fin, the tallest point on
+  the model.
+- **Same after-the-render ordering as the reticle and the landing ships' bars, for the same
+  reason**: `Vector3.project()` reads `camera.matrixWorldInverse` without refreshing it, and the
+  camera has just moved this frame.
+- **It was invisible on first landing, and the bug is worth remembering.** The landing ships'
+  bar layer, `#fly-lander-health`, was `position: absolute` with no size and no inset — which
+  collapses to a zero-size box at its static position — and every bar inside it is *also*
+  `position: absolute`, so their percentage `left`/`top` resolved against that zero-size
+  container instead of against `#fly-view`. Every bar landed pinned to the same point instead of
+  tracking its own ship. The fix is `inset: 0` on the layer, so it fills the view and the
+  percentages mean what they say. `#fly-plane-health` never had this bug because there is only
+  one of it and it sits directly under `#fly-view`, the positioned ancestor, rather than under an
+  intermediate layer of its own.
+
+### Losing
+
+`destroyed`, `DEFEAT_MESSAGE`, `planeBurst` and the top of `update()`, all in `fly-view.ts`.
+
+- **Zero health explodes the aircraft and stops the flight, and this is the one consequence
+  written in for reaching zero.** `planeTarget.hit()` sets `destroyed` once health has nowhere
+  further to go, hides `plane`, fires `planeBurst` at its last position and puts up
+  `DEFEAT_MESSAGE` through the command post's own message line, the same one `BRIEFING` uses to
+  open the view.
+- **The message has to say how to get out of the state it just put you in, and the first version
+  didn't.** A frozen scene with no other on-screen prompt gives no hint that Space is the way
+  back, so `DEFEAT_MESSAGE` is two sentences: "The fight for Earth has been lost. Press Space to
+  fly again." The corner legend is told too — `spaceLabel` swaps "laser" for "restart" for as
+  long as `destroyed` is true, because that permanent legend is the one other place on screen
+  that claims to say what Space does, and leaving it saying "laser" over a gun that no longer
+  exists would be its own small lie. `reset()` swaps it back.
+- **The explosion is `fly/burst.ts`**, a module that used to be private to `fly/landers.ts` and
+  was pulled out once a second user for it turned up — the same move `fly/bolts.ts` went through
+  for the landing ships' return fire (see "And the landing ships" above): a burst does not care
+  who died any more than a bolt cares who fired it. The aircraft's own is warm rather than a
+  landing ship's cold green, and bigger and a little slower (34 units / 1.4 s / eighteen shards
+  against 26 / 1.1 s / fourteen), because this is the one explosion here that ends the flight
+  rather than removing one target among several.
+- **`update()` returns immediately once `destroyed` is set, after ticking `planeBurst` and
+  nothing else.** Every other moving part — the landers, the saucer, the rings, bolts already in
+  the air — holds exactly where it was, because their own `.update()` calls live in the same
+  function and never run again until `reset()`. This is a considered choice, not the cheapest
+  possible one: keeping the world alive around a plane that is no longer there would need every
+  one of those systems taught to ignore a gone aircraft, for a state that is about to be reset
+  anyway. A held frame reads as a stopping point; a frame that quietly keeps going reads as a
+  bug.
+- **Space restarts, and it is read from the keydown event, not from `keys.has('Space')` in the
+  render loop.** The key is very likely still physically held — it is the trigger, and a death
+  usually happens mid-volley — so a level-triggered check in `update()` would call `reset()` on
+  the very first frame after the explosion starts, before there was any chance to read the
+  message. `onKeyDown` checks `destroyed` before adding the key to the held set at all, so the
+  same press neither restarts twice nor leaves Space stuck "held" into the new flight.
+- **The message survives being frozen, because the code that would end it is what got frozen.**
+  `say()` just starts a countdown (`messageLeft`) that a later, different part of `update()`
+  ticks down and eventually clears — the same part that never runs again once `destroyed` is
+  true. No sentinel value, no special-casing in `say()` itself: the message outlives its own
+  timer for the boring reason that the timer stopped being wound.
+- **`start()` has to choose which message to show, because `stop()` takes any message down with
+  it.** Switching away mid-defeat and back would otherwise reopen the view with the aircraft
+  still gone, still uncontrollable, and nothing on screen explaining either — so `start()` shows
+  `DEFEAT_MESSAGE` again rather than `BRIEFING` if `destroyed` is still true. `reset()` is what
+  actually clears the flag; merely returning to the view does not forgive a death.
+- **`reset()` is the only way out**, and it undoes every part of dying in one place: `destroyed`
+  false, the aircraft visible again, `planeBurst` hidden, the message panel closed, health back
+  to `PLANE_MAX_HEALTH`, alongside everything else it already put back for an ordinary restart.
+
+### The parking game
+
+`src/park-view.ts` and `src/park/`, and nothing else in the repo touches any of it. Two decisions
+govern everything below and neither is cosmetic.
+
+- **The board is a fixed 360 x 640 field, letterboxed.** Every number in the game — the car's
+  length, the target's half-width, the error you are scored on — is in board units, and one
+  transform in `render()` maps the whole field onto the canvas. This is not about looking right
+  in portrait. It is what makes two runs the *same run*: the stated goal for this scene is
+  eventually to be able to say "here is how close you got on level 7, and here is how close
+  everybody else got", and a board that stretched to the viewport would make a four-unit miss a
+  different achievement on a phone and on a desktop. Letterboxing is the price and it is cheap.
+- **The ladder is a pure function of the level number.** `park/levels.ts` may not call
+  `Math.random()` — the speed, the target's size and position, the oil slicks and the bonus zone
+  all come out of two curves and a 32-bit integer hash of *n*. A single random call in there
+  would look identical on screen and would quietly delete the comparison the board was shaped
+  for, along with any hope of going back to beat your own stage record. `dev/park.mjs` asserts
+  the ladder is byte-identical across two page loads, which is the only way that stays true.
+
+And the rest of it, in the order it bites:
+
+- **The whole field is visible and the camera never scrolls.** You see the car, the gap and the
+  target from the moment it launches, which is what makes the tap a judgement rather than a
+  reaction — the feeling the scene is for. The cost is a 308-unit track, which puts a hard
+  ceiling on speed: at 260 u/s there is well under a second of approach and no room for more. So
+  **difficulty is carried by the clearance shrinking**, 36 units either side of the tyres down to
+  4 — a nine-fold squeeze — while the speed curve asymptotes short of unwatchable. The five rungs
+  a session actually uses give tap windows of 686, 246, 102, 48 and 34 ms; the last is about where
+  human timing precision runs out, and exactly where five rounds should finish. **Both curves are
+  much steeper than they first were**, and that is a correction rather than a taste: the original
+  pair took twenty rungs to become interesting, which in a game whose whole appeal is the instant
+  of a tap is nineteen too many.
+- **A rating band has to be measured against the perfect band, not only against the clearance.**
+  At the top of the ladder a quarter of the clearance is *narrower* than the perfect band itself,
+  so `GREAT` — tested after `PERFECT` — had a window entirely inside it and could never be
+  awarded. It takes the wider of the two now. Worth remembering before any further tuning of
+  either curve: the shrinking target eventually crosses every fixed threshold in the file.
+- **The stop is instantaneous, and back-dated to the tap.** There is no braking curve and no
+  skid, because either would put a second skill between the tap and the result when the tap *is*
+  the result. More importantly the car's position is computed from the *event's* own timestamp,
+  not read at the next animation frame: at 255 u/s one frame is over four board units against a
+  level-20 half-width of 4.6, so sampling at the frame would hand the whole zone to the frame
+  clock and no amount of skill would get it back. `MAX_BACKDATE_MS` caps how far that
+  interpolation is trusted, so a stale or synthetic timestamp cannot teleport the car. What the
+  player gets instead of brakes is weight — a nose dip, tyre smoke, a squash — all of which are
+  cosmetic and none of which move the judged number.
+- **The win condition is the whole car inside the bay, and the ladder is built out of that.**
+  The judged point is the car's centre — one number, and the only one a tap can move — but the
+  band it has to land in is the round's **clearance**, which is the bay's half-width less
+  `CAR_HALF`. So `park/levels.ts` shrinks the clearance, 36 units down to 4, and the bay itself
+  only goes from 130 units wide to 67. It can never go below 58: **a bay shorter than the car is
+  not a hard bay, it is an impossible one.** An earlier ladder shrank the *bay* to ±4 and judged
+  the centre alone, which worked only because the car's own size was not in the question — and
+  that is what made the target read as a mark to aim at rather than a space to fit into.
+- **It was the tyres for a while, and the car's outline is better.** `WHEEL_X + WHEEL_R` is 27.5
+  against a 29-unit half-length, so the bumper legitimately overhung a bay the game called
+  parked, and the rule needed a sentence to explain. The car's own silhouette needs none — you
+  can see whether it is between the lines — and it takes the drawing and the scoring off two
+  different measurements of the same object. Nothing drawn may now stick out past `CAR_HALF`;
+  `dev/park.mjs` asserts the wheels do not.
+- **The wheels are symmetric about the car's centre.** They were drawn at -16 and +17 while they
+  were only ever decoration, and a car whose centre is not the midpoint of its own drawing is one
+  whose judged number sits half a unit out in one direction forever.
+- **The nose dip is a vertical shear, not a rotation, and that is a correctness fix.** The bay is
+  measured against the car's outline, so **anything that changes the car's drawn width is a
+  scoring bug, not a visual one** — the player checks "is it between the lines" by eye, and a
+  drawing that narrows under the brakes puts a car genuinely over a line inside it. A rotation
+  does exactly that: it used to swing the axles in by **1.7 units** at the crash tilt, 40% of the
+  last round's clearance, and "it said missed and the car was in" was the entirely reasonable
+  conclusion. `transform(1, k, 0, 1, 0, 0)` maps (x, y) to (x, y + kx), so every point keeps its
+  x: the nose drops, the tail lifts, and the footprint is provably untouched at any tilt. The
+  wheels sit outside it and stay on the road, which is also what a suspension does.
+- **The nose dip was pointing the wrong way.** Canvas y runs *down*, so the negative tilt that
+  called itself a dip was lifting the nose under braking. `NOSE_DIP` is positive now.
+- **The bay's two lines are painted outside the judged edges, not inside them.** Drawn inward —
+  which they were — five units of paint at each end meant the gap you could see between the lines
+  was ten units narrower than the space the judge measured, so "both tyres between the lines" and
+  "both tyres in the bay" were two different rules and a marginal call could look wrong either
+  way. Outside, the inner edges of the paint *are* the boundary.
+- **A failed round marks the line it crossed in red and the end of the car that crossed it in
+  white.** This is not decoration: at the last round's 4.3 units of clearance, missing by a tenth
+  of a unit puts the bodywork a tenth of a *pixel* past the paint, and an honest verdict on a stop
+  like that is indistinguishable from a bug. The mark is the difference between "the game is
+  wrong" and "oh — that end, that line". White rather than red on the car, because red bodywork
+  against a red line is three ways of saying nothing.
+- **The block stands directly after the bay, and `BLOCK_GAP` is as small as the geometry
+  allows.** `failLine` is `bay far edge + BLOCK_GAP - CAR_HALF`. With the whole car measured the
+  bumper and the judged edge are the same line, so the band between "your nose crossed the paint"
+  and "your nose hit the wall" is exactly `BLOCK_GAP` on every round — `dev/park.mjs` asserts that
+  identity rather than a range, which is the tightest form the invariant has ever had.
+- **It was 24, and crashing was then almost impossible.** You had to overshoot the bay by most of
+  a car length to find the block, so in practice every failure was a miss and the block was
+  scenery. The rule now is simply **stop short and you miss, go past and you hit it**: four units
+  is sixteen milliseconds at round five's speed.
+- **The cheaper failure is the early one, and that is deliberate.** A miss costs 40 and a crash
+  60, so the whole session is played a fraction early on purpose — which is exactly how anyone
+  parks a real car towards a wall. Because the block is fixed to the bay's far line and the bay
+  narrows every round, the space you may stop in closes from the left as the session goes on,
+  with the wall staying where it is.
+- **The bay never starts where the car does.** At level 1 it is 127 units wide on a 308-unit
+  street, and without `BAY_CLEAR` the near line would land behind the start line and the car
+  would begin the level already parked. That constraint binds at the bottom of the ladder and the
+  roll-time one binds at the top, which is why `minCentre` is a `max` of the two.
+- **The bay is drawn as a bay — a wash of colour between two bold end lines — not as a block of
+  hazard chevrons.** The chevrons were right while the target was something to aim the middle of
+  the bonnet at. They are wrong for a space to fit into, where the two lines and the gap between
+  them are the entire question, so the fill dropped back and the ends took the weight. The centre
+  mark survives as a faint dashed tick, because it is what the score is measured from rather than
+  what you have to hit.
+- **There is no precision ruler, and its removal is the reason the board is 512 tall rather than
+  640.** A hundred units above the mat carried the level's clearance blown up to the full width of
+  the board, with a dashed bracket for the stage record and a tick for where the car stopped. It
+  was the densest thing on the screen and it did not read: a second, magnified coordinate space
+  stacked over the real one, which people took for a progress bar. **The mat says the same thing
+  in the only frame that matters — the car sitting between two painted lines** — and everything
+  the ruler added was a restatement of that in a space nobody had been taught. Its ghost bracket
+  became `personalBest` on the verdict: "your best here", a fact rather than a figure.
+- The street is *drawn* only as far as the block, which is also why it visibly lengthens as the
+  levels place their bays further out — a street carrying on past the thing that ends it makes
+  the block read as an obstacle in the middle of it rather than as the end of it.
+- **A session is five fixed bays and you always play all five. This is the load-bearing decision
+  and it took two wrong turns to reach.** There are exactly two structures that produce a number
+  two strangers can compare: a *variable* length whose score **is** the length (Flappy Bird — a
+  count of pipes, comparable because the unit repeats), or a *fixed* length scored on quality
+  (Dialed.gg, and this). The game was neither for a while — endless with one life, scored on
+  total distance with lower being better — under which quitting on round one with a tidy stop
+  beat a flawless run to round twenty, and the only honest comparable number the structure could
+  produce was "how far did you get". Before that, failing had no consequence at all: a stop
+  nowhere near the bay scored a little and advanced you anyway. **A fixed denominator is the fix,
+  and the one-life rule is what had to go for it.** `SESSION` in `park/levels.ts` is the five
+  rungs, spread across the ladder rather than taken off the bottom of it, so one session runs from
+  686 ms of tap window down to 34 ms.
+- **A failed round costs a flat penalty, not the distance it missed by.** A failure has to score
+  *something* or the total is meaningless, and the distance actually missed by can be two hundred
+  units if you stop at the start line — one flubbed round would swamp four good ones and the
+  session score would be a record of your worst moment. `MISS_PENALTY` is 40, more than the widest
+  round can score by parking badly (round one's clearance is 36), so failing is always worse than
+  any successful park however sloppy; `dev/park.mjs` asserts that against the session's own
+  widest clearance rather than trusting the comment. The verdict still shows the *real* distance
+  as feedback; the results screen shows what the round cost. Those differ on a failure, and the
+  word next to the number is what makes that legible.
+- **`CRASH_PENALTY` is 60 — a crash costs half as much again as a miss, because it is worse.**
+  Stopping outside the bay is bad parking; putting the bumper through the block is bad parking
+  *and* hitting something, and charging the same for both says the block is scenery. It also
+  gives the two failures different shapes to play against: overshooting long is cheaper than
+  overshooting into the wall, so a round that is already lost still has something left to get
+  right. Five crashes cap a session at 300.
+- **The score is the distance, and lower is better.** `error` — how far the car's centre finished
+  from the bay's centre, in board units — is the whole of it. There is no points formula: there
+  used to be one (a thousand times a squared falloff of the nearness, plus a five-hundred perfect
+  bonus, all of it multiplied by a zone multiplier) and it was three arbitrary constants standing
+  between the player and the one fact the game actually measures. `PERFECT` / `GREAT` / `CLOSE`
+  survive as *feedback* — they pick the colour and fire the confetti — but they are derived from
+  the distance and they are not a second score.
+- **The session's figure is the total distance, which only ever goes up.** The header calls it
+  `TOTAL OFF` rather than `SCORE`, because a number labelled "score" is one a player assumes they
+  want large, and this is the opposite. It sits beside `ROUND 3/5` — **the denominator is on
+  screen the whole time**, because it is the entire reason the total means anything. A best total
+  is a legitimate record now and `park/best.ts` keeps one; it was refused while the game was
+  endless, because totals over runs of different lengths cannot be compared and a run that failed
+  on round one with a tidy stop would have held a "best" no honest session could ever beat.
+- **The two failures differ only in what they look like.** `CRASHED` is the car past the fail
+  line and into the block: debris, a toppled block and a hard shake. `MISSED` is a car parked
+  politely in the wrong place: a puff of smoke and nothing else. They cost differently too — see
+  `CRASH_PENALTY` — and the verdict names which it was.
+- **The results screen is its own screen, not a panel over the mat.** A summary laid on top of
+  the parked car covers the one thing worth looking at — a run-ending card did exactly that once
+  and was deleted for it. **Don't put a modal over the mat.** The results are fine as a full
+  screen because by the time they show, the last round's verdict has been and gone and there is
+  nothing underneath left to read. They carry the total, whether it beat the stored best, and a
+  row per round: number, rating, and what it cost. The breakdown earns its place — a total of 53
+  built from five sloppy stops and one built from four good stops and a miss are very different
+  sessions, and the rows say which round to go back for.
+- **A failed round's penalty counts towards the round record but is not announced.**
+  "Your best here" printed under a word that has just cost you forty units reads as
+  congratulation for failing.
+- **`reset()` starts a fresh session and is the only way out of `results`.** Round 1, the total
+  and the per-round scores cleared, effects cleared. Nothing carries forward except what
+  `park/best.ts` wrote to disk.
+- **There is one bay on the street and nothing else, and this reverses two earlier features.**
+  Oil slicks on the approach — patches you must not stop on, which slid the car on if you did —
+  and a small 3x zone beyond the main one both existed and both are gone. Each was defensible on
+  its own and together they were the problem: three things to read in the half-second before a
+  tap that is only ever about one of them, on a screen already carrying too many numbers. A
+  street with patches on it also stops looking like a street. **Everything is the parking zone
+  now** — how wide it is, how far away, and how fast you are going at it — and difficulty comes
+  from the two curves alone. Don't reintroduce a second scoring target or a hazard on the tarmac;
+  that is the history you would be arguing with.
+- **The mat carries nothing printed on it either.** It briefly had a tape measure under the
+  street, unnumbered graduations for a sense of scale. It went with the rest: the verdict under
+  the mat is where a distance is read, and the mat's job is to be the thing the street lies on.
+- **There is no run-history strip.** A row of small bars along the bottom of the verdict showed
+  every stop of the run as a height. It said nothing a player could act on and read as a chart
+  nobody had asked for.
+- **The `ready` phase exists so the target can be read before anything moves.** Each level parks
+  the car at the start line and waits for a tap to launch. Without it the first thing you would
+  do every level is look at where the target is while the car was already rolling towards it.
+- **`arm()` clears the last verdict, and forgetting to was a real bug.** The verdict is drawn
+  whenever the phase is not `ready`, so a `result` left lying around reappeared
+  the instant the *next* level was launched: the previous stop's word and distance, under a car
+  that had not been anywhere yet. It looked like the game was scoring you before you had done
+  anything. The fix is one line in `arm()`, and the harness now asserts `result` is null once a
+  level advances.
+- **`INPUT_LOCKOUT` is not politeness.** The tap that stopped the car is very often still on its
+  way up when the verdict lands, and without the lockout the same press would stop the car and
+  launch the next level.
+- **`stop()` re-arms a level that was mid-roll.** Switching away and back would otherwise return
+  you to a car still rolling towards a target you have not looked at since. The run and the score
+  are kept; the launch is not.
+- **This is the repo's only `localStorage`**, and `park/best.ts` carries the reasoning: one
+  versioned key, every access in a `try/catch` because the property access itself throws in some
+  private-browsing modes, and a malformed record treated as no record. `bestError` — the smallest
+  distance on each level, in board units — is the leaderboard-shaped half of it. **Nothing on
+  screen reads it back any more**, now that the ruler that drew its ghost is gone; what the player
+  gets is `personalBest`, the one-bit answer to "was that your best here". `errorFor()` stays as
+  the read side so the data is not orphaned, and `best.ts` says so. The key is at `v2`: `v1` also
+  held a best run *score*, which could not survive the score becoming a distance, and there was
+  nothing there worth migrating.
+- **Effects are drawn under the car, not over it.** Dust and tyre smoke belong beneath the thing
+  that threw them; drawn on top they read as mud on the paintwork, which is exactly what the
+  first pass looked like.
+- **The DPR cap is 2 even on a coarse pointer**, unlike `fly-view.ts`, which caps at 1.5. That cap
+  is there because nearly every pixel in flight view is shader work under a bloom composer; this
+  is a few dozen flat fills, and crisp text at arm's length is worth more than the fragments.
+- **There is no sound**, deliberately: `src/audio/` is CC0-only by policy and view-owned, and a
+  satisfying stop wants a real sound pass and a licence check rather than a file dropped in.
+- **`node dev/park.mjs`** is the harness, and it exists for the two things no screenshot can
+  show: that the ladder is deterministic, and that the stop is back-dated. It also walks the
+  ladder asserting every bay is on the street and wider than the car that has to fit in it, that
+  none starts where the car does, that every fail line leaves room for the block and every bay's
+  far end is reachable before the bumper meets it, and that every level gives at least
+  `MIN_ROLL_SECONDS` of approach. It also drives the win condition at its own boundary — a tyre
+  on the line is in, a tyre a tenth of a unit past it is out — through `tapAt`, so that is tested
+  through the real judging rather than by doing the arithmetic twice. It prints the ladder as a table with
+  each level's tap window in milliseconds, which is the number the curves are really tuned
+  against. Like `shots.mjs` and `walk.mjs` it is not wired into `npm run build`.
 
 ### Planet inspector behaviour
 Shares `space.ts` with planet view, so everything above about the planet shader still
@@ -1197,12 +1782,25 @@ automatically — no extra copy step needed.
 Two decisions that govern everything from here. They were made deliberately; don't quietly
 reverse them.
 
-**It is becoming a space station to inhabit, not a game.** The long-run shape is: move around
-on board, and eventually go outside in a suit on a tether — but never really leave. The design
-goal is *presence*. **No score, no timers, no objectives, no collectibles.** Those would work
-against the only thing that makes a place worth standing in. (The asset view is unaffected —
-it stays the plain preview tool it has always been. So is the flight view, which is not the
-station and does have a saucer to shoot at — but even there, no score and no timer.)
+**The station is a place to inhabit, not a game.** The long-run shape is: move around on board,
+and eventually go outside in a suit on a tether — but never really leave. The design goal is
+*presence*. **No score, no timers, no objectives, no collectibles.** Those would work against the
+only thing that makes a place worth standing in.
+
+**That rule is about the station, and the other scenes are outside it.** It is worth saying
+plainly, because the exceptions have been growing and pretending otherwise would make the rule
+useless where it actually matters. The asset view is unaffected — it stays the plain preview tool
+it has always been. The flight view is not the station: it has a saucer to shoot at, landing ships
+that shoot back, a lander countdown, boost rings, health bars for both sides of that fight, a
+tally of landers brought down and a way to lose. Even there the line held loosely — no score, no
+timer counting up, no reward for anything done right, only a consequence for what the landing
+ships do to you.
+
+**Precision Parking breaks it outright, and that is the point of it.** It is a score game with a
+level ladder, a personal best, one life and a stated ambition to compare stages between players.
+Nothing about it is meant to migrate inboard: it is a toy on a mat in its own hash, sharing no
+code, no world and no lighting with the station, and it exists partly *because* keeping it
+entirely separate is what lets the station go on being a place rather than a thing to do.
 
 **Real outside, warm inside.** The NASA Earth stays photoreal in the window; the warmth and
 softness go into the station, not onto the planet. The contrast is the point — a cluttered

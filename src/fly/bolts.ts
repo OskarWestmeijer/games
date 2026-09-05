@@ -2,31 +2,35 @@ import * as THREE from 'three';
 import { PLANET_RADIUS } from '../space';
 
 /**
- * The aircraft's laser: a fixed pool of bolts that fly straight, expire, and are checked
- * against one target as they go.
+ * A fixed pool of bolts that fly straight, expire, and are checked against a list of targets as
+ * they go. Originally the aircraft's own laser and nothing else; the landing ships' return fire
+ * (`fly/landers.ts`) is a second instance of this same pool, tuned slower and sparser through
+ * `BoltsOptions` rather than forked into a second file — a bolt does not care who fired it.
  *
  * Cheap on purpose. Nothing here allocates after construction — the meshes are made once and
  * parked out of sight, `fire()` wakes one up and a dead one is simply made invisible again —
- * and there is no physics beyond a position and a velocity. The bolts do not inherit the
- * aircraft's own speed either, which is both what a laser would do and 13% of the answer at
- * cruise.
+ * and there is no physics beyond a position and a velocity. The bolts do not inherit their
+ * shooter's own speed either, which is both what a laser would do and, at the aircraft's
+ * cruise, most of the answer anyway.
  */
 
-/** How many can be in the air at once. At `INTERVAL` and `LIFETIME` below, twelve is the most
- *  that can ever be live; the rest is headroom for a longer range later. */
-const POOL = 24;
-/** Well over the aircraft's `MAX_SPEED` of 130, or you could out-run your own fire. */
-const SPEED = 340;
+/** How many can be in the air at once. At `DEFAULT_INTERVAL` and `DEFAULT_LIFETIME` below,
+ *  twelve is the most that can ever be live from one pool; the rest is headroom. */
+const DEFAULT_POOL = 24;
+/** Well over the aircraft's `MAX_SPEED` of 30 (and its boosted 120), or you could out-run your
+ *  own fire. */
+const DEFAULT_SPEED = 340;
 /** Seconds a bolt lives — about 750 units of reach, twice the planet's radius. */
-const LIFETIME = 2.2;
+const DEFAULT_LIFETIME = 2.2;
 /** Seconds between shots: six a second, so holding Space is a stream and not a wall. */
-const INTERVAL = 0.16;
+const DEFAULT_INTERVAL = 0.16;
 
 const LENGTH = 5;
 const THICKNESS = 0.22;
 /** Warm and over 1.0, so the bloom pass turns each bolt into a light. Everything of the
- *  player's in this scene is warm; the saucer and its lights are the cold things. */
-const COLOR = new THREE.Color(3.4, 1.5, 0.45);
+ *  player's in this scene is warm; the alien half — the saucer, and now the landing ships'
+ *  return fire — is cold green instead, which is `BoltsOptions.color`'s job to change. */
+const DEFAULT_COLOR = new THREE.Color(3.4, 1.5, 0.45);
 
 /** A box's own axis, which `setFromUnitVectors` turns onto the direction of travel. */
 const BOX_AXIS = new THREE.Vector3(0, 0, 1);
@@ -44,6 +48,21 @@ export interface BoltTarget {
   /** Called on the frame a bolt arrives. Must tolerate being called twice: two bolts can land
    *  in the same frame, and both will say so. */
   hit(): void;
+}
+
+export interface BoltsOptions {
+  /** Cold green for the landing ships' return fire; defaults to the player's own warm colour.
+   *  Must be authored the same way — over 1.0 — or it will not pick up the bloom pass. */
+  color?: THREE.Color;
+  /** How many can be live at once. */
+  pool?: number;
+  /** World units per second. */
+  speed?: number;
+  /** Seconds a bolt lives before it expires on its own. */
+  lifetime?: number;
+  /** Seconds between shots — the pool's own floor under how often `fire()` can succeed,
+   *  independent of anything a caller does with several shooters sharing the one pool. */
+  interval?: number;
 }
 
 export interface Bolts {
@@ -66,10 +85,15 @@ export interface Bolts {
   clear(): void;
 }
 
-export function createBolts(): Bolts {
+export function createBolts(options: BoltsOptions = {}): Bolts {
+  const POOL = options.pool ?? DEFAULT_POOL;
+  const SPEED = options.speed ?? DEFAULT_SPEED;
+  const LIFETIME = options.lifetime ?? DEFAULT_LIFETIME;
+  const INTERVAL = options.interval ?? DEFAULT_INTERVAL;
+
   const group = new THREE.Group();
   const geometry = new THREE.BoxGeometry(THICKNESS, THICKNESS, LENGTH);
-  const material = new THREE.MeshBasicMaterial({ color: COLOR });
+  const material = new THREE.MeshBasicMaterial({ color: options.color ?? DEFAULT_COLOR });
 
   const bolts: Bolt[] = [];
   for (let i = 0; i < POOL; i++) {

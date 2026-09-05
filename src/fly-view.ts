@@ -8,8 +8,12 @@ import type { TextureQuality } from './space';
 import { createUfo } from './fly/ufo';
 import { createBolts } from './fly/bolts';
 import type { BoltTarget } from './fly/bolts';
-import { createLanders, LANDING_TIME } from './fly/landers';
+import { createLanders, LANDER_GLOW, LANDER_MAX_HEALTH, LANDING_TIME } from './fly/landers';
 import { createCommandPost } from './fly/command-post';
+import { createRings } from './fly/rings';
+import { createPacks } from './fly/packs';
+import { createTrail } from './fly/trail';
+import { createBurst } from './fly/burst';
 
 /**
  * "Flight view": the same world as the other two planet scenes, with a small aeroplane you
@@ -24,11 +28,12 @@ import { createCommandPost } from './fly/command-post';
  * Like `planet-inspect.ts` it builds its own `buildSpace()`, so it shares no GPU resources
  * and no sun with the other scenes.
  *
- * There is one saucer in the sky, a few landing ships on their way down, an Earth defence
- * command post going round overhead and a laser on the space bar — see `fly/ufo.ts`,
- * `fly/landers.ts`, `fly/command-post.ts` and `fly/bolts.ts`. That is the extent of the game in
- * here: no score, nothing that can shoot back, and the only clock is the forty seconds a landing
- * ship takes to arrive. What it is all *for* is having somewhere to fly to.
+ * There is one saucer in the sky, a few landing ships on their way down and shooting back,
+ * an Earth defence command post going round overhead, stacks of boost rings to fly through, a
+ * laser on the space bar and a health bar of the aircraft's own — see `fly/ufo.ts`,
+ * `fly/landers.ts`, `fly/command-post.ts`, `fly/rings.ts`, `fly/packs.ts` and `fly/bolts.ts`.
+ * That is the extent of the game in here: still no score, and the only clock is the forty
+ * seconds a landing ship takes to arrive. What it is all *for* is having somewhere to fly to.
  */
 
 /** Nose is -Z, up is +Y, right is +X — the same convention three's cameras use. */
@@ -45,13 +50,46 @@ const MIN_RADIUS = ATMOSPHERE_RADIUS + 14;
 /** Far enough out to see the whole disc, and nowhere near the moon at 3000. */
 const MAX_RADIUS = PLANET_RADIUS * 6;
 
-/** Throttle, in world units per second. The planet is 300 across, so 45 is a brisk cruise. */
+/**
+ * Throttle, in world units per second. The planet is 300 across.
+ *
+ * **The ceiling is deliberately low, and it came down twice.** It was 130 — fast enough that the
+ * throttle alone got you anywhere and the boost rings would have been a curiosity — then 70, and
+ * it is 30 now. Under its own power the aeroplane loafs: a lap of the planet is four minutes,
+ * the terrain is close enough to read, and going anywhere in a hurry means flying through
+ * something. Everything fast in this view is now a ring, which is the point of them, and a
+ * boosted aeroplane still does 120 — four times what the throttle alone will give.
+ */
 const MIN_SPEED = 12;
-const MAX_SPEED = 130;
-const CRUISE_SPEED = 45;
-/** Throttle authority. Slowing is twice as quick as speeding up, so S reads as a brake. */
-const THROTTLE_UP = 34;
-const THROTTLE_DOWN = 70;
+const MAX_SPEED = 30;
+const CRUISE_SPEED = 24;
+/**
+ * Throttle authority. Slowing is twice as quick as speeding up, so S reads as a brake.
+ *
+ * Scaled down with the ceiling, and it had to be: the usable range is 18 units wide now against
+ * 118 at the original ceiling, so the old 34 a second crossed the whole of it in half a second
+ * and the throttle stopped being a lever and became a switch. At 12 it is a second and a half
+ * end to end, which is what it always felt like.
+ */
+const THROTTLE_UP = 12;
+const THROTTLE_DOWN = 24;
+
+/**
+ * The boost, in world units per second on top of whatever the throttle is doing. Kept as its
+ * own term rather than shoved into `speed`, which is what makes it read as a boost: the
+ * throttle setting survives it untouched, so the aeroplane accelerates hard, coasts back down
+ * and is still cruising at exactly what you left it on.
+ *
+ * One ring is worth `BOOST_GAIN`, which against a 30-unit throttle ceiling is half as much
+ * again as the aeroplane can do on its own — deliberately dramatic, because a ring you can
+ * barely feel is not worth flying to. They stack up to `BOOST_MAX`, three deep, which is what
+ * makes taking a whole stack in one climb the best thing there is to do here. The decay is a
+ * half-life of `BOOST_DECAY x ln 2`, a shade under two seconds: long enough to enjoy and far too
+ * short to live on.
+ */
+const BOOST_GAIN = 45;
+const BOOST_MAX = 90;
+const BOOST_DECAY = 2.6;
 
 /** Control authority, in radians per second at full deflection. */
 const PITCH_RATE = 0.95;
@@ -134,6 +172,10 @@ const CHASE_ROLL_SHARE = 0.65;
  * as an aeroplane's rather than as a cursor's.
  */
 const MUZZLE = new THREE.Vector3(4.2, 0.05, -0.6);
+/** How close a landing ship's bolt has to pass the aircraft to count — the wingspan is 8.4, so
+ *  this is generous the same way the saucer's and the landing ships' own hit radii are: judging
+ *  a near miss on a moving target from a chase camera is hard enough without a stingy hitbox. */
+const PLANE_HIT_RADIUS = 4.5;
 /**
  * How far down the nose the reticle is projected — the range it is boresighted for.
  *
@@ -149,6 +191,53 @@ const MUZZLE = new THREE.Vector3(4.2, 0.05, -0.6);
  * straddle it symmetrically and so bias it not at all.
  */
 const RETICLE_RANGE = 220;
+
+/**
+ * How far above a landing ship its floating health bar sits, in world units — clear of the hull
+ * (the tallest point is the collar at y = 3.1) so the bar never overlaps the model it belongs
+ * to. Offset along the local vertical (the ship's own position, normalised) rather than along
+ * its mesh orientation: the mesh's own "up" is the direction of travel, which on a descent
+ * points mostly at the ground, and a bar hung off that would drift underneath the ship rather
+ * than staying above it.
+ */
+const LANDER_BAR_OFFSET = 6.5;
+
+/**
+ * The player's own health. The saucer stays unarmed on purpose (see `fly/ufo.ts`), but a landing
+ * ship now shoots back while it is in the air — this is what its return fire takes off, and
+ * what a recovered repair pack (`fly/packs.ts`) puts back. There is still no ground to hit and
+ * no consequence written in for reaching zero: it clamps there and stops, which is as far as
+ * this was asked to go.
+ */
+/** 100, then up 20% — a bit more margin for a fight that now has return fire, boost rings and
+ *  repair packs all touching the same number. */
+const PLANE_MAX_HEALTH = 120;
+/**
+ * How much one hit from a landing ship's return fire takes off. Was 7 — a shade under half a
+ * tank for twelve hits, which read as sniping rather than fighting back, especially alongside
+ * the faster `FIRE_INTERVAL` that came with this. At 15 against a 120-health aircraft, eight
+ * hits brings a fresh one down, which against a ship that now fires under once a second means
+ * standing in front of one and trading shots is a real risk rather than background noise.
+ */
+const LANDER_HIT_DAMAGE = 15;
+/** How much a recovered repair pack gives back, capped at `PLANE_MAX_HEALTH`. Two packs make you
+ *  whole exactly, at 60 against 120 — kept a clean multiple of `PLANE_MAX_HEALTH` when that went
+ *  up 20%, rather than let "two packs" quietly stop being true. */
+const PACK_HEAL_AMOUNT = 60;
+/**
+ * How much flying through one boost ring gives back — a quarter of the tank, so four rings
+ * (a third of a stack, or a stack and change) make a fresh aircraft whole. On top of the boost
+ * itself, which is the ring's original job: going fast and staying alive are the same errand
+ * now, rather than the healing being a reason to fly to a ring on its own.
+ */
+const RING_HEAL_AMOUNT = PLANE_MAX_HEALTH / 4;
+/**
+ * How far above the aircraft its bar floats, along the aircraft's *own* up rather than the local
+ * vertical a landing ship's bar uses. A landing ship sits still relative to the ground it is
+ * over; the aeroplane banks, and anchoring to world "up" would swing the bar out to one side of
+ * the fuselage in every turn instead of staying parked over it the way the chase camera expects.
+ */
+const PLANE_BAR_OFFSET = 3;
 
 /**
  * The minimap's SVG overlay is drawn in map fractions — 100 across by 50 down, which is the
@@ -169,6 +258,20 @@ const URGENT_SECONDS = 10;
  */
 const BRIEFING = 'We are under attack — shoot down the landing ships!';
 const MESSAGE_SECONDS = 5;
+/**
+ * What the command post says when the aircraft's own health runs out. Unlike `BRIEFING` this is
+ * never given a duration to fade on — `update()` stops running the moment `destroyed` is set, so
+ * the countdown that would remove it never gets another tick. It stays up until `reset()` takes
+ * it down, which is what makes it read as a stopping point rather than a passing remark.
+ *
+ * **It has to say how to get out of the state it just put you in.** The first version was just
+ * the first sentence, and the frozen scene it sits over gives no other hint that Space is the
+ * way back — there is no on-screen prompt anywhere else in this view for a key to press, because
+ * everywhere else the keys are the permanent legend in the corner. That legend still says
+ * "laser" against Space here, which is now also wrong, so the message is the only place left to
+ * say what the key does.
+ */
+const DEFEAT_MESSAGE = 'The fight for Earth has been lost. Press Space to fly again.';
 
 /**
  * How quickly the minimap marker's heading follows the track it is leaving. It is smoothed
@@ -243,6 +346,9 @@ export interface FlyViewOptions {
   /** Live readouts in the HUD pill. Injected, never queried for. */
   speedLabel?: HTMLElement | null;
   altitudeLabel?: HTMLElement | null;
+  /** How many landing ships have been shot down. Written only when it changes — it moves a
+   *  handful of times a session against sixty frames a second. */
+  downedLabel?: HTMLElement | null;
   /**
    * The minimap's marker, sitting inside a panel that holds a flat map of the whole world.
    * Injected like the readouts — `main.ts` is the only file that reaches for DOM ids — and the
@@ -258,11 +364,11 @@ export interface FlyViewOptions {
    * mark per landing ship. Handed the container rather than the marks themselves because how
    * many there are belongs to `fly/landers.ts`, not to the markup.
    */
-  landerLayer?: SVGElement | null;
+  mapOverlay?: SVGElement | null;
   /**
    * The banner across the top of the screen. This module appends one countdown per landing ship
    * to it and hides the whole panel when there is nothing on its way down. Same arrangement as
-   * `landerLayer`, and for the same reason.
+   * `mapOverlay`, and for the same reason.
    */
   alertPanel?: HTMLElement | null;
   /**
@@ -273,6 +379,27 @@ export interface FlyViewOptions {
   messageText?: HTMLElement | null;
   /** The aiming reticle, placed over wherever the nose is pointing. */
   reticle?: HTMLElement | SVGElement | null;
+  /**
+   * An empty container this module fills with one floating health bar per landing ship,
+   * anchored over the ship itself rather than in a corner panel — a ship you are actually
+   * aiming at is not something you want to read a status bar for somewhere else on screen.
+   * How many there are is `fly/landers.ts`'s business (`LANDER_COUNT`), not the markup's.
+   */
+  landerHealthLayer?: HTMLElement | null;
+  /**
+   * The player's own floating health bar and its fill. Only one of these exists, unlike the
+   * landing ships' bars, so it is markup (`#fly-plane-health`) rather than something this
+   * module builds — see `updatePlaneHealthBar()`.
+   */
+  planeHealthBar?: HTMLElement | null;
+  planeHealthFill?: HTMLElement | null;
+  /**
+   * The word in the corner legend against the Space key — "laser" normally. Swapped to "restart"
+   * for as long as the aircraft is destroyed, since the same key does a different job then and
+   * the permanent legend is the one piece of on-screen help that would otherwise go on saying
+   * the wrong thing.
+   */
+  spaceLabel?: HTMLElement | null;
 }
 
 export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions = {}) {
@@ -319,10 +446,53 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   // aeroplane rather than under it.
   const ufo = createUfo();
   scene.add(ufo.group);
-  const landers = createLanders(space);
+  const packs = createPacks();
+  scene.add(packs.group);
+  // The landing ships' own return fire: the same pool the player's laser is, cold green and
+  // tuned slower and sparser — see `BoltsOptions` in `fly/bolts.ts` and the header of
+  // `fly/landers.ts` for the shared-cooldown reasoning.
+  const enemyBolts = createBolts({
+    color: LANDER_GLOW,
+    pool: 16,
+    speed: 200,
+    lifetime: 2.4,
+    // Loosened from 0.35 along with the faster per-ship `FIRE_INTERVAL` in `fly/landers.ts` —
+    // left at the old value this would have been the thing actually capping the rate of fire,
+    // not the ships' own cadence.
+    interval: 0.28
+  });
+  scene.add(enemyBolts.group);
+  // A ship you shoot down leaves a repair pack where it died. Ten seconds, then it is gone —
+  // see `fly/packs.ts`. Recovering one now also patches the aircraft back up, which is the
+  // "if damage is ever added" that file's header was written for.
+  const landers = createLanders(space, {
+    onShotDown: (at) => packs.drop(at),
+    enemyBolts
+  });
   scene.add(landers.group);
+  /** The last kill count written to the HUD. -1 so the opening zero is written once. */
+  let shownDowned = -1;
   const post = createCommandPost();
   scene.add(post.group);
+  const rings = createRings(space);
+  scene.add(rings.group);
+  // In world space beside the aeroplane rather than under it: a wake is left behind in the
+  // world, and parented to the aircraft it would turn with it.
+  const trail = createTrail();
+  scene.add(trail.group);
+  /**
+   * The aircraft's own destruction — `fly/burst.ts` again, the same shape of effect as a
+   * landing ship's kill, warm rather than cold because this one is ours, and bigger and a
+   * little slower (34 units, 1.4 s, eighteen shards against a ship's 26/1.1/14) because it is
+   * the one explosion in this scene that ends the flight rather than just removing a target.
+   */
+  const planeBurst = createBurst({
+    color: new THREE.Color(3.2, 1.4, 0.4),
+    radius: 34,
+    time: 1.4,
+    shardCount: 18
+  });
+  scene.add(planeBurst.group);
   const bolts = createBolts();
   scene.add(bolts.group);
   /** Built once: the position inside it is the saucer's own live vector. */
@@ -333,6 +503,31 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   };
   /** What the laser can hit right now. Refilled every frame, never reallocated. */
   const boltTargets: BoltTarget[] = [];
+  /**
+   * The aircraft itself, as a target for the landing ships' return fire. A stable one-element
+   * array rather than something rebuilt every frame like `boltTargets` above — there is always
+   * exactly one aircraft, so there is nothing here that ever changes shape.
+   */
+  const planeTarget: BoltTarget = {
+    position: plane.position,
+    radius: PLANE_HIT_RADIUS,
+    hit: () => {
+      // Tolerates being called after death like every other `hit()` here does after its own
+      // kill: two bolts can land in the same frame, and the second must not fire a second
+      // explosion or a second defeat message.
+      if (destroyed) return;
+      health = Math.max(0, health - LANDER_HIT_DAMAGE);
+      if (health <= 0) {
+        destroyed = true;
+        plane.visible = false;
+        trail.clear();
+        planeBurst.fire(plane.position);
+        say(DEFEAT_MESSAGE);
+        if (options.spaceLabel) options.spaceLabel.textContent = 'restart';
+      }
+    }
+  };
+  const enemyBoltTargets: readonly BoltTarget[] = [planeTarget];
   /** Which wingtip fires next. */
   let muzzleSide = 1;
 
@@ -353,6 +548,13 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   let roll = 0;
   let yaw = 0;
   let speed = CRUISE_SPEED;
+  /** What the rings have added on top of the throttle, decaying towards zero. */
+  let boost = 0;
+  /** See `PLANE_MAX_HEALTH` — currently never reduced. */
+  let health = PLANE_MAX_HEALTH;
+  /** Set once, the frame health reaches zero. `update()` stops doing anything else the moment
+   *  this is true — see the top of that function — until `reset()` clears it. */
+  let destroyed = false;
 
   /** Where the aircraft is on the flat map, 0..1 each way. See `Space.surfaceUv`. */
   const groundTrack = new THREE.Vector2();
@@ -379,7 +581,9 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   /**
    * One countdown per landing ship: a mark the colour of its square on the map, and the seconds
    * it has left. Built here for the same reason the map's marks are — how many there are is
-   * `LANDER_COUNT`'s business, not the markup's.
+   * `LANDER_COUNT`'s business, not the markup's. The health bar is a separate, floating thing
+   * anchored over the ship itself — see `updateLanderHealthBars()` — because a ship you are
+   * actually aiming at is not something you want to read off a panel in the corner.
    */
   const timerRows = options.alertPanel
     ? landers.all.map(() => {
@@ -410,13 +614,13 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
    * Made here rather than written into `index.html`: it is the same four nodes repeated, and
    * how many times is `LANDER_COUNT`'s business.
    */
-  const landerSlots = options.landerLayer
+  const landerSlots = options.mapOverlay
     ? landers.all.map(() => {
         const node = (tag: string, className: string) => {
           const el = document.createElementNS(SVG_NS, tag) as SVGElement;
           el.setAttribute('class', className);
           el.style.display = 'none';
-          options.landerLayer!.appendChild(el);
+          options.mapOverlay!.appendChild(el);
           return el;
         };
         const path = node('line', 'lander-path');
@@ -430,6 +634,23 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
       })
     : null;
 
+  /**
+   * One floating health bar per landing ship, built the same way as everything else whose
+   * count is `fly/landers.ts`'s business. Positioned in `updateLanderHealthBars()`.
+   */
+  const landerHealthBars = options.landerHealthLayer
+    ? landers.all.map(() => {
+        const el = document.createElement('div');
+        el.className = 'lander-health';
+        el.style.display = 'none';
+        const fill = document.createElement('div');
+        fill.className = 'lander-health-fill';
+        el.appendChild(fill);
+        options.landerHealthLayer!.appendChild(el);
+        return { el, fill, shown: -1 };
+      })
+    : null;
+
   const forward = new THREE.Vector3();
   const right = new THREE.Vector3();
   const radialUp = new THREE.Vector3();
@@ -440,7 +661,12 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   const spin = new THREE.Quaternion();
   const basis = new THREE.Matrix4();
   const muzzle = new THREE.Vector3();
+  const landerAnchor = new THREE.Vector3();
+  const planeAnchor = new THREE.Vector3();
   const aim = new THREE.Vector3();
+  /** Where the aeroplane was at the top of this frame. The rings' pass test needs the segment
+   *  it flew, not the point it ended at — see `fly/rings.ts`. */
+  const wasAt = new THREE.Vector3();
   /** Seconds of screen time the current message has left. Counted down in `update()`, so it
    *  stops with the view rather than running on behind a parked scene. */
   let messageLeft = 0;
@@ -467,11 +693,25 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
 
     pitch = roll = yaw = 0;
     speed = CRUISE_SPEED;
+    boost = 0;
+    health = PLANE_MAX_HEALTH;
+    // Undoes the destruction, if there was one — `update()` reads this flag first thing, so
+    // this is what actually starts the flight running again as well as bringing the aircraft
+    // back into view.
+    destroyed = false;
+    plane.visible = true;
+    planeBurst.group.visible = false;
+    options.messagePanel?.classList.remove('show');
+    if (options.spaceLabel) options.spaceLabel.textContent = 'laser';
+    trail.clear();
     // The marker's heading is a difference between frames, so it has no meaning across a jump.
     hasTrack = false;
     bolts.clear();
+    enemyBolts.clear();
     ufo.spawn(plane.position);
     landers.reset();
+    packs.clear();
+    rings.reset(plane.position);
     placeCamera(1);
   }
 
@@ -501,6 +741,17 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   }
 
   function update(dt: number) {
+    // Everything below this stops the instant the aircraft is destroyed. The explosion still
+    // has to run its own course, so it is ticked here rather than in the dead code beneath it —
+    // and that is the only thing that keeps moving until `reset()` (Space) starts the flight
+    // over. Landers, the saucer, the rings and the incoming bolts all hold exactly where they
+    // were, which is the point: this is a stopping point, not a pause with everything still
+    // happening around a plane that is no longer there.
+    if (destroyed) {
+      planeBurst.update(dt);
+      return;
+    }
+
     // Arrows are the stick (pitch, and commanded bank), A/D the rudder, W/S the throttle.
     // Arrow Up climbs — this is an arcade chase view, not a sim with a yoke to push forward.
     const target = {
@@ -519,6 +770,10 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
       MIN_SPEED,
       MAX_SPEED
     );
+    // Exponential, so it is frame-rate independent and never quite reaches zero — the trail's
+    // own threshold is what decides when a boost is over.
+    boost *= Math.exp(-dt / BOOST_DECAY);
+    const velocity = speed + boost;
 
     plane.rotateX(pitch * PITCH_RATE * dt);
     plane.rotateY(yaw * YAW_RATE * dt);
@@ -553,18 +808,39 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     levelAxis.crossVectors(forward, radialUp);
     if (levelAxis.lengthSq() > 1e-6) {
       levelAxis.normalize();
-      const correction = -(speed / plane.position.length() + climb * LEVEL_GAIN) * hold * dt;
+      const correction = -(velocity / plane.position.length() + climb * LEVEL_GAIN) * hold * dt;
       plane.quaternion.premultiply(spin.setFromAxisAngle(levelAxis, correction));
       forward.copy(NOSE).applyQuaternion(plane.quaternion);
     }
 
-    plane.position.addScaledVector(forward, speed * dt);
+    // Kept before the move: the rings are tested against the segment flown, below.
+    wasAt.copy(plane.position);
+    plane.position.addScaledVector(forward, velocity * dt);
 
     // No ground and no ceiling, only two spheres. Sliding along them is the whole collision
     // response: at this speed a bounce would read as a bug rather than as terrain.
     const radius = plane.position.length();
     const clamped = THREE.MathUtils.clamp(radius, MIN_RADIUS, MAX_RADIUS);
     if (clamped !== radius) plane.position.multiplyScalar(clamped / radius);
+
+    // The rings. They neither block nor deflect — flying through one only adds speed, and the
+    // test is swept over the segment above, so a boosted pass cannot skip through the hoop
+    // between two frames. Two in one frame is possible and simply stacks.
+    // `forward` is the nose after the level-hold has had its say, which is both the direction
+    // the aeroplane is actually travelling and half of what each hoop turns to face.
+    const ringsPassed = rings.update(dt, wasAt, plane.position, forward);
+    boost = Math.min(boost + ringsPassed * BOOST_GAIN, BOOST_MAX);
+    // A ring repairs as well as boosts, `RING_HEAL_AMOUNT` a hoop — the same "no consequence for
+    // reaching zero except this one" clamp as everywhere else health is touched.
+    if (ringsPassed > 0) health = Math.min(PLANE_MAX_HEALTH, health + ringsPassed * RING_HEAL_AMOUNT);
+
+    // …and the packs, over the same segment. This is `PACK_HEAL_AMOUNT`'s job — the landing
+    // ships' own return fire is what makes recovering one worth anything now.
+    const recovered = packs.update(dt, wasAt, plane.position);
+    if (recovered > 0) {
+      health = Math.min(PLANE_MAX_HEALTH, health + recovered * PACK_HEAL_AMOUNT);
+      say('Repair pack recovered.', 2.5);
+    }
 
     if (messageLeft > 0) {
       messageLeft -= dt;
@@ -590,12 +866,27 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     bolts.update(dt, boltTargets);
     ufo.update(dt, plane.position);
     landers.update(dt, plane.position);
+    // The landing ships' own fire, tested against the aircraft the same way theirs is tested
+    // against them — `enemyBoltTargets` never changes shape, so nothing here allocates.
+    enemyBolts.update(dt, enemyBoltTargets);
     // Neither shootable nor interactive: it just goes round, whatever else is happening.
     post.update(dt);
 
     placeCamera(1 - Math.exp(-dt * CHASE_FOLLOW));
+    // After the camera, which is what the ribbons are turned to face — asked before it, they
+    // would be spanned against where the camera was last frame and go thin in a hard turn.
+    trail.update(plane, camera.position, boost / BOOST_GAIN);
 
-    if (options.speedLabel) options.speedLabel.textContent = `${Math.round(speed)}`;
+    if (options.speedLabel) {
+      options.speedLabel.textContent = `${Math.round(speed + boost)}`;
+      // The readout goes warm while there is a boost on it, so the number and the wake behind
+      // the wings are saying the same thing.
+      options.speedLabel.classList.toggle('boosting', boost > BOOST_GAIN * 0.1);
+    }
+    if (options.downedLabel && landers.downed !== shownDowned) {
+      shownDowned = landers.downed;
+      options.downedLabel.textContent = `${shownDowned}`;
+    }
     if (options.altitudeLabel) {
       options.altitudeLabel.textContent = `${Math.round(plane.position.length() - PLANET_RADIUS)}`;
     }
@@ -679,8 +970,14 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
    * Redrawn every frame rather than once at spawn, because the planet turns underneath: both
    * ends are fixed in space, so on the map they creep west together with the ground they are
    * over.
+   *
+   * **The boost rings are deliberately not on here.** They were, briefly, one mark per site.
+   * The map is for finding the things that are *happening* — where a ship is coming down and how
+   * long it has — and a fixed constellation of thirty-six hoops turned it into a scatter of
+   * warm rings with the green marks that matter somewhere among them. The rings are big, lit and
+   * three deep; you find them by looking out of the window.
    */
-  function updateLanderMarkers() {
+  function updateMapMarks() {
     let anyInbound = false;
     landers.all.forEach((lander, i) => {
       const timer = timerRows?.[i];
@@ -756,6 +1053,11 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   function updateReticle() {
     const el = options.reticle;
     if (!el) return;
+    // Nothing to aim once the gun is gone with the rest of the aircraft.
+    if (destroyed) {
+      el.style.display = 'none';
+      return;
+    }
     aim
       .copy(NOSE)
       .applyQuaternion(plane.quaternion)
@@ -773,8 +1075,81 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     el.style.top = `${(-aim.y * 0.5 + 0.5) * 100}%`;
   }
 
+  /**
+   * Puts a floating health bar over every live landing ship. Same load-bearing ordering as
+   * `updateReticle()` — called after the render, because `Vector3.project` reads
+   * `camera.matrixWorldInverse` without refreshing it and the camera has just moved.
+   */
+  function updateLanderHealthBars() {
+    if (!landerHealthBars) return;
+    landers.all.forEach((lander, i) => {
+      const bar = landerHealthBars[i];
+      if (!lander.active) {
+        bar.el.style.display = 'none';
+        bar.shown = -1;
+        return;
+      }
+      landerAnchor
+        .copy(lander.position)
+        .normalize()
+        .multiplyScalar(LANDER_BAR_OFFSET)
+        .add(lander.position)
+        .project(camera);
+      // Behind the camera, same fold-over as the reticle's own z > 1 check.
+      if (landerAnchor.z > 1) {
+        bar.el.style.display = 'none';
+        return;
+      }
+      bar.el.style.display = '';
+      bar.el.style.left = `${(landerAnchor.x * 0.5 + 0.5) * 100}%`;
+      bar.el.style.top = `${(-landerAnchor.y * 0.5 + 0.5) * 100}%`;
+      if (lander.health !== bar.shown) {
+        bar.fill.style.width = `${(lander.health / LANDER_MAX_HEALTH) * 100}%`;
+        bar.shown = lander.health;
+      }
+    });
+  }
+
+  /**
+   * Puts the player's own health bar over the aeroplane. Same load-bearing after-the-render
+   * ordering as the reticle and the landing ships' bars: `project()` reads
+   * `camera.matrixWorldInverse` without refreshing it, and the camera has just moved.
+   */
+  function updatePlaneHealthBar() {
+    const el = options.planeHealthBar;
+    const fill = options.planeHealthFill;
+    if (!el || !fill) return;
+    // A bar of nothing floating over an aircraft that is no longer there is worse than no bar.
+    if (destroyed) {
+      el.style.display = 'none';
+      return;
+    }
+    planeAnchor
+      .copy(planeUp)
+      .multiplyScalar(PLANE_BAR_OFFSET)
+      .add(plane.position)
+      .project(camera);
+    if (planeAnchor.z > 1) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+    el.style.left = `${(planeAnchor.x * 0.5 + 0.5) * 100}%`;
+    el.style.top = `${(-planeAnchor.y * 0.5 + 0.5) * 100}%`;
+    fill.style.width = `${(health / PLANE_MAX_HEALTH) * 100}%`;
+  }
+
   function onKeyDown(event: KeyboardEvent) {
     if (!running) return;
+    // Space restarts once the aircraft is gone, rather than firing a gun that no longer exists.
+    // Read from the keydown event itself, not `keys.has('Space')` in the render loop — the key
+    // is very likely still held from the shot that caused this, and a level-triggered check
+    // would restart the instant the explosion began, before there was any chance to read the
+    // message on screen.
+    if (destroyed && event.code === 'Space') {
+      reset();
+      return;
+    }
     keys.add(event.code);
     // The arrows would otherwise scroll whatever is behind the canvas on a short viewport, and
     // the space bar scrolls it a page at a time.
@@ -814,9 +1189,11 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     // is a question about the surface, so it has to be asked of the surface as it is about to
     // be drawn rather than as it was last frame.
     updateMinimap(dt);
-    updateLanderMarkers();
+    updateMapMarks();
     composer.render();
     updateReticle();
+    updateLanderHealthBars();
+    updatePlaneHealthBar();
   }
 
   window.addEventListener('resize', resize);
@@ -830,7 +1207,9 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     if (running) return;
     running = true;
     resize(); // the canvas had no size while the view was hidden
-    say(BRIEFING);
+    // `stop()` takes any message down with it, including `DEFEAT_MESSAGE` — so a return trip
+    // while still destroyed needs it put back, not papered over with the arrival briefing.
+    say(destroyed ? DEFEAT_MESSAGE : BRIEFING);
     clock.start();
     tick();
   }
@@ -844,8 +1223,15 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     // sitting there on the way back in.
     messageLeft = 0;
     options.messagePanel?.classList.remove('show');
+    // …and the wake would otherwise be a streak from wherever the aeroplane was parked to
+    // wherever it is when the next boost starts.
+    trail.clear();
+    // A pack's ten seconds do not run while the view is parked, so one left behind would still
+    // be sitting there — and its clock would restart — on the way back in.
+    packs.clear();
     // Bolts in the air would otherwise be hanging there, mid-flight, on the way back in.
     bolts.clear();
+    enemyBolts.clear();
     clock.stop();
   }
 
@@ -874,9 +1260,21 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
       get groundTrack() {
         return { u: groundTrack.x, v: groundTrack.y };
       },
+      get boost() {
+        return boost;
+      },
+      get health() {
+        return health;
+      },
+      get destroyed() {
+        return destroyed;
+      },
       ufo,
       landers,
-      post
+      post,
+      rings,
+      packs,
+      enemyBolts
     };
   }
 

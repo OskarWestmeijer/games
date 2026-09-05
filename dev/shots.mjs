@@ -81,7 +81,9 @@ page.on('console', (m) => {
 });
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 
-await page.goto(`${server.url}/#`, { waitUntil: 'load' });
+// `#planet` explicitly, not the bare hash: the site's landing view is Precision Parking
+// now, and this harness would sit waiting for a `window.__station` that never arrives.
+await page.goto(`${server.url}/#planet`, { waitUntil: 'load' });
 
 // The HUD is not what is being reviewed, and the mode switcher sits exactly where the roof
 // of the nose lands in half these framings.
