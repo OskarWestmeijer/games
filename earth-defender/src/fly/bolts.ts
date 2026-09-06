@@ -3,8 +3,8 @@ import { PLANET_RADIUS } from '../space';
 
 /**
  * A fixed pool of bolts that fly straight, expire, and are checked against a list of targets as
- * they go. Originally the aircraft's own laser and nothing else; the landing ships' return fire
- * (`fly/landers.ts`) is a second instance of this same pool, tuned slower and sparser through
+ * they go. Originally the aircraft's own laser and nothing else; the bombers' return fire
+ * (`fly/bombers.ts`) is a second instance of this same pool, tuned slower and sparser through
  * `BoltsOptions` rather than forked into a second file — a bolt does not care who fired it.
  *
  * Cheap on purpose. Nothing here allocates after construction — the meshes are made once and
@@ -25,10 +25,10 @@ const DEFAULT_LIFETIME = 2.2;
 /** Seconds between shots: six a second, so holding Space is a stream and not a wall. */
 const DEFAULT_INTERVAL = 0.16;
 
-const LENGTH = 5;
-const THICKNESS = 0.22;
+const DEFAULT_LENGTH = 5;
+const DEFAULT_THICKNESS = 0.22;
 /** Warm and over 1.0, so the bloom pass turns each bolt into a light. Everything of the
- *  player's in this scene is warm; the alien half — the saucer, and now the landing ships'
+ *  player's in this scene is warm; the alien half — the saucer, and now the bombers'
  *  return fire — is cold green instead, which is `BoltsOptions.color`'s job to change. */
 const DEFAULT_COLOR = new THREE.Color(3.4, 1.5, 0.45);
 
@@ -51,7 +51,7 @@ export interface BoltTarget {
 }
 
 export interface BoltsOptions {
-  /** Cold green for the landing ships' return fire; defaults to the player's own warm colour.
+  /** Cold green for the bombers' return fire; defaults to the player's own warm colour.
    *  Must be authored the same way — over 1.0 — or it will not pick up the bloom pass. */
   color?: THREE.Color;
   /** How many can be live at once. */
@@ -63,6 +63,15 @@ export interface BoltsOptions {
   /** Seconds between shots — the pool's own floor under how often `fire()` can succeed,
    *  independent of anything a caller does with several shooters sharing the one pool. */
   interval?: number;
+  /**
+   * The box itself. Defaulted, because a laser bolt is a laser bolt — this exists for the
+   * bombers' own bombs (`fly/bombers.ts`), which come out of a third instance of this pool and
+   * have to read as something *dropped* rather than as something fired: short, fat and slow
+   * against a bolt's long, thin and instant. Everything else about them is a bolt, which is why
+   * they are this file and not a fourth one.
+   */
+  length?: number;
+  thickness?: number;
 }
 
 export interface Bolts {
@@ -90,6 +99,8 @@ export function createBolts(options: BoltsOptions = {}): Bolts {
   const SPEED = options.speed ?? DEFAULT_SPEED;
   const LIFETIME = options.lifetime ?? DEFAULT_LIFETIME;
   const INTERVAL = options.interval ?? DEFAULT_INTERVAL;
+  const LENGTH = options.length ?? DEFAULT_LENGTH;
+  const THICKNESS = options.thickness ?? DEFAULT_THICKNESS;
 
   const group = new THREE.Group();
   const geometry = new THREE.BoxGeometry(THICKNESS, THICKNESS, LENGTH);

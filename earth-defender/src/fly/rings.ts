@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PLANET_RADIUS } from '../space';
 import type { Space } from '../space';
+import { CRUISE_ALTITUDE } from './lane';
 
 /**
  * Boost rings: hoops hanging in the sky at fixed places around the planet, which you fly
@@ -22,13 +23,15 @@ import type { Space } from '../space';
  * wherever you are and no two are ever piled up together — which random latitudes and
  * longitudes do constantly, and which also bunches them at the poles.
  *
- * **Each site is a stack of three hoops, not one** — low, middle and high orbit over the same
- * patch of ground, at `ALTITUDES`. So a site is a place you can reach at any altitude you happen
- * to be flying at, rather than a hoop you have to climb or dive several tens of units to line up
- * on; and having found one, the obvious thing to do with it is take all three, which is a climb
- * through a stack and much the best thing this view has to fly. It also means the aeroplane's
- * whole altitude band is useful, where a single ring per site made one height right and the rest
- * of the band a place you passed through.
+ * **One hoop per site, and it hangs in the lane** — see `ALTITUDE` below. It was a stack of
+ * three, low, middle and high over the same patch of ground, and the stack was an answer to a
+ * question the aeroplane no longer asks: when it could be at any height between the atmosphere
+ * and six planet radii out, a single hoop meant one height was right and the rest of the band
+ * was a place you passed through, so every site offered one at whatever height you happened to
+ * be at. The aeroplane now *has* a height (`fly/lane.ts`) and returns to it on its own, so two
+ * hoops out of every three were hanging above the only altitude the aircraft is ever at, and
+ * lining one up meant holding a climb to a spot rather than flying to it. One ring, in the lane,
+ * is a thing you fly *at*.
  *
  * **They do not block, catch, slow or turn the aeroplane.** There is no collision here at all:
  * a ring is a plane with a circle marked on it, and the only question ever asked of it is
@@ -66,15 +69,14 @@ import type { Space } from '../space';
  *  are: twelve sites is about a radian between neighbours, twenty seconds at cruise. */
 export const SITE_COUNT = 12;
 /**
- * The three altitudes at every site, in units above the surface: low, middle and high orbit.
- * Low sits well clear of the floor the aeroplane cannot descend past (`MIN_RADIUS` in
- * `fly-view.ts`, 24.5 above the surface), and high is a long way inside its ceiling.
- * Spaced 60 apart, which is three seconds of a steep climb — far enough that the stack reads as
- * three separate things from the ground, close enough to take all three in one pass.
+ * The one height a hoop is ever at: the aeroplane's own lane, so a ring is lined up by turning
+ * towards it and not by holding a climb. It is `fly/lane.ts`'s number rather than a chosen one —
+ * a hoop a few units off the lane would have to be flown at with the up key held, which is the
+ * whole thing this stopped being (see the header).
  */
-const ALTITUDES = [50, 110, 170];
-/** …so this many hoops exist. */
-export const RING_COUNT = SITE_COUNT * ALTITUDES.length;
+const ALTITUDE = CRUISE_ALTITUDE;
+/** …so there are exactly as many hoops as there are sites. */
+export const RING_COUNT = SITE_COUNT;
 
 /** The hoop. Wide enough to aim at from a long way off, and to fly through in a bank. */
 const RADIUS = 20;
@@ -102,8 +104,8 @@ const POP_SCALE = 1.9;
 /**
  * **The hoop is a lit object, not a light**, and that is a correction. It was one bright warm
  * material authored well over 1.0, which put the whole of a 20-unit torus through the bloom
- * threshold: from any distance a ring was a white-hot circle, and with thirty-six of them the
- * scene's loudest thing was its scenery. The alien landing ships — the one thing here with a
+ * threshold: from any distance a ring was a white-hot circle, and with a skyful of them the
+ * scene's loudest thing was its scenery. The alien bombers — the one thing here with a
  * clock on it — were quietly outshouted by the furniture. So the ring is warm metal now, lit by
  * the same sun and earthshine as the aeroplane, with a low emissive to keep it visible against
  * the night side, and everything it has that blooms is in the lamps.
@@ -175,12 +177,10 @@ export function createRings(space: Space): Rings {
     longitude: THREE.MathUtils.radToDeg(((i * GOLDEN_ANGLE) % (Math.PI * 2)) - Math.PI)
   }));
 
-  const rings = places.flatMap((place) =>
-    ALTITUDES.map((altitude, level) => makeRing(place, altitude, level))
-  );
+  const rings = places.map((place) => makeRing(place, ALTITUDE));
 
-  function makeRing(place: { latitude: number; longitude: number }, altitude: number, level: number) {
-    // Per ring rather than shared, because a pop fades one hoop and not the other thirty-five.
+  function makeRing(place: { latitude: number; longitude: number }, altitude: number) {
+    // Per ring rather than shared, because a pop fades one hoop and not the other eleven.
     const material = new THREE.MeshStandardMaterial({
       color: HOOP_COLOR,
       emissive: HOOP_EMISSIVE,
@@ -207,10 +207,6 @@ export function createRings(space: Space): Rings {
     }
     mesh.add(lamps);
     group.add(mesh);
-
-    // The lamps of a stack are offset from each other, so three hoops seen one above the other
-    // are visibly three rather than one thing with a thick edge.
-    lamps.rotation.z = (level / ALTITUDES.length) * ((Math.PI * 2) / LAMP_COUNT);
 
     return {
       mesh,
@@ -257,7 +253,7 @@ export function createRings(space: Space): Rings {
   /**
    * Where the hoop is this frame. Its home is a place on the *ground*, not a point in space, so
    * it has to be asked for again every frame or the planet turns out from under it — the same
-   * reasoning as the landing ships' two ends, and what keeps its mark on the minimap sitting on
+   * reasoning as the bombers' two ends, and what keeps its mark on the minimap sitting on
    * the country it belongs to instead of creeping west all session.
    */
   function place(ring: Ring) {

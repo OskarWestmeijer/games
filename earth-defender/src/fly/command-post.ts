@@ -1,14 +1,18 @@
 import * as THREE from 'three';
 import { ORBIT_DAWN, ORBIT_NOON, PLANET_RADIUS } from '../space';
+import { CEILING_ALTITUDE } from './lane';
 
 /**
- * Earth defence command post: a station going round and round the planet, high above the
+ * Earth defence command post: a station going round and round the planet at the top of the
  * aeroplane's own band, warm-lit and on the minimap.
  *
- * It is scenery with a job description. Nothing is run from it — there is no interior, no
- * docking and nothing to shoot — but it is the one thing up here that says the saucers are
- * being *answered* rather than merely being watched. Everything of the player's in this scene
- * is warm and everything of theirs is cold green; this is the biggest warm thing in it.
+ * **It is where you rearm**, which is new: it was scenery with a job description, and the job
+ * description is now a mechanic. Ammunition is finite (`fly-view.ts`), and a pass inside
+ * `REARM_RANGE` fills the guns back up — so the post is the one fixed thing in this view you
+ * ever *need*, and finding it on the minimap and climbing to it is an errand the fight
+ * interrupts. There is still no interior, no docking and nothing to shoot: you fly through it.
+ * Everything of the player's in this scene is warm and everything of theirs is cold green; this
+ * is the biggest warm thing in it.
  *
  * **It is not the station in `src/station/`.** That one is a 15.6 m hull you walk around inside
  * in planet view, modelled in metres. This view is arcade-scaled — the aeroplane is 8 units
@@ -18,12 +22,40 @@ import { ORBIT_DAWN, ORBIT_NOON, PLANET_RADIUS } from '../space';
  */
 
 /**
- * How high it flies: well above the saucer's band (45–130) and the landing ships' entry
- * altitude (150), so it reads as being *over* the traffic, and well inside the aeroplane's
- * ceiling so it can be climbed to and looked at.
+ * How high it flies: **the top of the aeroplane's band** (`fly/lane.ts`), which is a change of
+ * job and not a tuning. It orbited at 220, comfortably over everything, back when the aeroplane
+ * could climb to six planet radii and the post was scenery. The aeroplane now has a ceiling, and
+ * the post is where you rearm (`REARM_RANGE`) — so it has to be somewhere the aeroplane can
+ * actually get to, and the ceiling is the one height it takes a deliberate climb to reach. That
+ * is the whole point of putting it there: rearming costs you the lane, and the lane is where the
+ * fight is.
  */
-const ORBIT_ALTITUDE = 220;
+const ORBIT_ALTITUDE = CEILING_ALTITUDE;
 const ORBIT_RADIUS = PLANET_RADIUS + ORBIT_ALTITUDE;
+/**
+ * How close the aeroplane has to get **to the package**, in world units, to be rearmed and
+ * repaired. Generous, because it is a fast pass at a moving station and not a docking manoeuvre:
+ * there is no docking, you fly through it the way you fly through a boost ring, and `fly-view.ts`
+ * does the refilling.
+ *
+ * Measured from `packagePosition` rather than from the middle of the station, which is the point
+ * of hanging a package there at all — the thing you aim at and the thing that counts have to be
+ * the same thing, or the station is a 50-unit structure with an invisible sweet spot in it.
+ */
+export const REARM_RANGE = 34;
+
+/**
+ * How far under the station the resupply package hangs, in world units — the post's own -Y, which
+ * is the side facing Earth.
+ *
+ * **It is always there, and it never runs out.** It is not a pickup that respawns like
+ * `fly/packs.ts`; it is what the station *is*, made visible: somewhere with your name on it that
+ * you can see from a long way off and fly at. Eighteen units below the hub puts it at about 102
+ * of altitude against the station's own 120, which is the other half of why it is here — the
+ * package is inside the aeroplane's band rather than exactly on its ceiling, so a rearm run is a
+ * climb you can make roughly rather than a height you have to hold exactly.
+ */
+const PACKAGE_DROP = 18;
 /** Seconds for a lap. Three times the aeroplane's own, so it is overtaken rather than chased. */
 const ORBIT_PERIOD = 150;
 /** Where in that lap it starts: orbit angle 0 is local noon, so this opens it in daylight. */
@@ -34,6 +66,9 @@ const RING_SPIN = 0.15;
 /** Warm and over 1.0, so the bloom pass makes lights of them. */
 const LIGHT = new THREE.Color(2.8, 1.7, 0.7);
 const BEACON = new THREE.Color(3.0, 0.45, 0.35);
+/** The band round the resupply crate: warm, and the brightest thing on the station, because it
+ *  is the one part of it the aeroplane actually has to find. */
+const PACKAGE_GLOW = new THREE.Color(3.2, 2.1, 0.8);
 
 /**
  * Hub, habitat ring on four spokes, two solar wings and a dish. About 50 units across against
@@ -109,6 +144,23 @@ function buildPost(): { post: THREE.Group; ring: THREE.Group } {
   beacon.position.y = 13.4;
   post.add(beacon);
 
+  // The resupply package, on a tether under the hub: a crate with a lit band round it, big enough
+  // to aim an aeroplane at from a couple of hundred units off. Deliberately the same warm family
+  // as a repair pack, because it is the same promise made permanent — see `PACKAGE_DROP`.
+  const tether = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, PACKAGE_DROP - 4, 6), trim);
+  tether.position.y = -4 - (PACKAGE_DROP - 4) / 2;
+  post.add(tether);
+
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(6.5, 5, 6.5), hull);
+  crate.position.y = -PACKAGE_DROP;
+  post.add(crate);
+  // The band is what makes it read as a supply crate rather than as a lump of the station that
+  // came loose: over 1.0, so the bloom lights it, and drawn on all four sides.
+  const bandGeometry = new THREE.BoxGeometry(6.9, 1.1, 6.9);
+  const band = new THREE.Mesh(bandGeometry, new THREE.MeshBasicMaterial({ color: PACKAGE_GLOW }));
+  band.position.y = -PACKAGE_DROP;
+  post.add(band);
+
   return { post, ring };
 }
 
@@ -117,6 +169,9 @@ export interface CommandPost {
   group: THREE.Group;
   /** Where it is now — the live vector, for the minimap. */
   position: THREE.Vector3;
+  /** …and where the resupply package under it is: what the aeroplane actually flies at, and
+   *  what `REARM_RANGE` is measured from. Live, like the other. */
+  packagePosition: THREE.Vector3;
   update(dt: number): void;
 }
 
@@ -124,6 +179,7 @@ export function createCommandPost(): CommandPost {
   const { post, ring } = buildPost();
 
   const position = new THREE.Vector3();
+  const packagePosition = new THREE.Vector3();
   const travel = new THREE.Vector3();
   const up = new THREE.Vector3();
   const back = new THREE.Vector3();
@@ -153,6 +209,9 @@ export function createCommandPost(): CommandPost {
     basis.makeBasis(right, up, back);
     post.position.copy(position);
     post.quaternion.setFromRotationMatrix(basis);
+    // The package hangs straight down the station's own spine, which is the local vertical — so
+    // this is the position, minus `PACKAGE_DROP` of altitude, and needs no matrix to work out.
+    packagePosition.copy(position).addScaledVector(up, -PACKAGE_DROP);
   }
 
   place();
@@ -160,6 +219,7 @@ export function createCommandPost(): CommandPost {
   return {
     group: post,
     position,
+    packagePosition,
     update(dt: number) {
       angle += (dt / ORBIT_PERIOD) * Math.PI * 2;
       place();

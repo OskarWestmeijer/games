@@ -65,7 +65,7 @@
       </div>
       <div id="fly-view" class="view" hidden>
         <canvas id="fly-canvas"></canvas>
-        <!-- The alert bar: every landing ship on its way down, where it is coming down, and
+        <!-- The alert bar: every bomber on its way down, where it is coming down, and
              how long it has left. Across the top of the screen, because it is the thing you are
              actually playing against. fly-view.ts appends a row per ship and hides the whole bar
              when nothing is inbound. -->
@@ -91,21 +91,43 @@
              is aimed a little below the nose so the planet stays in frame. Placed every frame
              by fly-view.ts, which also hides it when the nose swings behind the camera. -->
         <div id="fly-reticle" aria-hidden="true"></div>
-        <!-- One floating health bar per landing ship, positioned over the ship itself every
-             frame by fly-view.ts (updateLanderHealthBars()) — not a corner panel, because a
+        <!-- One floating health bar per bomber, positioned over the ship itself every
+             frame by fly-view.ts (updateBomberHealthBars()) — not a corner panel, because a
              ship you are aiming at is not something you want to read a bar for somewhere else
-             on screen. Empty; how many bars exist is fly/landers.ts's business. -->
-        <div id="fly-lander-health" aria-hidden="true"></div>
+             on screen. Empty; how many bars exist is fly/bombers.ts's business. -->
+        <div id="fly-bomber-health" aria-hidden="true"></div>
         <!-- The player's own health bar, floating over the aeroplane in the chase view by the
-             same means as the landing ships' bars (updatePlaneHealthBar() in fly-view.ts). Only
+             same means as the bombers' bars (updatePlaneHealthBar() in fly-view.ts). Only
              one of these ever exists, so it is markup rather than something built in JS. -->
         <div id="fly-plane-health" aria-hidden="true"><div id="fly-plane-health-fill"></div></div>
+        <!--
+          The notes: the design decisions this view is being built out of, kept on screen where
+          the thing they describe is. Directly above the readout pill and in the same centred
+          column, because it is the same kind of panel — about the flight rather than part of the
+          world — and it is **always visible**: a note behind a toggle is a note nobody reads.
+
+          It is markup and nothing else. No script, no storage, nothing in the scene reads it, and
+          it takes no clicks: adding a note is adding an <li> here, which is the whole point of
+          having it in the file the view is built from rather than in a document somewhere else.
+
+          Dim and small on purpose — the alert bar is the thing on this screen that is allowed to
+          shout, and these are notes, not instruments.
+        -->
+        <ul id="fly-notes" aria-label="Design notes">
+          <li>Landers are bombers now: level runs, nose forward.</li>
+          <li>Rockets on R: four of them, guided, two to a bomber.</li>
+          <li>Ammunition is finite — rearm by flying through the command post.</li>
+          <li>Default speed, always: S slows while held, releasing returns to cruise.</li>
+        </ul>
         <!-- The pill is the instruments — what the aircraft is doing. The stick lives in the
              corner legend below, which is why the two are not the same element. -->
         <div id="fly-controls" class="hud">
           <span><span id="fly-speed" class="hud-value">45</span> u/s</span>
           <span><span id="fly-altitude" class="hud-value">120</span> alt</span>
+          <span><span id="fly-ammo" class="hud-value">120</span> rds</span>
+          <span><span id="fly-rockets" class="hud-value">4</span> rkt</span>
           <span><span id="fly-downed" class="hud-value">0</span> down</span>
+          <span><span id="fly-lost" class="hud-value">0</span> lost</span>
           <span class="hud-note coarse-only">Needs a keyboard</span>
         </div>
         <!--
@@ -117,7 +139,7 @@
           <!-- Keyboard only, so the legend is hidden outright on a touchscreen; the pill says
                "needs a keyboard" there instead. -->
           <div id="fly-keys" class="control-legend">
-            <span class="legend-keys"><kbd>↑</kbd><kbd>↓</kbd></span><span>pitch</span>
+            <span class="legend-keys"><kbd>↑</kbd><kbd>↓</kbd></span><span>climb &amp; dive</span>
             <span class="legend-keys"><kbd>←</kbd><kbd>→</kbd></span><span>bank &amp; turn</span>
             <span class="legend-keys"><kbd>A</kbd><kbd>D</kbd></span><span>rudder</span>
             <span class="legend-keys"><kbd>W</kbd><kbd>S</kbd></span><span>throttle</span>
@@ -125,6 +147,7 @@
                  "restart" once the aircraft is destroyed — the same key does a different job
                  then, and the legend has to say so. -->
             <span class="legend-keys"><kbd>Space</kbd></span><span id="fly-space-label">laser</span>
+            <span class="legend-keys"><kbd>R</kbd></span><span>rocket</span>
           </div>
           <!--
             The minimap. The map is static and the marker moves — see `#minimap` in style.css
@@ -132,7 +155,7 @@
             `fly-view.ts` for how the aeroplane gets put on it.
           -->
           <div id="minimap" aria-hidden="true">
-            <!-- The landing ships' approach paths and marks, drawn by fly-view.ts into this
+            <!-- The bombers' approach paths and marks, drawn by fly-view.ts into this
                  empty layer. Its viewBox is the map itself: 100 across by 50 down, the panel's
                  own 2:1, so a longitude is an x and a latitude is a y. First child, so the
                  lines pass under the two markers below rather than over them. -->

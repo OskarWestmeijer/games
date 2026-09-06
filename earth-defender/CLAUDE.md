@@ -17,21 +17,33 @@
 ## What this is
 
 **One Three.js world seen four ways**, picked from a fixed dropdown in the top-right corner
-(`#mode-switcher`): a small aeroplane defending the Earth from alien landers, the space station in
+(`#mode-switcher`): a small aeroplane defending the Earth from alien bombers, the space station in
 orbit above it, an inspector for the planet itself, and a viewer for the AI-generated assets the
 whole thing is built out of. All four share `space.ts`, one renderer budget and one page.
 
 **Flight view** (`…/#fly`) is a small aeroplane flown from a chase camera around the same planet:
-arrows pitch and bank, `A`/`D` rudder, `W`/`S` throttle, `Space` the laser, speed and altitude in a
-centre pill, a key legend over a minimap bottom-right. Twelve fixed sites carry three stacked boost
-rings each — the throttle's ceiling is deliberately modest and rings are how you go fast (and
-quietly heal). An unarmed saucer drifts somewhere over the planet; alien landing ships descend on
-40-second approaches, shooting back, and can be shot down for a repair pack. Take enough fire and
-the aircraft explodes until Space restarts it. A command post orbits higher up. The flight model is
-deliberately the *minimum* that reads as flying — no lift, drag, stall, gravity or ground; an
-orientation, a speed along the nose, a bank *command*, and a level-hold that bends the path round
-the globe. Keyboard only. Builds its own `buildSpace()`, so it shares no GPU resources with the
-other scenes.
+arrows climb and bank, `A`/`D` rudder, `W`/`S` throttle, `Space` the laser, `R` a rocket, speed,
+altitude and what is left in the guns in a centre pill, a notepad above it and a key legend over a
+minimap bottom-right. **It flies in a lane** — a fixed cruise
+altitude that is also its floor, with a ceiling Arrow Up climbs to and glides back down from
+(`fly/lane.ts`) — and the bombers, the boost rings and the saucer are all in that same band,
+which is what makes them things you fly *at*. Twelve fixed sites carry one boost ring each — the
+throttle's ceiling is deliberately modest and rings are how you go fast (and quietly heal). An
+unarmed saucer drifts somewhere over the planet, and **alien bombers run in on the world's
+capitals and bomb them flat** — a level transit at a fixed speed, then a circling bombardment you
+can still stop, then on to the nearest capital left standing. A city that falls leaves a red cross
+on the minimap for the rest of the session, damage to one that survives is permanent, and **when
+the last capital goes the flight is over**. The ships shoot back and can be shot down for a repair
+pack. **The gun locks on** — the curve of the planet puts a target at your own altitude well below
+a level nose — and **ammunition is finite**, shown on the aeroplane itself as a draining bar and
+four rocket pips, which is what the command post is for: it orbits at the ceiling with a resupply
+package on a tether under it, and a pass through that fills both guns and repairs the aircraft.
+Run dry and the reticle stops hunting and points at the package instead. Take enough fire and the
+aircraft explodes until Space restarts it. The flight model is deliberately the
+*minimum* that reads as flying — no lift, drag, stall, gravity or ground; an orientation, a speed
+along the nose, a bank *command*, a commanded altitude, and a level-hold that puts the nose on the
+flight path and bends the track round the globe. Keyboard only. Builds its own `buildSpace()`, so
+it shares no GPU resources with the other scenes.
 
 **Planet view** (`…/#planet`) is a space station in orbit around Earth, walked in first person —
 click to lock the pointer, WASD to move; drag to look and push the on-screen stick on a tablet. No
@@ -75,7 +87,8 @@ index.html            #mode-switcher (mode + surface-resolution selects), #asset
                       #viewport), a .hud control pill per 3D view (#planet-controls,
                       #inspect-controls, #fly-controls), #planet-view (#planet-canvas, #crosshair,
                       #interact-prompt), #inspect-view (#inspect-canvas, #sun-azimuth), #fly-view
-                      (#fly-canvas, #fly-reticle, #fly-lander-health, #fly-plane-health,
+                      (#fly-canvas, #fly-reticle, #fly-bomber-health + .capital-health, #fly-notes,
+                      #fly-plane-health,
                       #fly-corner = #fly-keys over #minimap with #minimap-plane / #minimap-ufo /
                       #minimap-paths). Loads /src/main.ts
 vite.config.ts        publicDir -> ai-assets/; modelManifest() plugin scans it and exposes
@@ -90,17 +103,23 @@ src/
   fly-view.ts         createFlyView() — aeroplane, four-key flight model, chase camera, trigger,
                       reticle, own health/defeat, updateMinimap(). Its header carries the
                       reasoning for every constant in it
+  fly/lane.ts         the vertical band: cruise altitude (also the floor) and ceiling. Owned here
+                      because the aeroplane, the ships, the rings and the saucer must agree on it
   fly/ufo.ts          the saucer. Unarmed, deliberately
-  fly/landers.ts      the landing ships: 40 s approaches, 12 hits, return fire
-  fly/burst.ts        expanding shell + thrown shards; used by landers and by the aircraft's death
-  fly/places.ts       LAND_TARGETS — a country and a coordinate well inside it. A table rather than
-                      a land mask, which is what makes "never in the ocean" true by construction
-  fly/rings.ts        boost rings: 12 Fibonacci sites x 3 hoops, swept pass test, tracking, heal
+  fly/bombers.ts      the bombers: transit in the lane, then bomb a capital until it falls. Owns
+                      the capitals' health, the bombs, and the hop to the nearest survivor
+  fly/burst.ts        expanding shell + thrown shards; used by bombers, by rockets and by the aircraft's death
+  fly/places.ts       CAPITALS — ~4 per continent. The board: what the bombers attack, what the
+                      crosses on the minimap are, and what running out of means losing
+  fly/rings.ts        boost rings: 12 Fibonacci sites, one hoop each in the lane, swept pass test
   fly/packs.ts        repair packs: 10 s, magnet pull + tether, swept pickup
   fly/trail.ts        wingtip ribbons while boosting: camera-facing strips, fixed length
-  fly/command-post.ts the Earth defence station — scenery on a circular orbit. Not station/
+  fly/rockets.ts      guided rockets: 6-deep pool, one press one rocket, proximity fuse, 6 hits
+  fly/command-post.ts the Earth defence station: a circular orbit at the ceiling, and where you
+                      rearm and repair — REARM_RANGE is measured from the package hanging under
+                      it. Not station/
   fly/bolts.ts        a pool of bolts, cadence, swept hit test. Parametrised, so it is both the
-                      player's laser and (a second instance) the landers' return fire
+                      player's laser and (a second instance) the bombers' return fire
   flight.ts           the station's altitude, attitude, orbit mode, clock; owns pitchFor()
   regions.ts          walkable floor: convex XZ polygons, the clamp, Deck (region + height +
                       storey), clipRegion(), arcDecks()
@@ -311,45 +330,139 @@ notes are in `git show ed3f592:CLAUDE.md`. **This is the one place in the repo w
   parameterisation. Asked in the planet's **local** frame so the axial spin is in the answer, and
   called **after `space.update()`**. **The heading is finite-differenced in map space**, not taken
   from the nose, with `du` wrapped at ±0.5 or the antimeridian frame reads as a sprint across the map.
-- **A lander gets a line, not a mark** — a mark says where something is, a line says where it is
+- **A bomber gets a line, not a mark** — a mark says where something is, a line says where it is
   *going*. The SVG overlay is its own space (`viewBox="0 0 100 50"`, `preserveAspectRatio="none"`),
   a path spanning more than half the map is drawn twice a map width apart, and paths are redrawn
   every frame because the planet turns underneath them. **The boost rings are deliberately not on
   the map** — it is for the things that are *happening*.
+- **Altitude is commanded, not flown, and the aeroplane is placed on a shell every frame**
+  (`plane.position.setLength`) rather than clamped between a floor and a ceiling it could wander
+  between. Arrow Up asks for `CEILING_ALTITUDE` and holds it, releasing asks for `CRUISE_ALTITUDE`
+  back, Arrow Down only hurries that — **there is nothing below the lane**. Climb and glide are
+  *angles* (`CLIMB_ANGLE`), so the rate scales with speed and a boosted climb is a second, not six.
+  The pitch stick has no direct authority at all: **the level-hold points the nose along whatever
+  climb actually happened**, which is why the attitude can never be a lie and why the aeroplane can
+  no longer be aimed at empty sky. Side effect worth keeping: a held bank now costs no height,
+  where it used to spiral into the floor.
+- **One number, four files** — `fly/lane.ts` exists because the aeroplane, the bombers, the
+  rings and the saucer all place against the band, and any of them tuned alone puts something the
+  player is meant to reach where the aeroplane cannot go.
 - **Rings are why the throttle ceiling came down** (130 → 30): boosted the aeroplane does 120, so one
   ring is worth half as much again as the whole throttle range. **The boost is its own term**,
   decaying on top of the throttle, so the aeroplane surges and coasts back to what you left it on.
 - **Nothing about a ring is solid** — no collision, no deflection; the only question is whether the
   segment flown this frame crossed the disc, tested **swept** like the laser's and the packs'.
-  **Sites are fixed to the ground** (12 Fibonacci points x 3 hoops), so a run between three of them
-  is a route you can fly twice. **A hoop is a lit object, not a light** — over the bloom threshold,
-  36 white-hot circles outshouted the landing ships; what blooms is its six lamps. **Every hoop turns
-  to face the aeroplane**, rate-limited.
+  **Sites are fixed to the ground** (12 Fibonacci points, **one hoop each, in the lane**), so a run
+  between three of them is a route you can fly twice. It was a stack of three at 50/110/170, which
+  was an answer to an aeroplane that could be at any height; two of every three now hung above the
+  only altitude it is ever at. **A hoop is a lit object, not a light** — over the bloom threshold,
+  a skyful of white-hot circles outshouted the bombers; what blooms is its six lamps. **Every
+  hoop turns to face the aeroplane**, rate-limited.
 - **The wake is capped shorter than the chase camera's standoff**, which is the whole of why it looks
   like a wake, and tapers by **distance along the wake, not sample index**. Camera-facing strips, not
   lines. Lives in world space; history dropped when the boost ends or the view is parked.
-- **A pack is what a lander leaves when *you* shoot it down** — one that lands leaves nothing. Ten
+- **A pack is what a bomber leaves when *you* shoot it down** — one that gets its run in leaves nothing. Ten
   seconds; inside `MAGNET_RANGE` it comes to you on a ramp (the ramp, not the top speed, reads as a
   magnet), tether recomputed *after* the pack moves. Cleared when the view is parked.
-- **Landers take 12 hits — two seconds of sustained fire** — and **shoot back** through a second
+- **Bombers take 12 hits — two seconds of sustained fire** — and **shoot back** through a second
   `createBolts` instance whose own `interval` caps the *combined* incoming rate from every ship.
-  `LANDER_HIT_DAMAGE` 15, so seven hits kills a fresh aircraft; `PACK_HEAL_AMOUNT` 60 and
+  `BOMBER_HIT_DAMAGE` 15, so seven hits kills a fresh aircraft; `PACK_HEAL_AMOUNT` 60 and
   `RING_HEAL_AMOUNT` a quarter of the tank undo it. The ring's heal is deliberately **unmarked** —
   two marks were tried in the hoop and both were pulled.
-- **A lander never comes down in the ocean, and that is structural**: the site is a row out of
-  `fly/places.ts`, so there is no land mask and the countdown's label cannot disagree with the place.
-  Both ends of the approach are lat/lon converted every frame — held in world space a target drifts
-  ~9° west of its own country over a 40 s descent.
+- **A run is two halves, and the second one is the game.** A bomber flies a level **transit** in
+  the lane to a capital, and then **bombs it**: circling at `ORBIT_OFFSET`, one bomb every
+  `BOMB_INTERVAL`, six of them to level a city. The bombardment is the window you can do something
+  in — a countdown you either beat or miss is a notice, a city coming apart under a ship you can
+  still shoot down is somewhere to fly to. It replaced a 40 s descent from 150 to the deck, most
+  of which happened at a height the aeroplane cannot be at.
+- **The clock is distance, not a constant.** `BOMBER_SPEED` is fixed and a hop is however long it
+  is, so `secondsLeft` is real — the fixed 40 s made no sense once a ship hopped from the city it
+  just destroyed to the nearest one standing. Under the bombs the same field counts what the bombs
+  still have to do. Both ends stay lat/lon converted every frame: held in world space a target
+  drifts ~9° west of its own city over a run.
+- **A destroyed capital stays destroyed, and a damaged one stays damaged.** The health lives in
+  `fly/bombers.ts` for the life of the flight — kill a ship at 2 of 6 and that is what the next
+  one finds. **The player can never touch a city**: the bombs are a third `createBolts` pool owned
+  by that module, and the cities' targets never enter `boltTargets`, so it is true by construction
+  rather than by care.
+- **The crosses are placed once and never touched again.** The minimap is static and `surfaceUv()`
+  is asked in the planet's local frame, so a fallen capital has a fixed place on it however far
+  the world has turned — unlike the ships' marks and the approach lines, which are redrawn every
+  frame. Cleared only by `reset()`.
+- **Losing every capital is a defeat, and the aeroplane is not exploded for it** — nothing shot
+  it; the world it was defending is simply gone (`EARTH_LOST_MESSAGE`). Everything else about the
+  state is what being shot down leaves: `update()` returns at the top, Space is the way out.
+- **The alert row's bar says two different things**, and `.bombing` says which: the approach
+  draining in transit, then the city's own health in red. Same question either way — how long has
+  this place got — answered by whatever is actually deciding it. It is deliberately *not* the
+  `.urgent` state, which is about a clock running out rather than about the thing happening.
+- **Capitals are a short table on purpose** (`fly/places.ts`, ~4 per continent). Sixty-four
+  countries was right when a target was a place to vanish at; a capital is a thing you can lose,
+  so the list has to be short enough that losing one matters and that the crosses can be told
+  apart on a 100 x 50 panel. The old "must be well inland" rule retired with the descent — nothing
+  touches down any more, so a coastal capital is fine. What survives of it is the better half: the
+  target *is* the row, so the countdown's label cannot disagree with the place.
 - **The alert bar is the one thing here that shouts**; everything else is a dim pill in a corner.
+- **Ammunition is finite and the command post is where it comes from.** `LASER_AMMO` 120 (twenty
+  seconds of held fire), `ROCKET_AMMO` 4; a round is spent when `bolts.fire()` actually *fires*,
+  not per frame the trigger is down. **The post moved from 220 to the ceiling for this** — it was
+  scenery, and a place you must reach has to be reachable — so rearming is a climb out of the lane
+  and a pass inside `REARM_RANGE`, and the ceiling finally has a job. A pass **also repairs the
+  aircraft to full**: a pack is 60 and a ring a quarter of the tank because both are picked up *in*
+  the fight, and this is the one thing you have to leave the fight for. Empty says so once
+  (`DRY_MESSAGE`), and the pill's number goes red rather than blinking.
+- **The magazine is on the aeroplane, not only in the pill** (`buildPlane()`): a bar across the
+  spine that drains and reddens with the rounds, and four pips under the port wing that go out
+  with the rockets. **Across the fuselage, not along it** — the chase camera sits directly astern,
+  so a fore-and-aft bar is foreshortened into a dot, which is exactly what the first pass was. The
+  fill scales from its port end (the geometry is translated so the box's origin is that end) and
+  never quite reaches zero: a bar of no length reads as "no gauge", not as "nothing left".
+- **The station carries a resupply package on a tether**, `PACKAGE_DROP` under the hub, and
+  `REARM_RANGE` is measured **from the package** — the thing you aim at and the thing that counts
+  have to be the same, or a 50-unit station has an invisible sweet spot in it. It hangs at ~102 of
+  altitude against the station's 120, so a rearm run is a climb you can make roughly rather than a
+  height you have to hold exactly.
+- **Out of everything, the reticle stops hunting and becomes a waypoint on that package** — at any
+  range and any bearing, because a lock you can only get by already facing the right way is no
+  help. Same brackets, wider and in the station's pale light rather than the gun's amber, and
+  `lockTarget` stays null: "fly here" and "shoot this" must not look alike.
+- **Rockets are the laser's opposite** (`fly/rockets.ts`): four of them, guided at the locked
+  target, `ROCKET_DAMAGE` 6 so two end a bomber. **Fired from the keydown event, not the held
+  keys** — one press is one rocket, and a level-triggered check either empties the rack in six
+  frames or drops a tap taken between two of them. Guidance is a rate-limited turn towards the
+  *live* target vector, so the lock has to be a lock; with no target it flies straight and is
+  wasted.
+- **The throttle is sprung, like the lane is**: `CRUISE_SPEED` is where the aeroplane lives, W and
+  S are things you *hold*, and letting go walks it back. Left as a setting, the aeroplane's usual
+  state was whatever the last fight left it on — most often 12, because slowing down is what you
+  do in one.
+- **`#fly-notes` is the design notes on screen, and it is markup and nothing else** — a `<ul>` in
+  `index.html`, always visible above the pill, no script, no storage, no clicks, read by nothing.
+  Adding a note is adding an `<li>`, which is the point of keeping it in the file the view is
+  built from. Small and dim like the control legend, but **on its own dark ground and darker than
+  the pill**, which the legend does not need: nine lines across the middle of the screen sit over
+  the sunlit limb, and a text shadow alone left half of them unreadable. `fly-view.ts` keeps
+  `isTyping()` even though nothing there takes a caret today — every key
+  here is a control with no modifier, so the first text field ever put over this HUD would fly the
+  aeroplane as it was typed in. `keyup` stays ungated: a key released over a field may have been
+  pressed over the scene, and a stuck control is worse.
 - **Landing is not animated; being shot is** — nothing you did caused a landing. A burst **outlives
   the ship that made it**, so it is ticked *outside* the active check.
 - **Health bars float over their target**, placed **after the render**. The aircraft's own is anchored
-  to its **own up**, or it swings out to one side in every bank. `#fly-lander-health` needs
+  to its **own up**, or it swings out to one side in every bank. `#fly-bomber-health` needs
   `inset: 0`: a zero-size absolute layer makes every bar's percentage offset resolve to one point.
 - **Bolts**: a pool that never allocates, cadence owned by `bolts`, a swept hit test, no inherited
   aircraft speed, targets walked per bolt (`hit()` must tolerate two bolts in one frame), and **no
-  lead prediction on either side**. **The reticle is boresighted at `RETICLE_RANGE`** because the
-  chase camera is aimed below the nose. **`Space` is `preventDefault`ed** or the page scrolls.
+  lead prediction on either side**. **`Space` is `preventDefault`ed** or the page scrolls.
+- **The gun locks on, and it has to** (`takeAim()`): with everything in the fight at one altitude
+  (below), a ship 220 ahead sits ~18° *under* a level nose, and a boresighted laser fired over the
+  top of every target — this is the whole reason the aim assist exists, not a convenience. The pick
+  is **bearing only**, flattened onto the local horizontal, tightest bearing inside `LOCK_CONE`
+  wins; elevation is the curve's business, not the player's. `LOCK_RANGE` **must stay inside the
+  horizon** (~360 between two aircraft in the lane) or the gun locks through the planet. Unlocked,
+  it aims at the lane `RETICLE_RANGE` ahead — *not* down the nose, which is a tangent and misses
+  by 15 units per 100. **The reticle is drawn over that same point** and becomes a bracketed square
+  when it is a target: the lock is a thing you can see.
 - **The saucer is unarmed and slower than `MIN_SPEED`**, a place to go rather than a chase, spawning
   in a band 1.0–2.4 radians of arc away.
 - **Zero health explodes the aircraft and stops the flight.** `update()` returns immediately once
@@ -483,7 +596,7 @@ game's URL — which is the decision to make, not a config to write, whenever it
 **The station is a place to inhabit, not a game.** The long-run shape is: move around on board, and
 eventually go outside in a suit on a tether — but never really leave. The goal is *presence*. **No
 score, no timers, no objectives, no collectibles.** That rule is about the station; flight view is
-outside it (a saucer, landers that shoot back, a countdown, boost rings, a way to lose), and even
+outside it (a saucer, bombers that shoot back, a countdown, boost rings, a way to lose), and even
 there the line holds loosely — no score, no timer counting up, no reward for anything done right.
 
 **Real outside, warm inside.** The NASA Earth stays photoreal in the window; warmth and softness go

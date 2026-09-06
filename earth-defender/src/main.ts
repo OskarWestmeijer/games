@@ -31,13 +31,16 @@ const flyCanvas = document.querySelector<HTMLCanvasElement>('#fly-canvas')!;
 const flySpeed = document.querySelector<HTMLSpanElement>('#fly-speed')!;
 const flyAltitude = document.querySelector<HTMLSpanElement>('#fly-altitude')!;
 const flyDowned = document.querySelector<HTMLSpanElement>('#fly-downed')!;
+const flyAmmo = document.querySelector<HTMLSpanElement>('#fly-ammo')!;
+const flyRockets = document.querySelector<HTMLSpanElement>('#fly-rockets')!;
+const flyLost = document.querySelector<HTMLSpanElement>('#fly-lost')!;
 const flyMarker = document.querySelector<SVGSVGElement>('#minimap-plane')!;
 const flyContact = document.querySelector<SVGSVGElement>('#minimap-ufo')!;
 const flyPost = document.querySelector<SVGSVGElement>('#minimap-post')!;
 const flyReticle = document.querySelector<HTMLDivElement>('#fly-reticle')!;
 const flyPaths = document.querySelector<SVGSVGElement>('#minimap-paths')!;
 const flyAlerts = document.querySelector<HTMLDivElement>('#fly-alerts')!;
-const flyLanderHealth = document.querySelector<HTMLDivElement>('#fly-lander-health')!;
+const flyBomberHealth = document.querySelector<HTMLDivElement>('#fly-bomber-health')!;
 const flyPlaneHealth = document.querySelector<HTMLDivElement>('#fly-plane-health')!;
 const flySpaceLabel = document.querySelector<HTMLSpanElement>('#fly-space-label')!;
 const flyPlaneHealthFill = document.querySelector<HTMLDivElement>('#fly-plane-health-fill')!;
@@ -268,13 +271,16 @@ async function setMode(mode: Mode) {
       speedLabel: flySpeed,
       altitudeLabel: flyAltitude,
       downedLabel: flyDowned,
+      ammoLabel: flyAmmo,
+      rocketLabel: flyRockets,
+      lostLabel: flyLost,
       planeMarker: flyMarker,
       ufoMarker: flyContact,
       postMarker: flyPost,
       reticle: flyReticle,
       mapOverlay: flyPaths,
       alertPanel: flyAlerts,
-      landerHealthLayer: flyLanderHealth,
+      bomberHealthLayer: flyBomberHealth,
       planeHealthBar: flyPlaneHealth,
       planeHealthFill: flyPlaneHealthFill,
       spaceLabel: flySpaceLabel,

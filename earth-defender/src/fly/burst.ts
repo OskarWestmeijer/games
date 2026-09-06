@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 /**
  * A one-shot explosion: an additive shell that expands and fades, with a handful of shards
- * thrown out of it. Originally a landing ship's own kill effect and nothing else; extracted here
+ * thrown out of it. Originally a bomber's own kill effect and nothing else; extracted here
  * once the aircraft's own destruction needed the same shape of thing in a different colour and
  * at a different scale, rather than forking a second copy of it.
  *

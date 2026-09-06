@@ -772,7 +772,7 @@ export interface Space {
    * the planet turns underneath it.
    *
    * The same `SphereGeometry` convention `surfaceUv` inverts, run forwards. Handed out for the
-   * flight view's landing ships, which aim at a country rather than at a point in space.
+   * flight view's bombers, which aim at a country rather than at a point in space.
    */
   worldFromLatLon(
     latitude: number,

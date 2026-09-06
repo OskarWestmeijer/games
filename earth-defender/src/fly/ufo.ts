@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PLANET_RADIUS } from '../space';
+import { CEILING_ALTITUDE, CRUISE_ALTITUDE } from './lane';
 
 /**
  * The one thing in the flight view that is not scenery: a saucer, drifting slowly somewhere
@@ -47,10 +48,15 @@ const LEAN = 0.12;
  */
 const SPAWN_MIN_ARC = 1.0;
 const SPAWN_MAX_ARC = 2.4;
-/** Its altitude band, kept inside the aircraft's own so it can always be reached without
- *  diving into the atmosphere shell or climbing out of the neighbourhood. */
-const MIN_ALTITUDE = 45;
-const MAX_ALTITUDE = 130;
+/**
+ * Its altitude band, kept inside the aircraft's own so it can always be reached without diving
+ * into the atmosphere shell or climbing out of the neighbourhood — and that promise is now a
+ * real constraint rather than a courtesy, because the aeroplane's band is a narrow lane with a
+ * ceiling on it (`fly/lane.ts`). Inset from both ends of it by more than `BOB_AMPLITUDE`, so a
+ * saucer at the bottom of its bob is still somewhere the aeroplane can get to.
+ */
+const MIN_ALTITUDE = CRUISE_ALTITUDE + 5;
+const MAX_ALTITUDE = CEILING_ALTITUDE - 5;
 
 /** Seconds between one being shot down and the next turning up. */
 const RESPAWN_DELAY = 6;

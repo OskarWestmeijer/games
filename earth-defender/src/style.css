@@ -327,9 +327,9 @@ body {
 }
 
 /* --- the incoming bars ---------------------------------------------------------------------
-   One bar per landing ship on its way down, stacked at the top of the screen: what it is coming
+   One bar per bomber on its way down, stacked at the top of the screen: what it is coming
    down on, how long it has left, and a fill that drains as it descends. Its own health bar
-   floats over the ship instead — see #fly-lander-health below. Loud on purpose — this
+   floats over the ship instead — see #fly-bomber-health below. Loud on purpose — this
    is the one thing in the flight view with a deadline on it, and the whole reason to break off
    what you were doing. Everything else here is a dim pill in a corner; these shout.
 
@@ -421,6 +421,26 @@ body {
   box-shadow: 0 0 8px rgba(90, 255, 205, 0.7);
 }
 
+
+/* --- a city under the bombs -----------------------------------------------------------------
+   The row's bar stops being the ship's approach and becomes the *city's health* the moment the
+   bombing starts (see `updateMapMarks()`), and this is what says so: red, which nothing else in
+   this HUD is, and steady rather than pulsing. It is not the urgent state — urgency is about a
+   clock running out, and this is past that: the thing is happening. The two classes are mutually
+   exclusive in `fly-view.ts` for exactly that reason. */
+.fly-alert.bombing {
+  border-color: rgba(255, 90, 74, 0.75);
+}
+
+.fly-alert.bombing .alert-head {
+  color: #ff8f7a;
+}
+
+.fly-alert.bombing .timer-mark,
+.fly-alert.bombing .alert-fill {
+  background: #ff5a4a;
+  box-shadow: 0 0 8px rgba(255, 90, 74, 0.85);
+}
 
 /* The last ten seconds. Warm, and pulsing: by then it is your problem rather than information. */
 .fly-alert.urgent {
@@ -547,7 +567,7 @@ body {
   }
 }
 
-/* --- the landing ships' approaches ----------------------------------------------------------
+/* --- the bombers' approaches ----------------------------------------------------------
    Drawn in the overlay's own coordinates (100 x 50 = the whole map), so every width here scales
    with the panel. The line is the whole point: a mark says where something *is*, a line says
    where it is *going*, which is what decides whether it is worth flying after. */
@@ -559,22 +579,34 @@ body {
 }
 
 /* Dashed, because it is a plan rather than a track — the ship has not been along it yet. */
-.lander-path {
+.bomber-path {
   stroke: rgba(98, 255, 208, 0.62);
   stroke-width: 0.55;
   stroke-dasharray: 2 1.6;
 }
 
 /* The landing site: a ring, which is to say a place, at the end of the line. */
-.lander-site {
+.bomber-site {
   fill: none;
   stroke: rgba(98, 255, 208, 0.8);
   stroke-width: 0.5;
 }
 
+/* A capital that has been bombed to nothing: the only red on this panel, and the only mark on it
+   that never moves or goes away. Drawn once when the city falls — its place on a static map is
+   fixed, however far the planet has turned since — and cleared only by a restart. Stroked dark
+   underneath (`paint-order`) so it survives over pale desert as well as over ocean. */
+.capital-cross {
+  stroke: #ff5a4a;
+  stroke-width: 0.7;
+  stroke-linecap: round;
+  fill: none;
+  paint-order: stroke;
+}
+
 /* And the ship on its way down it — a square, so that at three pixels across it cannot be
    mistaken for the saucer's circle. */
-.lander-ship {
+.bomber-ship {
   fill: #62ffd0;
   stroke: rgba(4, 6, 10, 0.9);
   stroke-width: 0.6;
@@ -596,24 +628,90 @@ body {
   border: 1px solid rgba(255, 207, 122, 0.45);
   border-radius: 50%;
   pointer-events: none;
+  /* Only the box eases, never `left`/`top`: the ring is moved every frame by `updateReticle()`,
+     and a transition on its position would make it lag whatever it is over — most visibly the
+     moment it snaps onto a locked target, which is the one moment it has to be exact. What is
+     eased is the *shape*: a ring becoming a bracketed box reads as the gun finding something. */
+  transition:
+    width 110ms ease,
+    height 110ms ease,
+    margin 110ms ease,
+    border-color 110ms ease,
+    border-radius 110ms ease;
 }
 
-/* One floating health bar per landing ship, positioned over its own model every frame by
-   `updateLanderHealthBars()` in fly-view.ts. Plain on purpose — no glow, no box-shadow, no
+/* Locked on: four corner brackets round the target instead of the loose ring, which is the
+   difference between "the shots go here" and "the shots go to *that*". Drawn as eight background
+   slices on the one element rather than as extra markup — the reticle is a single div that
+   `updateReticle()` moves, and corners are what a bracket is. The border is kept and made
+   transparent so the box does not resize as the class goes on and off. Warm, like everything of
+   ours; the lock is not a second colour, only a firmer shape. */
+#fly-reticle.locked {
+  width: 38px;
+  height: 38px;
+  margin: -19px 0 0 -19px;
+  border-color: transparent;
+  border-radius: 0;
+  background-image:
+    linear-gradient(#ffcf7a, #ffcf7a), linear-gradient(#ffcf7a, #ffcf7a),
+    linear-gradient(#ffcf7a, #ffcf7a), linear-gradient(#ffcf7a, #ffcf7a),
+    linear-gradient(#ffcf7a, #ffcf7a), linear-gradient(#ffcf7a, #ffcf7a),
+    linear-gradient(#ffcf7a, #ffcf7a), linear-gradient(#ffcf7a, #ffcf7a);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-size:
+    11px 2px, 2px 11px,
+    11px 2px, 2px 11px,
+    11px 2px, 2px 11px,
+    11px 2px, 2px 11px;
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+}
+
+#fly-reticle.locked::after {
+  background: rgba(255, 207, 122, 1);
+}
+
+/* The empty-guns waypoint: the same brackets, put round the resupply package under the command
+   post, in the station's own paler light rather than the gun's amber. It is deliberately *not* a
+   third shape — the brackets already mean "this exact thing", and what has changed is only which
+   thing and why. Wider and dimmer than a gun lock, because it is a place to go rather than a
+   target: it should read at the edge of the eye and never be mistaken for something to shoot. */
+#fly-reticle.locked.waypoint {
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  background-image:
+    linear-gradient(#cfe6ff, #cfe6ff), linear-gradient(#cfe6ff, #cfe6ff),
+    linear-gradient(#cfe6ff, #cfe6ff), linear-gradient(#cfe6ff, #cfe6ff),
+    linear-gradient(#cfe6ff, #cfe6ff), linear-gradient(#cfe6ff, #cfe6ff),
+    linear-gradient(#cfe6ff, #cfe6ff), linear-gradient(#cfe6ff, #cfe6ff);
+  opacity: 0.8;
+}
+
+#fly-reticle.locked.waypoint::after {
+  background: rgba(207, 230, 255, 0.9);
+}
+
+/* One floating health bar per bomber, positioned over its own model every frame by
+   `updateBomberHealthBars()` in fly-view.ts. Plain on purpose — no glow, no box-shadow, no
    animation — so it reads as a status readout and does not compete with the ship, the burst, or
    the alert bar's own countdown fill, which is the one thing here that is meant to shout. */
 /* Filled out to the full view — not just given `position: absolute` and left to shrink-to-fit,
    which is the bug this had: an absolutely positioned box with no size and no inset collapses
-   to nothing, and every bar's percentage `left`/`top` (see `updateLanderHealthBars()`) is
+   to nothing, and every bar's percentage `left`/`top` (see `updateBomberHealthBars()`) is
    resolved against *this* box, not `#fly-view` — so every bar landed pinned to a single point
    instead of tracking its own ship. `inset: 0` is what makes the percentages mean what they say. */
-#fly-lander-health {
+#fly-bomber-health {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.lander-health {
+.bomber-health {
   position: absolute;
   width: 3.4rem;
   height: 0.22rem;
@@ -626,12 +724,31 @@ body {
   overflow: hidden;
 }
 
-.lander-health-fill {
+.bomber-health-fill {
   height: 100%;
   background: rgba(143, 232, 205, 0.65);
 }
 
-/* The player's own health bar. Same shape and the same restraint as a landing ship's — plain,
+/* The city's own bar, floating over the place being bombed. Same shape as a ship's, because it
+   is the same kind of statement, and wider because a city is not a ship — but red, which in this
+   scene means only one thing: ours, and going. */
+.capital-health {
+  position: absolute;
+  width: 4.6rem;
+  height: 0.28rem;
+  transform: translate(-50%, -100%);
+  background: rgba(20, 6, 6, 0.6);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.capital-health-fill {
+  height: 100%;
+  background: #ff5a4a;
+  box-shadow: 0 0 6px rgba(255, 90, 74, 0.8);
+}
+
+/* The player's own health bar. Same shape and the same restraint as a bomber's — plain,
    no glow, no animation — but warm rather than the cool green of a ship that isn't yours, the
    same "ours is warm, theirs is cold" convention the nav lights and the laser already use. */
 #fly-plane-health {
@@ -714,6 +831,67 @@ body {
 .hud-note {
   padding-left: 0.4rem;
   border-left: 1px solid var(--border);
+}
+
+/* A magazine at zero. Red rather than dimmed: every other number in this pill is something the
+   aeroplane is *doing*, and this one is the only one that is a thing it can no longer do. It is
+   the same restraint as everywhere else here — a colour, not a blink. */
+.hud-value.empty {
+  color: #ff8f7a;
+}
+
+/* Capitals lost. The mirror of the above — an ammunition count only matters at zero, and this
+   one matters from one — and the same red the crosses on the map are, because it is the same
+   fact counted. */
+.hud-value.lost {
+  color: #ff5a4a;
+}
+
+/* --- the notes ------------------------------------------------------------------------------
+   The design notes, standing above the readout pill in the same centred column and always on
+   screen: they are what this view is being built out of, and a note you have to open is a note
+   nobody reads.
+
+   Small and dim like the control legend, and left-aligned as a list — the pill below is centred
+   numbers, and the two should not read as the same thing. **It carries its own ground**, unlike
+   the legend, and that is not decoration: the legend is five words in a corner the planet rarely
+   fills, where this is nine lines across the middle of the screen, and over the sunlit limb a
+   text shadow alone left half of them unreadable. It is *darker* than the instrument pill and has
+   no border: nine lines of small dim text need a real ground where a strip of bright numbers does
+   not, and dropping the border is what keeps it a note on the glass rather than a second panel. */
+#fly-notes {
+  position: absolute;
+  left: 50%;
+  bottom: 4rem;
+  transform: translateX(-50%);
+  z-index: 1;
+  margin: 0;
+  padding: 0.5rem 0.85rem;
+  max-width: min(38rem, 74vw);
+  list-style: none;
+  font-size: 0.68rem;
+  line-height: 1.65;
+  color: var(--text-dim);
+  text-align: left;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  background: rgba(12, 14, 18, 0.82);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+/* The dash is the list marker, drawn rather than bulleted so it sits on the text's own baseline
+   and inherits the dimming. */
+#fly-notes li::before {
+  content: '— ';
+  opacity: 0.6;
+}
+
+/* Short viewports put the notes through the aeroplane, and there the flight wins: the pill and
+   the legend are instruments, these are reading. */
+@media (max-height: 620px), (pointer: coarse) {
+  #fly-notes {
+    display: none;
+  }
 }
 
 .planet-credit {

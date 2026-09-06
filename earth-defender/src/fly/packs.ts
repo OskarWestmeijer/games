@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 
 /**
- * Repair packs: what a landing ship leaves behind when you shoot it down. One falls out of the
+ * Repair packs: what a bomber leaves behind when you shoot it down. One falls out of the
  * wreck, drifts down for ten seconds, and is gone — collected if you were close enough behind
  * your own shot to fly through it, and simply gone if you were not.
  *
  * **There was nothing to repair for a while, and this file said so.** The saucer stayed unarmed
  * (still is — see `fly/ufo.ts`), and there was no ground to hit, so a pack was a *reason to fly
  * at the wreck* rather than a resource, and the honest state of `Packs.taken` was a number
- * waiting for a use. Now a landing ship shoots back on the way down, so it has one: a pack
+ * waiting for a use. Now a bomber shoots back on the way down, so it has one: a pack
  * healed by `PACK_HEAL_AMOUNT` in `fly-view.ts` is what patches that back up. The ten seconds
  * did not change — they are still short enough that taking one means committing to the kill
  * before you have made it.
@@ -29,7 +29,7 @@ import * as THREE from 'three';
  * other feedback for a mechanic that is otherwise silent until the pack simply arrives.
  */
 
-/** How many can be in the air at once: one per landing ship, since one ship leaves one pack. */
+/** How many can be in the air at once: one per bomber, since one ship leaves one pack. */
 const POOL = 4;
 
 /** Seconds from the drop to it going, whether or not anyone came for it. */
