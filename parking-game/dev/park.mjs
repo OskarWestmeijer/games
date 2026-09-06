@@ -1,7 +1,6 @@
 /**
  * Precision Parking harness.
  *
- * `shots.mjs` says how the station looks and `walk.mjs` says whether you can get anywhere in it.
  * This says the two things about the parking game that are invisible by eye and would each
  * quietly break the whole point of it:
  *
@@ -45,9 +44,9 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 420, height: 820 } });
 
 async function open() {
-  // `#park` rather than the bare hash even though parking is the default: an explicit hash keeps
-  // this harness working whichever view the site happens to open on.
-  await page.goto(`${server.url}/#park`, { waitUntil: 'load' });
+  // No hash. There is one view in this project and it is this one — the `#park` this used to
+  // ask for was a mode in a five-scene site that the parking game no longer lives in.
+  await page.goto(server.url, { waitUntil: 'load' });
   await page.waitForFunction(() => !!window.__park, null, { timeout: 60000 });
 }
 

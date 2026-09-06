@@ -78,8 +78,7 @@ body {
 
 #planet-view,
 #inspect-view,
-#fly-view,
-#park-view {
+#fly-view {
   position: relative;
   width: 100%;
 }
@@ -89,8 +88,7 @@ body {
 #asset-view[hidden],
 #planet-view[hidden],
 #inspect-view[hidden],
-#fly-view[hidden],
-#park-view[hidden] {
+#fly-view[hidden] {
   display: none;
 }
 
@@ -180,18 +178,6 @@ body {
   display: block;
   width: 100%;
   height: 100%;
-}
-
-/* Precision Parking. `touch-action: none` for the reason given on #planet-canvas — and here
-   also because the whole game is tapping, and Safari reads a quick second tap as a request to
-   zoom the page. The board letterboxes itself inside whatever shape this ends up; the surround
-   is painted by the canvas, not by CSS, so there is nothing here to keep in step with it. */
-#park-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  touch-action: none;
 }
 
 /* The two readouts sit next to each other in the pill; the unit follows the number. */

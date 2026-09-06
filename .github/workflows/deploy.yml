@@ -1,3 +1,9 @@
+# Builds and publishes the parking game, and nothing else.
+#
+# Each game in this repo is an independent project with its own lockfile and build (see the root
+# CLAUDE.md), and GitHub Pages serves one site per repo — so this workflow names one game folder
+# on purpose. `earth-defender/` is deliberately not built here, by request; changing which game is
+# published means changing `GAME` below and nothing else.
 name: Deploy to GitHub Pages
 
 on:
@@ -16,21 +22,30 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+env:
+  GAME: parking-game
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.GAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+          # The lockfile is per game, not at the repo root, so the cache has to be told where it is.
+          cache-dependency-path: ${{ env.GAME }}/package-lock.json
       - run: npm ci
-      - run: npm run build # tsc + vite build -> dist/ (ai-assets/ copied in as publicDir)
+      - run: npm run build # tsc + vite build -> <game>/dist/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          # Not affected by `defaults.run.working-directory`, which only applies to `run` steps.
+          path: ${{ env.GAME }}/dist
 
   deploy:
     needs: build

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Precision Parking</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!--
+      The whole game, and there is deliberately nothing else in here.
+
+      Every readout — the round, the total, the verdict, the prompt — is drawn *inside* the
+      letterboxed 360x512 board, in board units, because an HTML overlay pinned to the viewport
+      could not follow a board that letterboxes itself. That includes the "Tap" / "Press Space"
+      split, which is made from `matchMedia` in park-view.ts and drawn rather than swapped in CSS.
+    -->
+    <div id="app">
+      <canvas id="park-canvas"></canvas>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

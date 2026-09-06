@@ -1,26 +1,21 @@
-# 3D Asset Viewer
+# games
 
-A small GitHub Pages site that visualizes the `.glb` models in [`ai-assets/`](ai-assets)
-— AI-generated 3D assets from Meshy and Tripo3D. Pick a model from the sidebar gallery
-to load it into an interactive Three.js viewport (orbit / zoom / pan).
+A set of small, independent browser games. Each lives in its own directory with its own
+dependencies and build — there is nothing to install or run at the repo root.
 
-See [CLAUDE.md](CLAUDE.md) for architecture notes and how to add new assets.
+| folder | what it is | live |
+| --- | --- | --- |
+| [`parking-game/`](parking-game) | **Precision Parking** — a one-tap parking game on a 2D canvas. Five fixed bays, scored on how close you stopped. | [play it](https://oskarwestmeijer.github.io/games/) |
+| [`earth-defender/`](earth-defender) | A Three.js world seen four ways: fly an aeroplane against alien landers, walk a space station in orbit, inspect the planet, browse the AI-generated assets. | not deployed |
 
-## Run
+## Run one
 
 ```bash
+cd parking-game        # or earth-defender
 npm install
-npm run dev      # then open the printed http://localhost URL
-npm run build    # type-check (tsc) + production build to dist/
+npm run dev            # then open the printed http://localhost URL
+npm run build          # type-check (tsc) + production build to dist/
 ```
 
-## Stack
-
-Vite + TypeScript + [Three.js](https://threejs.org/). No game framework.
-
 Deployed to GitHub Pages on every push to `main` via
-[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
-
-## Credits
-
-Models generated with [Meshy](https://www.meshy.ai/) and [Tripo3D](https://www.tripo3d.ai/).
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), which builds `parking-game/` only.

@@ -1,0 +1,18 @@
+{
+  "name": "parking-game",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Precision Parking \u2014 a one-tap parking game on a 2D canvas.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "check": "node dev/park.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8"
+  }
+}

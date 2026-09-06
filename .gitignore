@@ -1,9 +1,13 @@
 node_modules
 dist
+.vite
 *.local
 .DS_Store
 .idea
-dev/shots
+
+# Screenshot output from earth-defender/dev/shots.mjs — regenerated, never committed.
+earth-defender/dev/shots
+
 # Not-for-publication assets: kept locally only, never pushed to GitHub
-# (unlike the rest of ai-assets/, which IS committed — see CLAUDE.md)
-ai-assets/not-public/
+# (unlike the rest of ai-assets/, which IS committed — see earth-defender/CLAUDE.md)
+earth-defender/ai-assets/not-public/

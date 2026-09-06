@@ -3,13 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Oskar Westmeijer</title>
+    <title>Earth Defender</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div id="mode-switcher">
       <select id="mode-select">
-        <option value="park">Precision Parking</option>
         <option value="fly">Flight View</option>
         <option value="planet">Planet View</option>
         <option value="inspect">Planet Inspector</option>
@@ -157,17 +156,6 @@
           <a href="https://visibleearth.nasa.gov/" target="_blank" rel="noopener">NASA Visible Earth</a>
           (public domain), downscaled.
         </p>
-      </div>
-      <!--
-        Precision Parking. The one 2D scene here, and the only one that is a game: a toy car, a
-        tap, and how close it stopped. Nothing but a canvas — the score, the level, the ruler and
-        the prompt are all drawn *inside* the letterboxed 360x640 board, in board units, where a
-        `.hud` pill pinned to the viewport could not follow them. That includes the
-        "Tap" / "Press Space" split the rest of the site does with .fine-only/.coarse-only: this
-        one is made from matchMedia in park-view.ts and drawn.
-      -->
-      <div id="park-view" class="view" hidden>
-        <canvas id="park-canvas"></canvas>
       </div>
       <div id="inspect-view" class="view" hidden>
         <canvas id="inspect-canvas"></canvas>

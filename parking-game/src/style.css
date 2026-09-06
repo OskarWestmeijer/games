@@ -1,0 +1,53 @@
+/*
+ * All of it. The game is one canvas that paints its own surround, so there is no panel, no
+ * pill and no theme to keep in step with anything — see `park/board.ts` for the palette, which
+ * lives in TypeScript because the drawing needs it and CSS does not.
+ */
+
+:root {
+  color-scheme: dark;
+  /* The same value as `COLORS.surround` in `park/board.ts`: the canvas paints the letterbox
+     itself, and this only ever shows for the instant before the first frame. */
+  --bg: #16181c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* A full-screen canvas, never a document: nothing scrolls, nothing is selectable text. */
+body {
+  overflow: hidden;
+  /* iOS: stop rubber-band scrolling and the long-press selection callout over the board. */
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#app {
+  width: 100vw;
+  /* dvh, because iOS Safari's 100vh includes the space behind its own chrome. vh first as the
+     fallback. */
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* `touch-action: none` because the whole game is tapping, and Safari reads a quick second tap
+   as a request to zoom the page. The board letterboxes itself inside whatever shape this ends
+   up; the surround is painted by the canvas, not by CSS. */
+#park-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  touch-action: none;
+}
