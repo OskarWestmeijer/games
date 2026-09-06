@@ -1,10 +1,12 @@
 /**
  * Precision Parking — the fifth scene, and the only one here that is a game outright.
  *
- * A chunky toy car rolls left to right along a fixed track towards a painted target. One tap
- * stops it dead. The score is how close its centre landed to the target's centre; overshoot and
- * the bumper meets the buffer block and the run is over. That is the whole of it, and the
- * reasoning below is mostly about the ways it could have been more and deliberately is not.
+ * A chunky toy taxi rolls left to right along a fixed street towards a painted bay. One tap stops
+ * it dead. **Parked means the whole car between the bay's two lines**, and the score is how far
+ * its centre finished from the bay's centre; overshoot and the bumper is in the boot of the car
+ * in front and the round is lost. A session is five fixed bays, the same five for everybody, and
+ * you always play all five. That is the whole of it, and the reasoning below is mostly about the
+ * ways it could have been more and deliberately is not.
  *
  * **Plain 2D canvas, not three.js.** The other four modes are one WebGL world seen four ways.
  * This shares nothing with them: no GPU contention, no `webglcontextlost` handler to write, no
@@ -12,42 +14,42 @@
  * because that loads instantly, stays crisp on a phone at any pixel ratio, and looks like a toy
  * rather than like the rest of the site.
  *
- * **A letterboxed 360x640 board, not a canvas that fills the window.** Every number in the game
+ * **Seen from above.** It was drawn side-on for a long time, and that was the mistake: in profile
+ * the action reads as *stop the truck on the mark*, which is precisely the framing the game left
+ * behind when the win condition became the whole car between two lines. Overhead, the rule needs
+ * no sentence to explain it — the gap you can see is the gap the car has to fit into. Nothing
+ * about the geometry moved when the camera did.
+ *
+ * **A letterboxed 360x512 board, not a canvas that fills the window.** Every number in the game
  * is in board units and the whole field is mapped onto the canvas by one transform. This is not
  * about looking right in portrait — it is what makes two runs the same run. If the board
  * stretched to the viewport, "you stopped 4 units off centre" would mean a different thing on a
  * phone and on a desktop, and the per-level comparison this scene is shaped around (see
  * `park/levels.ts`) could never be made.
  *
- * **The field is fixed and entirely visible; the camera never scrolls.** You can see the car,
- * the gap and the target from the moment it launches. That is what makes the tap a judgement
- * rather than a reaction, which is the feeling being aimed at. The cost is that the track is only
- * 308 units long, which puts a ceiling on speed — so difficulty is carried by the target
- * shrinking five-fold instead, and the speed curve asymptotes well short of unwatchable.
+ * **The field is fixed and entirely visible; the camera never scrolls.** You can see the car, the
+ * gap and the bay from the moment it launches. That is what makes the tap a judgement rather than
+ * a reaction, which is the feeling being aimed at. The cost is that the track is only 308 units
+ * long, which puts a ceiling on speed — so difficulty is carried by the bay's clearance shrinking
+ * nine-fold instead, and the speed curve asymptotes well short of unwatchable.
  *
  * **The stop is instantaneous, and back-dated to the tap.** There is no braking curve and no
  * skid, because either would put a second skill between the tap and the result, and the tap *is*
  * the result. More importantly the position is computed from the *event's* timestamp rather than
- * read at the next animation frame: at 200 units a second one frame of latency is 3.3 board
- * units, against a level-20 target half-width of 9. Sampled at the frame, a third of the target
- * would be eaten by the frame clock and no amount of skill would get it back. What the player
- * gets instead of brakes is weight — a nose dip, a squash and a puff of tyre smoke, all of which
- * are cosmetic and none of which move the judged number.
+ * read at the next animation frame: at 255 units a second one frame is over four board units,
+ * against a level-22 clearance of 4.3. Sampled at the frame, the whole bay would be handed to the
+ * frame clock and no amount of skill would get it back. What the player gets instead of brakes is
+ * weight — the body splaying on its springs, tyre smoke, two black lines on the tarmac — all of
+ * which are cosmetic and none of which move the judged number.
  *
- * **One life.** A crash ends the run. There is no timer, nothing to collect and no objective
- * beyond the score — which makes this the third and loudest exception to the "no score, no
- * timers, no objectives" rule in CLAUDE.md. That rule is about the station, which is a place to
- * be; this is a toy on a mat.
+ * **Failing does not end anything.** Five bays are attempted every session; a miss or a crash
+ * costs a flat penalty and the car rolls up to the next one. A total over a fixed five is the
+ * only number two players can hold up against each other, which makes this the loudest exception
+ * to the "no score, no timers, no objectives" rule in CLAUDE.md. That rule is about the station,
+ * which is a place to be; this is a toy on a street.
  */
 
-import {
-  BOARD_H,
-  BOARD_W,
-  CAR_HALF,
-  COLORS,
-  GROUND_Y,
-  START_X
-} from './park/board';
+import { BOARD_H, BOARD_W, CAR_HALF, COLORS, LANE_Y, START_X } from './park/board';
 import { ROUND_COUNT, roundSpec, type LevelSpec } from './park/levels';
 import { createEffects } from './park/effects';
 import { createBest } from './park/best';
@@ -95,10 +97,14 @@ const JUDGE_SECONDS = 1.4;
 const MISS_PENALTY = 40;
 const CRASH_PENALTY = 60;
 
-/** How far the body pitches when the brakes bite, in radians. **Positive is nose-down** — the
- *  canvas y axis points down, so this was lifting the nose under braking while calling itself a
- *  dip. `draw.ts` pitches the body alone; the wheels stay on the road. */
-const NOSE_DIP = 0.07;
+/**
+ * How far the body splays sideways when the brakes bite, as a fraction of its width.
+ *
+ * Side-on this was a nose dip, and a *shear* rather than a rotation, because a rotation narrowed
+ * the drawn car and so put a car genuinely over a line inside the paint. From above the same
+ * constraint bites on the same axis: the squash may only ever scale y. See `drawCar`.
+ */
+const BRAKE_SQUASH = 0.1;
 
 /** A tap is ignored for this long after a stop. The tap that stopped the car is very often still
  *  on its way up, and without this the same press would stop the car and launch the next level. */
@@ -133,8 +139,7 @@ export function createParkView(canvas: HTMLCanvasElement, options: ParkViewOptio
   let round = 0;
   let spec: LevelSpec = roundSpec(0);
   let carX = START_X;
-  let carTilt = 0;
-  let wheelAngle = 0;
+  let carSquash = 0;
   /** The session's score: every round's score added up. Lower is better. */
   let totalOff = 0;
   /** What each round scored, in order, for the results screen. */
@@ -153,7 +158,7 @@ export function createParkView(canvas: HTMLCanvasElement, options: ParkViewOptio
     round = next;
     spec = roundSpec(round);
     carX = START_X;
-    carTilt = 0;
+    carSquash = 0;
     phase = 'ready';
     phaseTime = 0;
     // The last level's verdict has to go with the last level. Both the ruler and the verdict are
@@ -170,7 +175,6 @@ export function createParkView(canvas: HTMLCanvasElement, options: ParkViewOptio
     sessionBest = false;
     result = null;
     lockout = 0;
-    wheelAngle = 0;
     effects.clear();
     arm(0);
   }
@@ -226,10 +230,10 @@ export function createParkView(canvas: HTMLCanvasElement, options: ParkViewOptio
     const rating: Rating = perfect ? 'PERFECT' : error <= great ? 'GREAT' : 'CLOSE';
 
     carX = stopX;
-    carTilt = NOSE_DIP;
-    effects.smoke(carX, GROUND_Y - 6, spec.speed);
+    carSquash = BRAKE_SQUASH;
+    effects.smoke(carX, LANE_Y, spec.speed);
     if (perfect) {
-      effects.confetti(carX, GROUND_Y - 46);
+      effects.confetti(carX, LANE_Y);
       effects.shake(2.5);
     }
 
@@ -259,10 +263,13 @@ export function createParkView(canvas: HTMLCanvasElement, options: ParkViewOptio
   function fail(rating: Rating, stopX: number) {
     const bay = spec.bay;
     carX = stopX;
-    carTilt = rating === 'CRASHED' ? NOSE_DIP * 2 : NOSE_DIP;
-    effects.smoke(stopX, GROUND_Y - 6, spec.speed);
+    carSquash = rating === 'CRASHED' ? BRAKE_SQUASH * 1.6 : BRAKE_SQUASH;
+    effects.smoke(stopX, LANE_Y, spec.speed);
     if (rating === 'CRASHED') {
-      effects.debris(stopX + CAR_HALF, GROUND_Y - 24);
+      effects.debris(stopX + CAR_HALF, LANE_Y);
+      // The roof sign comes off, once, at the moment of impact. `drawCar` stops drawing it from
+      // here on, so the one cartwheeling down the street is the only one left.
+      effects.trim(stopX + 6, LANE_Y);
       effects.shake(9);
     } else {
       effects.shake(2);
@@ -337,17 +344,16 @@ export function createParkView(canvas: HTMLCanvasElement, options: ParkViewOptio
 
     if (phase === 'rolling') {
       carX += spec.speed * dt;
-      wheelAngle += (spec.speed / 11) * dt;
       dustTimer -= dt;
       if (dustTimer <= 0) {
         dustTimer = 0.03;
-        effects.dust(carX - 16, GROUND_Y - 2, spec.speed);
+        effects.dust(carX - CAR_HALF, LANE_Y, spec.speed);
       }
       // Nobody tapped. The car meets the block, which is the same event as overshooting.
       if (carX >= spec.failLine) fail('CRASHED', spec.failLine);
     } else if (phase === 'judging') {
-      // The nose settles back out of its dip.
-      carTilt += (0 - carTilt) * Math.min(1, dt * 9);
+      // The body settles back onto its springs.
+      carSquash += (0 - carSquash) * Math.min(1, dt * 9);
       if (phaseTime < JUDGE_SECONDS) return;
       if (round + 1 < ROUND_COUNT) {
         arm(round + 1);
@@ -383,8 +389,7 @@ export function createParkView(canvas: HTMLCanvasElement, options: ParkViewOptio
       phaseTime,
       spec,
       carX,
-      carTilt,
-      wheelAngle,
+      carSquash,
       rolling: phase === 'rolling',
       round,
       totalOff,

@@ -133,8 +133,8 @@ check(
 // The contract between what is drawn and what is judged. The bay is measured against the car's
 // own outline, so nothing drawn may stick out past `CAR_HALF` — a wheel poking out past the
 // bodywork would be a visible part of the car outside a bay the game called parked. (The other
-// half of this contract, that the drawn width does not change under the brakes, is why the nose
-// dip is a vertical shear rather than a rotation; see `drawCar`.)
+// half of this contract, that the drawn length does not change under the brakes, is why the
+// scene's overhead view splays the body sideways rather than squashing it; see `drawCar`.)
 const drawn = await page.evaluate(async () => {
   const b = await import('/src/park/board.ts');
   return { tyre: b.WHEEL_X + b.WHEEL_R, carHalf: b.CAR_HALF };
