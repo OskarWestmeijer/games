@@ -133,8 +133,10 @@ export function createBolts(options: BoltsOptions = {}): Bolts {
     const lengthSq = segment.lengthSq();
     const t = lengthSq > 0 ? THREE.MathUtils.clamp(toTarget.dot(segment) / lengthSq, 0, 1) : 0;
     closest.copy(from).addScaledVector(segment, t);
+    lastMiss = Math.sqrt(closest.distanceToSquared(target.position));
     return closest.distanceToSquared(target.position) <= target.radius * target.radius;
   }
+  let lastMiss = 0;
 
   return {
     group,
@@ -156,22 +158,44 @@ export function createBolts(options: BoltsOptions = {}): Bolts {
       cooldown -= dt;
       for (const bolt of bolts) {
         if (bolt.life <= 0) continue;
+        // @ts-ignore diag
+        if (bolt.__min === undefined || bolt.__fresh) {
+          // @ts-ignore diag
+          bolt.__min = 1e9; bolt.__fresh = false; bolt.__steps = 0; bolt.__start = 1e9;
+          // @ts-ignore diag
+          for (const t of targets) bolt.__start = Math.min(bolt.__start, bolt.mesh.position.distanceTo(t.position));
+        }
         from.copy(bolt.mesh.position);
         bolt.mesh.position.addScaledVector(bolt.velocity, dt);
         bolt.life -= dt;
 
+        let landed = false;
         for (const target of targets) {
-          if (!swept(bolt.mesh.position, target)) continue;
+          const ok = swept(bolt.mesh.position, target);
+          // @ts-ignore diag
+          if (lastMiss < bolt.__min) bolt.__min = lastMiss;
+          if (!ok) continue;
           target.hit();
           bolt.life = 0;
+          landed = true;
           break;
         }
+        // @ts-ignore diag
+        bolt.__steps++;
         // Into the ground. There is no ground, but there is a planet.
         if (bolt.life > 0 && bolt.mesh.position.lengthSq() < PLANET_RADIUS * PLANET_RADIUS) {
           bolt.life = 0;
         }
 
-        if (bolt.life <= 0) bolt.mesh.visible = false;
+        if (bolt.life <= 0) {
+          bolt.mesh.visible = false;
+          // @ts-ignore diag
+          const log = (window as any).__boltLog;
+          // @ts-ignore diag
+          if (log && targets.length) log.push({ hit: landed, range: Math.round(bolt.__start), min: +bolt.__min.toFixed(1), steps: bolt.__steps, ground: !landed && bolt.mesh.position.lengthSq() < PLANET_RADIUS * PLANET_RADIUS });
+          // @ts-ignore diag
+          bolt.__fresh = true;
+        }
       }
     },
 

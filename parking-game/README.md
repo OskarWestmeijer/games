@@ -6,7 +6,7 @@ towards a painted bay; one tap stops it dead. **Parked means the whole car betwe
 Five fixed bays, the same five for everybody, and you always play all five. Your score is the total
 distance off centre across the session — lower is better.
 
-▶ **[Play it](https://oskarwestmeijer.github.io/games/)**
+▶ **[Play it](https://oskarwestmeijer.github.io/games/parking-game/)**
 
 See [CLAUDE.md](CLAUDE.md) for the design notes and why almost every number in it is what it is.
 

@@ -32,8 +32,8 @@ catches a floor bug.
 
 Vite + TypeScript + [Three.js](https://threejs.org/). Playwright for the two dev harnesses.
 
-**Not deployed.** The repo's Pages workflow builds the parking game instead; see the root
-[README](../README.md).
+**Not deployed** — the Pages workflow publishes `parking-game/` and `earth-defender/`. Adding this
+one is a word in that workflow's `GAMES` variable; see the root [README](../README.md).
 
 ## Credits
 

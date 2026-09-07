@@ -7,6 +7,8 @@ through the command post before the guns run dry. Lose every capital and the fli
 Keyboard only: arrows climb and bank, `A`/`D` rudder, `W`/`S` throttle, `Space` the laser, `R` a
 rocket.
 
+▶ **[Play it](https://oskarwestmeijer.github.io/games/earth-defender/)**
+
 See [CLAUDE.md](CLAUDE.md) for the design notes — the constants, and why each of them is what it is.
 
 ## Run
@@ -21,7 +23,7 @@ npm run build    # type-check (tsc) + production build to dist/
 
 Vite + TypeScript + [Three.js](https://threejs.org/). No game framework.
 
-**Not deployed.** The repo's Pages workflow builds the parking game instead; see the root
+Deployed to GitHub Pages alongside the other games in this repo; see the root
 [README](../README.md).
 
 ## Credits

@@ -409,7 +409,18 @@ export function createBombers(space: Space, options: BomberOptions = {}): Bomber
     return reachable.length ? reachable[Math.floor(Math.random() * reachable.length)] : nearest;
   }
 
-  const bombers: Bomber[] = Array.from({ length: BOMBER_COUNT }, (_, i) => {
+  /**
+   * Built with a loop and `push` rather than `Array.from({ length }, …)`, which is not a style
+   * preference: Rollup tracks the literal property values of every element an `Array.from`
+   * mapper returns, and it does not see `spawn()` write `bomber.active = true` through a
+   * parameter. It therefore folds `active` to a permanent `false`, decides the `if (!state.active)
+   * return` guard below always returns, and ships `hit() {}` — an empty body. The bombers then
+   * take no damage at all in a built bundle while working perfectly under `npm run dev`, which
+   * does not bundle. Pushing into an array Rollup cannot model makes it give up and keep the
+   * code. See `bolts.ts`, which has always built its pool this way.
+   */
+  const bombers: Bomber[] = [];
+  for (let i = 0; i < BOMBER_COUNT; i++) {
     const mesh = buildShip();
     mesh.visible = false;
     group.add(mesh);
@@ -493,8 +504,8 @@ export function createBombers(space: Space, options: BomberOptions = {}): Bomber
       }
     };
 
-    return state;
-  });
+    bombers.push(state);
+  }
 
   /** Starts a run to `city` from wherever `entryLat`/`entryLon` already say. The transit's
    *  length decides its own duration, which is what makes `secondsLeft` a real number. */

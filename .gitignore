@@ -5,6 +5,11 @@ dist
 .DS_Store
 .idea
 
+# The assembled Pages site, and the /games/ wrapper used to dry-run it locally. Built by
+# .github/workflows/deploy.yml in CI; only ever present here after a manual assembly.
+_site
+_serve
+
 # Screenshot output from the dev harnesses — regenerated, never committed.
 space-station/dev/shots
 earth-defender/dev/shots

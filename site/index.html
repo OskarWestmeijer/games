@@ -1,0 +1,508 @@
+<!doctype html>
+<!--
+  The site's front door, and *not* a project.
+
+  Every other top-level folder in this repo is an independent Vite app with its own package.json,
+  lockfile, node_modules and four config files. This one is a single static file with inline CSS,
+  inline SVG and no JavaScript: there is nothing to install and nothing to build.
+  `.github/workflows/deploy.yml` copies it to the root of the published site and drops each game's
+  `dist/` into a folder beside it. `./site/preview.sh` serves the assembled result locally.
+
+  Every link here is **relative**, so this page never has to know it is served from /games/. That is
+  the same reason both games set `base: './'` in their Vite config, and it is the whole trick that
+  lets several independent builds share one GitHub Pages site.
+
+  Two things about the design, so they don't get "tidied" away:
+
+  1. **Every colour on this page is lifted from a game's source**, not chosen here — the parking
+     panel is `COLORS` in `parking-game/src/park/board.ts`, the Earth Defender panel is the HUD
+     palette in `earth-defender/src/style.css`, and the page's ground is the one value both games
+     already share. So the two panels are deliberately *not* interchangeable cards: same geometry,
+     opposite atmosphere, because that is what the two games are.
+  2. **The artwork is drawn, not photographed.** Neither game ships a single image asset — parking
+     paints its whole world on a canvas from code — so a screenshot here would have been the odd
+     one out, and would go stale besides.
+
+  Adding a game is: add its folder to `GAMES` in the workflow, then copy a <li> block below and
+  draw it a panel in its own colours.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Games — Oskar Westmeijer</title>
+    <meta name="description" content="Two small browser games: a one-tap parking game, and an aeroplane defending Earth." />
+    <style>
+      :root {
+        color-scheme: dark;
+
+        /* The ground. `COLORS.surround` in parking-game, `--bg` in earth-defender — the two
+           games arrived at the same value independently, so the page sits on it. */
+        --ground: #16181c;
+        --text: #f2efe8;
+        --dim: #8a8f98;
+
+        /* Precision Parking, from park/board.ts. */
+        --park-asphalt: #6e6a64;
+        --park-asphalt-dark: #5d5952;
+        --park-kerb: #cec5b3;
+        --park-pavement: #c5baa5;
+        --park-paint: #f8f3e7;
+        --park-lane: #e6dfcf;
+        --park-taxi: #f5c433;
+        --park-teal: #336f6b;
+
+        /* Earth Defender, from its style.css: the gun's amber and the station's pale blue. */
+        --ed-amber: #ffcf7a;
+        --ed-blue: #cfe6ff;
+        --ed-space: #0a1018;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        /* Centred both ways. `align-items` rather than `margin: 0 auto` on the child: an auto
+           cross-axis margin inside a flex column beats `align-items: stretch` and shrink-wraps
+           the column to its content, which quietly cost the artwork a third of its width. */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: clamp(1.5rem, 5vw, 4rem) clamp(1.25rem, 5vw, 3rem) 4rem;
+        background: var(--ground);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap {
+        width: 100%;
+        max-width: 64rem;
+      }
+
+      /* The name and the way back to the source, on one line. The panels are the hero; this is
+         a signature, so it is the smallest thing on the page. */
+      .top {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: clamp(1.75rem, 4vw, 3rem);
+        font-size: 0.82rem;
+        color: var(--dim);
+      }
+
+      .top a {
+        color: inherit;
+        text-decoration: none;
+        border-bottom: 1px solid #2a2e35;
+        padding-bottom: 1px;
+      }
+
+      .top a:hover {
+        color: var(--text);
+        border-bottom-color: currentColor;
+      }
+
+      .shelf {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: clamp(1rem, 2.5vw, 1.75rem);
+      }
+
+      @media (max-width: 46rem) {
+        .shelf {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* A panel is a window into one game's world, not a card in a set: it carries that game's
+         own border tint and its own weather. No drop shadow anywhere on this page — the games
+         are flat-shaded and lit from inside, and a soft grey shadow under each would be the one
+         thing here borrowed from a template rather than from them. */
+      .game {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid var(--edge);
+        border-radius: 4px;
+        background: var(--ground);
+        color: inherit;
+        text-decoration: none;
+        transition: border-color 0.2s ease;
+      }
+
+      .game:hover,
+      .game:focus-visible {
+        border-color: var(--accent);
+      }
+
+      .game:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+      }
+
+      .art {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .body {
+        padding: 1.1rem 1.35rem 1.35rem;
+      }
+
+      /* The game's name is the largest thing in its panel and it is set in that game's own
+         accent — the taxi's yellow, the gun's amber. Nothing else on the page is coloured. */
+      .body h2 {
+        margin: 0;
+        font-size: clamp(1.45rem, 3.4vw, 1.9rem);
+        font-weight: 650;
+        letter-spacing: -0.021em;
+        line-height: 1.1;
+        color: var(--title, var(--accent));
+      }
+
+      .body p {
+        margin: 0.55rem 0 0;
+        max-width: 32ch;
+        font-size: 0.93rem;
+        line-height: 1.5;
+        color: #b9b6b0;
+      }
+
+      /* What you need in your hands. Not a badge — a line at the foot of the panel, which is
+         where you look last and where the answer to "can I play this right now" belongs. */
+      .input {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin-top: 1.05rem;
+        padding-top: 0.85rem;
+        border-top: 1px solid var(--edge);
+        font-size: 0.78rem;
+        color: var(--dim);
+      }
+
+      .input svg {
+        flex-shrink: 0;
+        opacity: 0.85;
+      }
+
+      .parking {
+        --edge: #3a352d;
+        --accent: var(--park-taxi);
+      }
+
+      .defender {
+        --edge: #23303f;
+        --accent: var(--ed-amber);
+        /* The name is the station's pale blue, not the gun's amber: two warm-yellow titles side
+           by side made the panels read as one component drawn twice, which is the opposite of
+           the point. Cold against warm is the whole idea. */
+        --title: var(--ed-blue);
+      }
+
+      /* Both games already split their own hint text on `pointer: coarse` (see `.coarse-only`
+         in either style.css). Same idea here, and it is the most useful thing this page does:
+         on a touchscreen, say plainly that one of these two cannot be played at all. */
+      .coarse {
+        display: none;
+      }
+
+      @media (pointer: coarse) {
+        .fine {
+          display: none;
+        }
+
+        .coarse {
+          display: inline;
+        }
+
+        /* Not hidden — it is still worth looking at, and there may be a keyboard nearby. */
+        .defender .input {
+          color: var(--ed-amber);
+          opacity: 0.75;
+        }
+      }
+
+      /* One motion moment each, and both are the game's own verb: the taxi rolls the last few
+         units into the bay, and the gun's reticle closes onto the target. Hover and focus only,
+         nothing on load. */
+      .taxi,
+      .bracket {
+        transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+      }
+
+      .game:hover .taxi,
+      .game:focus-visible .taxi {
+        transform: translateX(26px);
+      }
+
+      .game:hover .bracket-tl,
+      .game:focus-visible .bracket-tl {
+        transform: translate(5px, 5px);
+      }
+
+      .game:hover .bracket-tr,
+      .game:focus-visible .bracket-tr {
+        transform: translate(-5px, 5px);
+      }
+
+      .game:hover .bracket-bl,
+      .game:focus-visible .bracket-bl {
+        transform: translate(5px, -5px);
+      }
+
+      .game:hover .bracket-br,
+      .game:focus-visible .bracket-br {
+        transform: translate(-5px, -5px);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .taxi,
+        .bracket,
+        .game {
+          transition: none;
+        }
+
+        .game:hover .taxi,
+        .game:focus-visible .taxi,
+        .game:hover .bracket,
+        .game:focus-visible .bracket {
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <span>Oskar Westmeijer</span>
+        <a href="https://github.com/OskarWestmeijer/games">Source</a>
+      </div>
+
+      <ul class="shelf">
+        <li>
+          <a class="game parking" href="./parking-game/">
+            <!-- The board, from above, in the order the game draws it: pavement, kerb, the road
+                 with its dashed lane, the painted bay, and the kerbside below. Colours are
+                 `COLORS` in park/board.ts, unchanged. -->
+            <svg class="art" viewBox="0 0 400 200" role="img" aria-label="A yellow taxi rolling towards a painted parking bay, seen from above">
+              <defs>
+              </defs>
+
+              <rect width="400" height="200" fill="#1b1a18" />
+
+              <!-- Kerbside above the road. -->
+              <rect y="0" width="400" height="30" fill="var(--park-pavement)" />
+              <path d="M60 0v30M140 0v30M220 0v30M300 0v30M380 0v30" stroke="#b0a48d" stroke-width="1" />
+              <rect y="30" width="400" height="5" fill="var(--park-kerb)" />
+              <rect y="35" width="400" height="3" fill="#a29885" />
+
+              <!-- The road. -->
+              <rect y="38" width="400" height="122" fill="var(--park-asphalt)" />
+              <rect y="38" width="400" height="10" fill="var(--park-asphalt-dark)" opacity="0.5" />
+              <path d="M0 62h26M46 62h26M92 62h26M138 62h26M184 62h26M230 62h26M276 62h26M322 62h26M368 62h26"
+                    stroke="var(--park-lane)" stroke-width="3" opacity="0.75" />
+
+              <!-- The bay: two bold lines and a wash between them. The whole point of the game
+                   is getting the car entirely inside these. -->
+              <rect x="168" y="92" width="98" height="68" fill="#7c7871" opacity="0.55" />
+              <rect x="166" y="92" width="4" height="68" fill="var(--park-paint)" />
+              <rect x="264" y="92" width="4" height="68" fill="var(--park-paint)" />
+              <path d="M217 100v54" stroke="var(--park-paint)" stroke-width="2" stroke-dasharray="6 7" opacity="0.55" />
+
+              <!-- The car parked ahead — teal, so it can never be mistaken for yours. -->
+              <g>
+                <rect x="290" y="104" width="86" height="46" rx="9" fill="var(--park-teal)" />
+                <rect x="290" y="132" width="86" height="18" rx="9" fill="#24534f" />
+                <rect x="308" y="112" width="34" height="30" rx="5" fill="#8fbccb" />
+                <rect x="296" y="100" width="14" height="7" rx="3" fill="#2a2724" />
+                <rect x="356" y="100" width="14" height="7" rx="3" fill="#2a2724" />
+                <rect x="296" y="147" width="14" height="7" rx="3" fill="#2a2724" />
+                <rect x="356" y="147" width="14" height="7" rx="3" fill="#2a2724" />
+              </g>
+
+              <!-- The taxi, still rolling. It nudges towards the bay on hover. -->
+              <g class="taxi">
+                <rect x="44" y="104" width="92" height="46" rx="9" fill="var(--park-taxi)" />
+                <rect x="44" y="104" width="92" height="9" rx="4" fill="#ffd964" />
+                <rect x="44" y="136" width="92" height="14" rx="7" fill="#d09b14" />
+                <rect x="44" y="122" width="92" height="8" fill="#f6f1e4" />
+                <path d="M48 122h8v8h-8zM64 122h8v8h-8zM80 122h8v8h-8zM96 122h8v8h-8zM112 122h8v8h-8zM128 122h8v8h-8z"
+                      fill="#2c2823" />
+                <rect x="62" y="110" width="34" height="30" rx="5" fill="#a9cee0" />
+                <rect x="98" y="118" width="16" height="9" rx="3" fill="#fdf6e3" />
+                <rect x="50" y="100" width="14" height="7" rx="3" fill="#2a2724" />
+                <rect x="112" y="100" width="14" height="7" rx="3" fill="#2a2724" />
+                <rect x="50" y="147" width="14" height="7" rx="3" fill="#2a2724" />
+                <rect x="112" y="147" width="14" height="7" rx="3" fill="#2a2724" />
+              </g>
+
+              <!-- Kerbside below, with the tree the pavement always has. -->
+              <rect y="160" width="400" height="3" fill="#a29885" />
+              <rect y="163" width="400" height="5" fill="var(--park-kerb)" />
+              <rect y="168" width="400" height="32" fill="var(--park-pavement)" />
+              <path d="M70 168v32M150 168v32M230 168v32M310 168v32" stroke="#b0a48d" stroke-width="1" />
+              <circle cx="46" cy="184" r="13" fill="var(--park-tree, #5f8a54)" />
+              <circle cx="38" cy="189" r="9" fill="#4a6c42" />
+              <rect x="196" y="180" width="34" height="9" rx="3" fill="#8a7c66" />
+            </svg>
+
+            <div class="body">
+              <h2>Precision Parking</h2>
+              <p>One tap stops the car. Parked means all of it between the lines — five bays, and
+                 you are scored on how close you came to the middle.</p>
+              <span class="input">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+                  <circle cx="8" cy="8" r="2.4" fill="currentColor" stroke="none" />
+                  <circle cx="8" cy="8" r="6.2" opacity="0.55" />
+                </svg>
+                <span class="fine">Tap, or the space bar</span>
+                <span class="coarse">Tap to play</span>
+              </span>
+            </div>
+          </a>
+        </li>
+
+        <li>
+          <a class="game defender" href="./earth-defender/">
+            <!-- The lane: the aeroplane, a boost ring and the gun's reticle, over the sunlit
+                 limb. Amber is the gun and pale blue is the station, exactly as in the HUD. -->
+            <svg class="art" viewBox="0 0 400 200" role="img" aria-label="An aeroplane in orbit above the sunlit edge of the Earth, with an alien bomber locked in its sights">
+              <defs>
+                <linearGradient id="d-sky" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#070c13" />
+                  <stop offset="1" stop-color="#111e2c" />
+                </linearGradient>
+                <linearGradient id="d-earth" x1="0" y1="0" x2="0.3" y2="1">
+                  <stop offset="0" stop-color="#2f6ea8" />
+                  <stop offset="0.55" stop-color="#1d4a76" />
+                  <stop offset="1" stop-color="#0d2440" />
+                </linearGradient>
+                <linearGradient id="d-rim" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#cfe6ff" stop-opacity="0.95" />
+                  <stop offset="1" stop-color="#cfe6ff" stop-opacity="0" />
+                </linearGradient>
+                <clipPath id="d-globe">
+                  <ellipse cx="200" cy="352" rx="300" ry="205" />
+                </clipPath>
+                <radialGradient id="d-neb" cx="0.5" cy="0.5" r="0.5">
+                  <stop offset="0" stop-color="#3f7fbf" stop-opacity="0.3" />
+                  <stop offset="1" stop-color="#3f7fbf" stop-opacity="0" />
+                </radialGradient>
+              </defs>
+
+              <rect width="400" height="200" fill="url(#d-sky)" />
+              <ellipse cx="90" cy="52" rx="105" ry="62" fill="url(#d-neb)" />
+              <ellipse cx="320" cy="34" rx="80" ry="48" fill="url(#d-neb)" opacity="0.7" />
+
+              <g fill="#e8f1ff">
+                <circle cx="34" cy="26" r="1.1" opacity="0.9" /><circle cx="88" cy="15" r="0.8" opacity="0.6" />
+                <circle cx="132" cy="40" r="1" opacity="0.75" /><circle cx="186" cy="20" r="0.7" opacity="0.5" />
+                <circle cx="243" cy="35" r="1.2" opacity="0.85" /><circle cx="288" cy="14" r="0.8" opacity="0.6" />
+                <circle cx="342" cy="46" r="1" opacity="0.7" /><circle cx="378" cy="22" r="0.9" opacity="0.55" />
+                <circle cx="60" cy="70" r="0.8" opacity="0.5" /><circle cx="210" cy="62" r="0.9" opacity="0.6" />
+                <circle cx="160" cy="86" r="0.7" opacity="0.45" /><circle cx="312" cy="76" r="0.8" opacity="0.5" />
+              </g>
+
+              <!-- The limb. The atmosphere is a bright rim above the surface, never a glow laid
+                   over the night side — the same rule the planet's shader keeps. -->
+              <g>
+                <ellipse cx="200" cy="352" rx="300" ry="205" fill="url(#d-earth)" />
+                <path d="M-100 152a300 205 0 0 1 600 0" fill="none" stroke="url(#d-rim)" stroke-width="9" opacity="0.5" />
+                <path d="M-100 150a300 205 0 0 1 600 0" fill="none" stroke="#cfe6ff" stroke-width="1.6" opacity="0.85" />
+                <g clip-path="url(#d-globe)">
+                  <g fill="#3f7d54" opacity="0.85">
+                    <ellipse cx="128" cy="192" rx="48" ry="21" />
+                    <ellipse cx="171" cy="183" rx="31" ry="14" />
+                    <ellipse cx="96" cy="201" rx="30" ry="15" />
+                  </g>
+                  <g fill="#4a7f47" opacity="0.7">
+                    <ellipse cx="299" cy="194" rx="41" ry="18" />
+                    <ellipse cx="334" cy="203" rx="27" ry="14" />
+                  </g>
+                  <g fill="#e8f1ff">
+                    <ellipse cx="206" cy="197" rx="62" ry="8" opacity="0.16" />
+                    <ellipse cx="88" cy="184" rx="33" ry="5.5" opacity="0.14" />
+                    <ellipse cx="322" cy="182" rx="26" ry="5" opacity="0.12" />
+                  </g>
+                </g>
+              </g>
+
+              <!-- A boost ring, small and dim: it is the far one, and depth is what stops the
+                   three objects here reading as a row. What blooms is its lamps, not the hoop. -->
+              <g transform="translate(64 74)" opacity="0.55">
+                <ellipse rx="19" ry="22" fill="none" stroke="#b98f4e" stroke-width="2.5" />
+                <circle cx="0" cy="-22" r="1.9" fill="var(--ed-amber)" /><circle cx="16" cy="-11" r="1.9" fill="var(--ed-amber)" />
+                <circle cx="16" cy="11" r="1.9" fill="var(--ed-amber)" /><circle cx="0" cy="22" r="1.9" fill="var(--ed-amber)" />
+                <circle cx="-16" cy="11" r="1.9" fill="var(--ed-amber)" /><circle cx="-16" cy="-11" r="1.9" fill="var(--ed-amber)" />
+              </g>
+
+              <!-- Your aeroplane, seen from astern, which is where the chase camera actually
+                   sits. The bar across the spine is the magazine and the pips under the port
+                   wing are the four rockets — both are on the aircraft itself in the game, for
+                   the same reason they are here: it is what you are already looking at. -->
+              <g transform="translate(168 116)">
+                <rect x="-74" y="-4" width="148" height="8" rx="3" fill="#2b2f36" />
+                <rect x="-60" y="-2.5" width="44" height="5" rx="2" fill="#f3e3c4" />
+                <rect x="16" y="-2.5" width="44" height="5" rx="2" fill="#f3e3c4" />
+                <rect x="-18" y="-27" width="36" height="5" rx="2" fill="#2b2f36" />
+                <rect x="-2.5" y="-30" width="5" height="20" rx="2" fill="#343a43" />
+                <rect x="-11" y="-19" width="22" height="40" rx="5" fill="#3a3f47" />
+                <rect x="-7" y="-15" width="14" height="10" rx="2.5" fill="#c9d6e2" />
+                <rect x="-13" y="7" width="26" height="4" rx="2" fill="#1c2027" />
+                <rect x="-13" y="7" width="19" height="4" rx="2" fill="#62ffd0" opacity="0.85" />
+                <circle cx="-32" cy="9" r="1.7" fill="var(--ed-amber)" /><circle cx="-41" cy="9" r="1.7" fill="var(--ed-amber)" />
+                <circle cx="-50" cy="9" r="1.7" fill="var(--ed-amber)" /><circle cx="-59" cy="9" r="1.7" fill="var(--ed-amber)" />
+                <circle cx="-75" cy="0" r="2.6" fill="#ff5a4a" /><circle cx="75" cy="0" r="2.6" fill="#62ffd0" />
+              </g>
+
+              <!-- The bomber, running level for a capital. Green is theirs; it is the one cold
+                   signal colour in this picture and it is never used for anything of yours. -->
+              <g transform="translate(301 81)">
+                <path d="M-26 0L-9-11h18L26 0l-17 11h-18z" fill="#242b33" />
+                <path d="M-26 0L-9-11h18L26 0z" fill="#2f3944" />
+                <rect x="-4" y="-3" width="8" height="6" rx="1.5" fill="#62ffd0" opacity="0.9" />
+                <circle cx="-24" cy="0" r="1.6" fill="#62ffd0" /><circle cx="24" cy="0" r="1.6" fill="#62ffd0" />
+              </g>
+
+              <!-- The lock, bracketing the bomber. The gun locks on, and the lock is a thing you
+                   can see — so the brackets close onto the target on hover, which is the one
+                   piece of motion this panel has. -->
+              <g stroke="var(--ed-amber)" stroke-width="2" fill="none" stroke-linecap="square">
+                <path class="bracket bracket-tl" d="M269 65V49h16" />
+                <path class="bracket bracket-tr" d="M317 49h16v16" />
+                <path class="bracket bracket-bl" d="M269 97v16h16" />
+                <path class="bracket bracket-br" d="M317 113h16V97" />
+              </g>
+            </svg>
+
+            <div class="body">
+              <h2>Earth Defender</h2>
+              <p>Fly the lane, shoot down the bombers and keep the capitals standing. The guns run
+                 dry, so the command post is somewhere you have to go.</p>
+              <span class="input">
+                <svg width="15" height="13" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">
+                  <rect x="0.9" y="1.4" width="16.2" height="11.2" rx="2" />
+                  <path d="M4.3 5h1M7 5h1M9.7 5h1M12.4 5h1M4.3 8.2h9.4" stroke-linecap="round" />
+                </svg>
+                <span class="fine">Keyboard</span>
+                <span class="coarse">Needs a keyboard</span>
+              </span>
+            </div>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </body>
+</html>

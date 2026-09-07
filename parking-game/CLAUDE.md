@@ -1,9 +1,10 @@
 # Precision Parking — project brief & working notes
 
-> **This is one of several independent games in this repo, and it is the one that ships.** It has
-> its own `package.json`, `vite.config.ts`, `tsconfig.json` and `node_modules`; nothing here
-> imports from a sibling folder and nothing in a sibling folder imports from here. Deploy is
-> wired to this folder alone — see "Deploy" below.
+> **This is one of several independent games in this repo, and it is one of the two that ship.**
+> It has its own `package.json`, `vite.config.ts`, `tsconfig.json` and `node_modules`; nothing here
+> imports from a sibling folder and nothing in a sibling folder imports from here. It used to be
+> the *only* thing deployed and to own the site's root URL; it now has a folder in a shared site,
+> alongside `earth-defender/` — see "Deploy" below.
 >
 > It was one of five scenes behind a mode dropdown in a single Vite project until the repo was
 > split into a folder per game. The long-form history of every scene that used to share the page,
@@ -376,10 +377,18 @@ check.** Every art decision above was made by rendering the board and looking at
 
 ## Deploy — GitHub Pages
 
-`.github/workflows/deploy.yml` at the repo root builds **this folder** and publishes
-`parking-game/dist/` on every push to `main`. It is the only thing in the repo that is deployed.
-`base: './'` keeps asset paths relative so the `/games/` sub-path works
-(`https://oskarwestmeijer.github.io/games/`).
+`.github/workflows/deploy.yml` at the repo root builds every folder named in its `GAMES` variable —
+currently this one and `earth-defender/` — and publishes them as one site on every push to `main`.
+This game lives at **`https://oskarwestmeijer.github.io/games/parking-game/`**; the root is a static
+menu from `site/`.
+
+**It used to be at the root**, and the URL moved when the site went from one game to several. The
+root could not stay this game, because `index.html` here is a bare canvas that paints its own
+surround — there is deliberately nowhere in it to put a link to anything else.
+
+**`base: './'` is why the move cost nothing.** Vite emits `./assets/…` rather than `/assets/…`, so
+the build does not know or care which folder it is served from. Keep it that way: a root-absolute
+path added here would work in `npm run dev`, work in `npm run preview`, and 404 only once deployed.
 
 ## Where this is going
 

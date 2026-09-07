@@ -92,13 +92,20 @@ the chanterelle aboard as a hydroponics tray and a mushroom log. That means **co
 into that folder** — a sibling reaching into `ai-assets/` is the one thing the repo's house rules
 forbid.
 
-## Deploy — nothing, for now
+## Deploy — not yet, but it is a one-word change
 
-**This project is not deployed.** The repo's single Pages workflow builds `parking-game/` and
-nothing else; there is no workflow for this folder and no CI check on it either, so it is on
-whoever changes it to run `npm run build` before believing it still works.
+**This project is not deployed**, and there is no CI check on it either, so it is on whoever
+changes it to run `npm run build` before believing it still works.
 
-The build itself is intact and ready: `base: './'` keeps asset paths relative so a `/games/`
-sub-path would work, and `publicDir: 'ai-assets'` copies the asset folder into `dist/` with no extra
-step. **GitHub Pages serves one site per repo**, so publishing this would take the parking game's
-URL.
+Publishing it is **adding `asset-viewer` to the `GAMES` variable in
+`.github/workflows/deploy.yml`, plus an `<li>` in `site/index.html`.** That workflow builds every
+folder it names and gives each one a directory in a single Pages site, so this is no longer a
+decision about who owns the root URL — it used to be, and the older notes in this repo may still
+say so. It would land at `https://oskarwestmeijer.github.io/games/asset-viewer/`.
+
+The build is ready for it: `base: './'` keeps every emitted asset path relative, which is the one
+requirement for being served from a sub-path.
+`publicDir: 'ai-assets'` copies the models into `dist/` with no extra step, so they would ship too —
+which is ~71 MB of `.glb` and preview PNGs. **That is the thing to weigh**, and it is why this one is a plausible
+candidate for never being published: it is a tool for looking at files while working on them, and
+the files are in the repo already.

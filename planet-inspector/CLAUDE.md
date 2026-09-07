@@ -101,7 +101,6 @@ Compressed hard — the reasoning behind each of these is in `git show ed3f592:C
 - **Two map sets, one cache** — a module-level `mapCache`, never disposed, shared by every scene in the project that holds it, so
   switching is instant; a switch made mid-download wins and the stale promise drops its result.
 
-
 ## Touch, and iPad in particular
 
 - **`touch-action: none` on the canvas**, or Safari treats a drag as a page scroll. OrbitControls
@@ -125,15 +124,23 @@ If a change touches `space.ts` rather than `planet-inspect.ts`, remember it is a
 `space-station/dev/shots.mjs` is the harness that renders the same shader from inside a hull, and
 running it over there is the closest thing to a regression test the planet has.
 
-## Deploy — nothing, for now
+## Deploy — not yet, but it is a one-word change
 
-**This project is not deployed.** The repo's single Pages workflow builds `parking-game/` and
-nothing else; there is no workflow for this folder and no CI check on it either, so it is on
-whoever changes it to run `npm run build` before believing it still works.
+**This project is not deployed**, and there is no CI check on it either, so it is on whoever
+changes it to run `npm run build` before believing it still works.
 
-The build itself is intact and ready: `base: './'` keeps asset paths relative so a `/games/`
-sub-path would work. **GitHub Pages serves one site per repo**, so publishing this would take the
-parking game's URL.
+Publishing it is **adding `planet-inspector` to the `GAMES` variable in
+`.github/workflows/deploy.yml`, plus an `<li>` in `site/index.html`.** That workflow builds every
+folder it names and gives each one a directory in a single Pages site, so this is no longer a
+decision about who owns the root URL — it used to be, and the older notes in this repo may still
+say so. It would land at `https://oskarwestmeijer.github.io/games/planet-inspector/`.
+
+The build is ready for it: `base: './'` keeps every emitted asset path relative, which is the one
+requirement for being served from a sub-path.
+
+At ~4.2 MB of build, nearly all of it surface maps for a scene with nothing in it, this is the cheapest of the three to
+add and the least obviously worth adding: it is a study tool, and the same planet is already
+deployed inside `earth-defender/`.
 
 ## Where this is going
 

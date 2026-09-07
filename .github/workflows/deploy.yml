@@ -1,10 +1,22 @@
-# Builds and publishes the parking game, and nothing else.
+# Builds every game named in GAMES and publishes them as one GitHub Pages site.
 #
 # Each game in this repo is an independent project with its own lockfile and build (see the root
-# CLAUDE.md), and GitHub Pages serves one site per repo — so this workflow names one game folder
-# on purpose. The four Three.js folders — `earth-defender/`, `space-station/`, `planet-inspector/`
-# and `asset-viewer/` — are deliberately not built here, by request; changing which game is
-# published means changing `GAME` below and nothing else.
+# CLAUDE.md), and GitHub Pages serves one site per repo — but a site has directories, so several
+# independent builds can share it. Each game lands in a folder named after it, under a static menu
+# copied from `site/`:
+#
+#   /games/                  site/index.html
+#   /games/parking-game/     parking-game/dist/
+#   /games/earth-defender/   earth-defender/dist/
+#
+# This works only because every game sets `base: './'` in its Vite config, so its emitted asset
+# paths are relative and it does not need to know what sub-path it is served from. A game that
+# hardcodes a root-absolute path will 404 here and nowhere else — check that before adding one.
+#
+# **Adding a game is one word in GAMES below**, plus a <li> in site/index.html. The Three.js
+# folders that are not listed (space-station, planet-inspector, asset-viewer) are left out by
+# choice, not by architecture. Note that space-station/dist is ~29 MB, nearly all music,
+# and asset-viewer/dist is ~71 MB of models.
 name: Deploy to GitHub Pages
 
 on:
@@ -24,29 +36,54 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GAME: parking-game
+  # Space-separated, and the only place a game is added to or removed from the site.
+  GAMES: parking-game earth-defender
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.GAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-          # The lockfile is per game, not at the repo root, so the cache has to be told where it is.
-          cache-dependency-path: ${{ env.GAME }}/package-lock.json
-      - run: npm ci
-      - run: npm run build # tsc + vite build -> <game>/dist/
+          # Every lockfile in the repo, not just the ones being built, so that GAMES stays the
+          # single place a game is registered. The trade is that a dependency bump in a folder
+          # this workflow never builds busts the cache. Listing the built lockfiles explicitly
+          # would avoid that, but it drifts silently — a forgotten entry degrades the cache
+          # without ever failing a build, so nobody would find out.
+          cache-dependency-path: '**/package-lock.json'
+
+      # `npm run build` rather than `vite build`: the `tsc` half is the only type-check either
+      # game gets, since nothing else in this repo runs in CI. A failure in any game fails the
+      # whole deploy and nothing is published, which is the behaviour we want — a half-updated
+      # site is worse than a stale one.
+      - name: Build each game
+        run: |
+          for game in $GAMES; do
+            echo "::group::$game"
+            ( cd "$game" && npm ci && npm run build )
+            echo "::endgroup::"
+          done
+
+      # `cp -r <dir>/.` copies the *contents* of dist/, not the directory itself — without the
+      # trailing `/.` every game would end up at /games/<game>/dist/.
+      - name: Assemble the site
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp site/index.html _site/
+          for game in $GAMES; do
+            mkdir -p "_site/$game"
+            cp -r "$game/dist/." "_site/$game/"
+          done
+          find _site -maxdepth 2 -type d | sort
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          # Not affected by `defaults.run.working-directory`, which only applies to `run` steps.
-          path: ${{ env.GAME }}/dist
+          path: _site
 
   deploy:
     needs: build

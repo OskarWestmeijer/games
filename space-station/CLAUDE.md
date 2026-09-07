@@ -238,7 +238,6 @@ Compressed hard — the reasoning behind each of these is in `git show ed3f592:C
 - **Two map sets, one cache** — a module-level `mapCache`, never disposed, shared by every scene in the project that holds it, so
   switching is instant; a switch made mid-download wins and the stale promise drops its result.
 
-
 ## Touch, and iPad in particular
 
 - **iOS Safari has no Pointer Lock API** — not disabled, absent. Every call into lock/unlock sits
@@ -253,7 +252,6 @@ Compressed hard — the reasoning behind each of these is in `git show ed3f592:C
   a keyboard case reports `pointer: fine` and is still a device you poke with a thumb.
 - **Pixel ratio is capped at 1.5 on coarse pointers** — full-screen shader work under a bloom
   composer. `planet-inspector/` caps it too, in its own copy.
-
 
 ## Checking a change
 
@@ -274,7 +272,6 @@ not the default; there is nothing to name now. Both still wait on `window.__stat
   before believing it**: a leg drawn through furniture is testing the push-out, but the same
   signature is also what an unreachable pocket looks like. Ask whether the point it stuck at is
   anywhere a player could have reached.
-
 
 ## Planet textures — provenance and licence
 
@@ -324,7 +321,6 @@ goes for the audio and for `reference/`, which nothing imports and which therefo
 **Re-encoding one means re-encoding all three** — or deciding, deliberately, that they are
 different worlds now.
 
-
 ## Ambient audio — provenance and licence
 
 Everything in `src/audio/` must be **CC0 / public domain**, for the same reason the textures are
@@ -353,17 +349,26 @@ the per-file table and a list of verified CC0 sources.
   `HTMLAudioElement.volume` — no `AudioContext` to unlock.
 - MP3, because the iPad is a target and it is the one format every browser plays without a fallback.
 
+## Deploy — not yet, but it is a one-word change
 
-## Deploy — nothing, for now
+**This project is not deployed**, and there is no CI check on it either, so it is on whoever
+changes it to run `npm run build` before believing it still works.
 
-**This project is not deployed.** The repo's single Pages workflow builds `parking-game/` and
-nothing else; there is no workflow for this folder and no CI check on it either, so it is on
-whoever changes it to run `npm run build` before believing it still works.
+Publishing it is **adding `space-station` to the `GAMES` variable in
+`.github/workflows/deploy.yml`, plus an `<li>` in `site/index.html`.** That workflow builds every
+folder it names and gives each one a directory in a single Pages site, so this is no longer a
+decision about who owns the root URL — it used to be, and the older notes in this repo may still
+say so. It would land at `https://oskarwestmeijer.github.io/games/space-station/`.
 
-The build itself is intact and ready: `base: './'` keeps asset paths relative so a `/games/`
-sub-path would work. **GitHub Pages serves one site per repo**, so publishing this would take the
-parking game's URL — which is the decision to make, not a config to write, whenever it comes up.
-Note the weight before considering it: the music alone is ~22 MB.
+The build is ready for it: `base: './'` keeps every emitted asset path relative, which is the one
+requirement for being served from a sub-path.
+
+**The reason to hesitate is weight, not architecture.** `dist/` here is ~29 MB, and ~24 MB of that
+is the music. The rest of the site is ~4.4 MB together. A Pages artifact that size is legal and
+would work; whether it is a reasonable thing to serve to someone who clicked a link is a real
+question, and the honest answer is probably "not until the playlist is trimmed or fetched from
+somewhere else". Note that the music is already lazy — no `src` until the radio is switched on — so
+the *initial* load is not 30 MB; it is the artifact that is.
 
 ## Where this is going
 

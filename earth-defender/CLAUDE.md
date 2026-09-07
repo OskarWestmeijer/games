@@ -375,15 +375,26 @@ minimap, which is flight view's alone. **Re-encoding one means re-encoding all t
 deciding, deliberately, that they are different worlds now.
 
 
-## Deploy — nothing, for now
+## Deploy — GitHub Pages
 
-**This project is not deployed.** The repo's single Pages workflow builds `parking-game/` and
-nothing else; there is no workflow for this folder and no CI check on it either, so it is on
-whoever changes it to run `npm run build` before believing it still works.
+**This project is deployed**, at `https://oskarwestmeijer.github.io/games/earth-defender/`.
 
-The build itself is intact and ready: `base: './'` keeps asset paths relative so a `/games/`
-sub-path would work. **GitHub Pages serves one site per repo**, so publishing this would take the
-parking game's URL — which is the decision to make, not a config to write, whenever it comes up.
+`.github/workflows/deploy.yml` at the repo root builds every folder named in its `GAMES` variable —
+currently this one and `parking-game/` — and assembles them into one site, a folder each under a
+static menu from `site/`. `npm run build` is what CI runs, so **the `tsc` half is this project's
+only automated check**: there are no tests and no linting, and a type error is the one class of
+mistake that will stop a deploy. Everything else is on whoever changes it — `dev/.fly-shots.tmp.mjs`
+and looking at the result.
+
+**`base: './'` is what makes the sub-path work**, and it is not a default. Vite emits `./assets/…`,
+which includes the minimap's `url(./planet-minimap-*.webp)` in the compiled CSS, so nothing here
+knows or cares which folder it is served from. A root-absolute path added anywhere — a `fetch('/…')`,
+a hand-written `href="/…"` — works in `npm run dev`, works in `npm run preview`, and 404s only once
+deployed. That is the one deployment trap in this project.
+
+Worth knowing: this game is ~4.3 MB of the site, nearly all of it the 8K and 4K surface maps. That
+is fine, and it is also most of why the 4K set is chosen automatically on a coarse-pointer or
+data-saving device — see `main.ts`.
 
 ## Where this is going
 
