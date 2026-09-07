@@ -2,7 +2,8 @@
 #
 # Each game in this repo is an independent project with its own lockfile and build (see the root
 # CLAUDE.md), and GitHub Pages serves one site per repo — so this workflow names one game folder
-# on purpose. `earth-defender/` is deliberately not built here, by request; changing which game is
+# on purpose. The four Three.js folders — `earth-defender/`, `space-station/`, `planet-inspector/`
+# and `asset-viewer/` — are deliberately not built here, by request; changing which game is
 # published means changing `GAME` below and nothing else.
 name: Deploy to GitHub Pages
 

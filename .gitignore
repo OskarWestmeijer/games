@@ -5,9 +5,10 @@ dist
 .DS_Store
 .idea
 
-# Screenshot output from earth-defender/dev/shots.mjs — regenerated, never committed.
+# Screenshot output from the dev harnesses — regenerated, never committed.
+space-station/dev/shots
 earth-defender/dev/shots
 
 # Not-for-publication assets: kept locally only, never pushed to GitHub
-# (unlike the rest of ai-assets/, which IS committed — see earth-defender/CLAUDE.md)
-earth-defender/ai-assets/not-public/
+# (unlike the rest of ai-assets/, which IS committed — see asset-viewer/CLAUDE.md)
+asset-viewer/ai-assets/not-public/

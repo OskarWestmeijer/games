@@ -1,16 +1,13 @@
 # Earth Defender
 
-One Three.js world seen four ways, picked from the dropdown in the top-right corner:
+A small aeroplane defending the Earth from alien bombers, on a Three.js globe. Fly in a fixed lane,
+shoot down the ships bombing the world's capitals, boost through rings to go fast, and land a pass
+through the command post before the guns run dry. Lose every capital and the flight is over.
 
-- **Flight view** — a small aeroplane on a chase camera, boost rings, a laser, and alien landing
-  ships that shoot back.
-- **Planet view** — a space station in orbit, walked in first person. Somewhere to be, not
-  something to do.
-- **Planet inspector** — the same world from outside, on orbit controls, with a sun slider.
-- **Asset view** — a gallery of the AI-generated `.glb` models in [`ai-assets/`](ai-assets), from
-  [Meshy](https://www.meshy.ai/) and [Tripo3D](https://www.tripo3d.ai/).
+Keyboard only: arrows climb and bank, `A`/`D` rudder, `W`/`S` throttle, `Space` the laser, `R` a
+rocket.
 
-See [CLAUDE.md](CLAUDE.md) for architecture notes and how to add new assets.
+See [CLAUDE.md](CLAUDE.md) for the design notes — the constants, and why each of them is what it is.
 
 ## Run
 
@@ -30,4 +27,3 @@ Vite + TypeScript + [Three.js](https://threejs.org/). No game framework.
 ## Credits
 
 Surface maps from [NASA Visible Earth](https://visibleearth.nasa.gov/) (public domain).
-Models generated with [Meshy](https://www.meshy.ai/) and [Tripo3D](https://www.tripo3d.ai/).

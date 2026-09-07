@@ -1,0 +1,172 @@
+:root {
+  color-scheme: dark;
+  --bg: #16181c;
+  --panel: #1c1f24;
+  --border: #2a2e35;
+  --text: #e8e6e1;
+  --text-dim: #8a8f98;
+  --accent: #6ea8fe;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Every view here is a full-screen canvas, never a document: nothing scrolls, nothing is
+   selectable text, and #app is pinned to the viewport height. */
+body {
+  overflow: hidden;
+  /* iOS: stop rubber-band scrolling and the long-press selection callout over the scene. */
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#app {
+  display: flex;
+  width: 100vw;
+  /* dvh, because iOS Safari's 100vh includes the space behind its own chrome and would push
+     the HUD off the bottom of the screen. vh first as the fallback. */
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* The settings bar, top right. One control now the views are separate projects — the surface
+   map resolution, which is a download and so cannot live on anything diegetic. */
+#settings {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  display: flex;
+  gap: 0.5rem;
+}
+
+#settings select {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#settings select:hover {
+  border-color: var(--accent);
+}
+
+/* Held disabled while a map set downloads, so the switch can't be raced. */
+#settings select:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+#inspect-view {
+  position: relative;
+  width: 100%;
+}
+
+.coarse-only {
+  display: none;
+}
+
+@media (any-pointer: coarse) {
+  /* A slider is a small target for a thumb; give it some height to aim at. */
+  .hud input[type='range'] {
+    height: 2rem;
+  }
+}
+
+/* The hint text follows the *primary* pointer, so a laptop with a touchscreen still gets
+   told about the mouse. */
+@media (pointer: coarse) {
+  .fine-only {
+    display: none;
+  }
+
+  .coarse-only {
+    display: inline;
+  }
+}
+
+#inspect-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+#inspect-canvas:active {
+  cursor: grabbing;
+}
+
+/* The control pill both planet scenes sit their sliders and hint text in. */
+.hud {
+  position: absolute;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(12, 14, 18, 0.65);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
+}
+
+.hud label {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hud input[type='range'] {
+  width: 11rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.hud-note {
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--border);
+}
+
+.planet-credit {
+  position: absolute;
+  left: 1.25rem;
+  bottom: 1rem;
+  margin: 0;
+  max-width: 22rem;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+}
+
+.planet-credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+}
+
+.planet-credit a:hover {
+  color: var(--accent);
+}

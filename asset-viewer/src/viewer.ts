@@ -103,34 +103,20 @@ export function createViewer(canvas: HTMLCanvasElement) {
     camera.updateProjectionMatrix();
   }
 
-  let rafId = 0;
-  let active = true;
-
+  /**
+   * Runs for the life of the page. There used to be a `setActive()` here, to park the loop
+   * while this viewer sat hidden behind one of the other three modes — the gallery is its own
+   * project now, so there is no other scene to yield the GPU to.
+   */
   function tick() {
-    rafId = requestAnimationFrame(tick);
+    requestAnimationFrame(tick);
     controls.update();
     renderer.render(scene, camera);
-  }
-
-  /**
-   * Stops the render loop while this viewer is hidden behind another mode, so two WebGL
-   * scenes aren't competing for the GPU. `resize()` bails at 0x0, so the canvas size is
-   * stale after being hidden — re-measure on the way back in.
-   */
-  function setActive(next: boolean) {
-    if (next === active) return;
-    active = next;
-    if (active) {
-      resize();
-      tick();
-    } else {
-      cancelAnimationFrame(rafId);
-    }
   }
 
   window.addEventListener('resize', resize);
   resize();
   tick();
 
-  return { load, setActive };
+  return { load };
 }

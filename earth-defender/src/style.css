@@ -41,7 +41,9 @@ body {
   height: 100dvh;
 }
 
-#mode-switcher {
+/* The settings bar, top right. One control now the views are separate projects — the surface
+   map resolution, which is a download and so cannot live on anything diegetic. */
+#settings {
   position: fixed;
   top: 1rem;
   right: 1rem;
@@ -50,7 +52,7 @@ body {
   gap: 0.5rem;
 }
 
-#mode-switcher select {
+#settings select {
   padding: 0.4rem 0.6rem;
   font-size: 0.8rem;
   font-family: inherit;
@@ -61,95 +63,23 @@ body {
   cursor: pointer;
 }
 
-#mode-switcher select:hover {
+#settings select:hover {
   border-color: var(--accent);
 }
 
 /* Held disabled while a map set downloads, so the switch can't be raced. */
-#mode-switcher select:disabled {
+#settings select:disabled {
   opacity: 0.5;
   cursor: progress;
 }
 
-#asset-view {
-  display: flex;
-  width: 100%;
-}
-
-#planet-view,
-#inspect-view,
 #fly-view {
   position: relative;
   width: 100%;
 }
 
-/* Author `display: flex` above otherwise beats the UA stylesheet's [hidden] rule. */
-#mode-switcher[hidden],
-#asset-view[hidden],
-#planet-view[hidden],
-#inspect-view[hidden],
-#fly-view[hidden] {
-  display: none;
-}
-
-#planet-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  /* Without this, Safari treats a look-drag as a page scroll and swallows the pointermove
-     events. OrbitControls sets the same thing on its own canvases; PointerLockControls
-     does not. */
-  touch-action: none;
-}
-
-/* --- the touch movement stick ---------------------------------------------------------
-   Shown whenever a touchscreen exists at all (`any-pointer`), not only when touch is the
-   primary input — an iPad with a keyboard case reports `pointer: fine` from its trackpad but
-   is still very much a device you poke with a thumb. */
-#move-stick {
-  display: none;
-  position: absolute;
-  left: 1.75rem;
-  bottom: 5.5rem;
-  width: 8.5rem;
-  height: 8.5rem;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: rgba(12, 14, 18, 0.5);
-  touch-action: none;
-  align-items: center;
-  justify-content: center;
-}
-
-#move-knob {
-  width: 3.4rem;
-  height: 3.4rem;
-  border-radius: 50%;
-  background: rgba(110, 168, 254, 0.35);
-  border: 1px solid var(--accent);
-  /* Driven by fpv-controls; no transition, or the knob lags the thumb. */
-  pointer-events: none;
-}
-
 .coarse-only {
   display: none;
-}
-
-@media (any-pointer: coarse) {
-  /* No pointer lock to key off, so the crosshair is simply always there. */
-  #crosshair {
-    opacity: 1;
-  }
-
-  #move-stick {
-    display: flex;
-  }
-
-  /* A slider is a small target for a thumb; give it some height to aim at. */
-  .hud input[type='range'] {
-    height: 2rem;
-  }
 }
 
 /* The hint text follows the *primary* pointer, so a laptop with a touchscreen still gets
@@ -162,14 +92,6 @@ body {
   .coarse-only {
     display: inline;
   }
-}
-
-#inspect-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  cursor: grab;
-  touch-action: none;
 }
 
 /* Flight view is flown from the keyboard alone — no pointer input to reserve, so no
@@ -421,7 +343,6 @@ body {
   box-shadow: 0 0 8px rgba(90, 255, 205, 0.7);
 }
 
-
 /* --- a city under the bombs -----------------------------------------------------------------
    The row's bar stops being the ship's approach and becomes the *city's health* the moment the
    bombing starts (see `updateMapMarks()`), and this is what says so: red, which nothing else in
@@ -455,7 +376,6 @@ body {
 .fly-alert.urgent .timer-value {
   color: #fff1de;
 }
-
 
 .fly-alert.urgent .timer-mark,
 .fly-alert.urgent .alert-fill {
@@ -787,10 +707,6 @@ body {
   }
 }
 
-#inspect-canvas:active {
-  cursor: grabbing;
-}
-
 /* The control pill both planet scenes sit their sliders and hint text in. */
 .hud {
   position: absolute;
@@ -808,17 +724,6 @@ body {
   color: var(--text-dim);
   white-space: nowrap;
   transition: opacity 0.2s ease;
-}
-
-.hud label {
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.hud input[type='range'] {
-  width: 11rem;
-  accent-color: var(--accent);
-  cursor: pointer;
 }
 
 /* Tabular figures so the pill doesn't twitch as the number changes under the drag. */
@@ -915,224 +820,4 @@ body {
 
 .planet-credit a:hover {
   color: var(--accent);
-}
-
-/* --- looking at things ---------------------------------------------------------------------
-   "Look at the monitor and press E" has no referent without a mark to look *with*, so the
-   crosshair is not decoration. It shows while the pointer is locked, and always on a
-   touchscreen, where there is no lock to take. */
-
-#crosshair {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  margin: -2.5px 0 0 -2.5px;
-  border-radius: 50%;
-  background: rgba(232, 230, 225, 0.65);
-  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-body.pointer-locked #crosshair {
-  opacity: 1;
-}
-
-/* A real <button>, so the touch path is a tap on the prompt itself — there is no E key on an
-   iPad. It sits above the canvas, and `fpv-controls` binds its pointer handlers to the canvas,
-   so a tap here never also starts a look-drag. */
-#interact-prompt {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, 1.75rem);
-  padding: 0.4rem 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(12, 14, 18, 0.72);
-  color: var(--text);
-  font: inherit;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-
-#interact-prompt[hidden] {
-  display: none;
-}
-
-#interact-prompt kbd {
-  padding: 0.05rem 0.3rem;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.08);
-  font: inherit;
-  font-size: 0.7rem;
-}
-
-/* While the pointer is locked the player is "in" the scene — get the UI out of the way.
-   The controls are unreachable anyway with the pointer captured; Esc brings them back. */
-body.pointer-locked #planet-controls,
-body.pointer-locked .planet-credit {
-  opacity: 0;
-}
-
-body.pointer-locked #mode-switcher {
-  opacity: 0.2;
-}
-
-#gallery {
-  width: 260px;
-  flex-shrink: 0;
-  background: var(--panel);
-  border-right: 1px solid var(--border);
-  padding: 1.25rem 1rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-#gallery h1 {
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  margin: 0 0 1rem;
-}
-
-#gallery-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  transition: opacity 0.15s ease;
-}
-
-.gallery-item {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem;
-  border-radius: 8px;
-  cursor: pointer;
-  border: 1px solid transparent;
-  background: transparent;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.gallery-item:hover {
-  background: #23262c;
-}
-
-.gallery-item.active {
-  background: #23262c;
-  border-color: var(--accent);
-}
-
-.gallery-thumb {
-  width: 44px;
-  height: 44px;
-  border-radius: 6px;
-  object-fit: cover;
-  background: #101215;
-  flex-shrink: 0;
-}
-
-.gallery-thumb.placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-dim);
-  font-size: 1.1rem;
-}
-
-.gallery-meta {
-  min-width: 0;
-}
-
-.gallery-name {
-  font-size: 0.85rem;
-  text-transform: capitalize;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.gallery-source {
-  font-size: 0.7rem;
-  color: var(--text-dim);
-}
-
-#credits {
-  margin: auto 0 0;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-  font-size: 0.72rem;
-  line-height: 1.5;
-  color: var(--text-dim);
-}
-
-#credits a {
-  color: var(--text-dim);
-  text-decoration: underline;
-  text-decoration-color: var(--border);
-}
-
-#credits a:hover {
-  color: var(--accent);
-  text-decoration-color: var(--accent);
-}
-
-#homepage-link {
-  display: block;
-  margin-top: 0.6rem;
-  font-size: 0.72rem;
-  color: var(--text-dim);
-  text-decoration: none;
-}
-
-#homepage-link:hover {
-  color: var(--accent);
-}
-
-#viewport-wrap {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-}
-
-#viewport {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-#model-name {
-  position: absolute;
-  left: 1.25rem;
-  bottom: 1.25rem;
-  font-size: 0.9rem;
-  text-transform: capitalize;
-  color: var(--text-dim);
-  pointer-events: none;
-}
-
-#empty-state {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-dim);
-  font-size: 0.95rem;
-}
-
-/* Author `display: flex` above otherwise beats the UA stylesheet's [hidden] rule. */
-#empty-state[hidden] {
-  display: none;
 }

@@ -1,0 +1,201 @@
+:root {
+  color-scheme: dark;
+  --bg: #16181c;
+  --panel: #1c1f24;
+  --border: #2a2e35;
+  --text: #e8e6e1;
+  --text-dim: #8a8f98;
+  --accent: #6ea8fe;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Every view here is a full-screen canvas, never a document: nothing scrolls, nothing is
+   selectable text, and #app is pinned to the viewport height. */
+body {
+  overflow: hidden;
+  /* iOS: stop rubber-band scrolling and the long-press selection callout over the scene. */
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#app {
+  display: flex;
+  width: 100vw;
+  /* dvh, because iOS Safari's 100vh includes the space behind its own chrome and would push
+     the HUD off the bottom of the screen. vh first as the fallback. */
+  height: 100vh;
+  height: 100dvh;
+}
+
+#asset-view {
+  display: flex;
+  width: 100%;
+}
+
+#gallery {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 1.25rem 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+#gallery h1 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 1rem;
+}
+
+#gallery-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: opacity 0.15s ease;
+}
+
+.gallery-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.gallery-item:hover {
+  background: #23262c;
+}
+
+.gallery-item.active {
+  background: #23262c;
+  border-color: var(--accent);
+}
+
+.gallery-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #101215;
+  flex-shrink: 0;
+}
+
+.gallery-thumb.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+}
+
+.gallery-meta {
+  min-width: 0;
+}
+
+.gallery-name {
+  font-size: 0.85rem;
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gallery-source {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+#credits {
+  margin: auto 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+#credits a {
+  color: var(--text-dim);
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+}
+
+#credits a:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
+#homepage-link {
+  display: block;
+  margin-top: 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-decoration: none;
+}
+
+#homepage-link:hover {
+  color: var(--accent);
+}
+
+#viewport-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+#viewport {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#model-name {
+  position: absolute;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  font-size: 0.9rem;
+  text-transform: capitalize;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+#empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+
+/* Author `display: flex` above otherwise beats the UA stylesheet's [hidden] rule. */
+#empty-state[hidden] {
+  display: none;
+}

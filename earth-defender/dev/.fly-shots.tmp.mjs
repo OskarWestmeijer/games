@@ -32,7 +32,7 @@ const problems = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') problems.push(`${m.type()}: ${m.text()}`); });
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 
-await page.goto(`${server.url}/#fly`, { waitUntil: 'load' });
+await page.goto(server.url, { waitUntil: 'load' });
 await page.waitForFunction(() => !!window.__fly, null, { timeout: 60000 });
 await page.waitForFunction(() => window.__fly.mapsReady === true, null, { timeout: 180000 });
 await page.waitForTimeout(2000);

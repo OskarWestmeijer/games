@@ -81,16 +81,16 @@ page.on('console', (m) => {
 });
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 
-// `#planet` explicitly, not the bare hash: the site's landing view is Precision Parking
-// now, and this harness would sit waiting for a `window.__station` that never arrives.
-await page.goto(`${server.url}/#planet`, { waitUntil: 'load' });
+// The bare URL: this project is the station and nothing else now, so there is no hash to
+// name. `window.__station` still arrives a frame or two late — see the wait below.
+await page.goto(server.url, { waitUntil: 'load' });
 
 // The HUD is not what is being reviewed, and the mode switcher sits exactly where the roof
 // of the nose lands in half these framings.
-await page.addStyleTag({ content: '#mode-switcher,.hud,#planet-credit,#crosshair{display:none!important}' });
+await page.addStyleTag({ content: '#settings,.hud,.planet-credit,#crosshair{display:none!important}' });
 
 // The debug handle is installed by `planet-view.ts` under import.meta.env.DEV, once the
-// scene exists — which is after a dynamic import, so it is never there on first paint.
+// scene exists, which is a module graph and a WebGL context after first paint.
 await page.waitForFunction(() => !!window.__station, null, { timeout: 60000 });
 // Then wait for the planet maps: until they resolve the shader draws its procedural
 // stand-in, and a shot taken early is of a world that is not the one being reviewed.

@@ -7,63 +7,16 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="mode-switcher">
-      <select id="mode-select">
-        <option value="fly">Flight View</option>
-        <option value="planet">Planet View</option>
-        <option value="inspect">Planet Inspector</option>
-        <option value="asset">Asset View</option>
-      </select>
+    <!-- The one setting left after the split: the resolution of the planet's surface maps,
+         which is a download and so cannot live on anything in the world. -->
+    <div id="settings">
       <select id="texture-quality" title="Resolution of the planet's surface maps">
         <option value="4k">Surface 4K · 1.2 MB</option>
         <option value="8k" selected>Surface 8K · 2.9 MB</option>
       </select>
     </div>
     <div id="app">
-      <div id="asset-view" class="view" hidden>
-        <aside id="gallery">
-          <h1>Assets</h1>
-          <ul id="gallery-list"></ul>
-          <p id="credits">
-            Models generated with
-            <a href="https://www.meshy.ai/" target="_blank" rel="noopener">Meshy</a>
-            and
-            <a href="https://www.tripo3d.ai/" target="_blank" rel="noopener">Tripo3D</a>.
-          </p>
-          <a id="homepage-link" href="https://oskar-westmeijer.com/" target="_blank" rel="noopener">
-            oskar-westmeijer.com ↗
-          </a>
-        </aside>
-        <main id="viewport-wrap">
-          <canvas id="viewport"></canvas>
-          <div id="model-name"></div>
-          <div id="empty-state" hidden>No .glb files found in ai-assets/.</div>
-        </main>
-      </div>
-      <div id="planet-view" class="view" hidden>
-        <canvas id="planet-canvas"></canvas>
-        <div id="crosshair" aria-hidden="true"></div>
-        <button id="interact-prompt" hidden>
-          <span class="fine-only">Press <kbd>E</kbd> to <span data-interact-label></span></span>
-          <span class="coarse-only">Tap to <span data-interact-label></span></span>
-        </button>
-        <!--
-          No station controls here. Altitude, attitude, orbit mode and the clock live on the
-          navigation console you walk to — see `station/console.ts`. All that is left is how
-          to move.
-        -->
-        <div id="planet-controls" class="hud">
-          <span class="hud-note fine-only">Click or press W to look around · WASD to move · Esc to release</span>
-          <span class="hud-note coarse-only">Drag to look · stick to move</span>
-        </div>
-        <div id="move-stick" aria-hidden="true"><div id="move-knob"></div></div>
-        <p class="planet-credit">
-          Surface maps from
-          <a href="https://visibleearth.nasa.gov/" target="_blank" rel="noopener">NASA Visible Earth</a>
-          (public domain), downscaled.
-        </p>
-      </div>
-      <div id="fly-view" class="view" hidden>
+      <div id="fly-view">
         <canvas id="fly-canvas"></canvas>
         <!-- The alert bar: every bomber on its way down, where it is coming down, and
              how long it has left. Across the top of the screen, because it is the thing you are
@@ -173,20 +126,6 @@
               <circle cx="6" cy="6" r="3.2" />
             </svg>
           </div>
-        </div>
-        <p class="planet-credit">
-          Surface maps from
-          <a href="https://visibleearth.nasa.gov/" target="_blank" rel="noopener">NASA Visible Earth</a>
-          (public domain), downscaled.
-        </p>
-      </div>
-      <div id="inspect-view" class="view" hidden>
-        <canvas id="inspect-canvas"></canvas>
-        <div id="inspect-controls" class="hud">
-          <label for="sun-azimuth">Sun</label>
-          <input id="sun-azimuth" type="range" min="0" max="360" step="1" />
-          <span class="hud-note fine-only">Drag to orbit · scroll to zoom</span>
-          <span class="hud-note coarse-only">Drag to orbit · pinch to zoom</span>
         </div>
         <p class="planet-credit">
           Surface maps from

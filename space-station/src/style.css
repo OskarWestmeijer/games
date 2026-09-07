@@ -1,0 +1,258 @@
+:root {
+  color-scheme: dark;
+  --bg: #16181c;
+  --panel: #1c1f24;
+  --border: #2a2e35;
+  --text: #e8e6e1;
+  --text-dim: #8a8f98;
+  --accent: #6ea8fe;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Every view here is a full-screen canvas, never a document: nothing scrolls, nothing is
+   selectable text, and #app is pinned to the viewport height. */
+body {
+  overflow: hidden;
+  /* iOS: stop rubber-band scrolling and the long-press selection callout over the scene. */
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#app {
+  display: flex;
+  width: 100vw;
+  /* dvh, because iOS Safari's 100vh includes the space behind its own chrome and would push
+     the HUD off the bottom of the screen. vh first as the fallback. */
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* The settings bar, top right. One control now the views are separate projects — the surface
+   map resolution, which is a download and so cannot live on anything diegetic. */
+#settings {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  display: flex;
+  gap: 0.5rem;
+}
+
+#settings select {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#settings select:hover {
+  border-color: var(--accent);
+}
+
+/* Held disabled while a map set downloads, so the switch can't be raced. */
+#settings select:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+#planet-view {
+  position: relative;
+  width: 100%;
+}
+
+#planet-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  /* Without this, Safari treats a look-drag as a page scroll and swallows the pointermove
+     events. OrbitControls sets the same thing on its own canvases; PointerLockControls
+     does not. */
+  touch-action: none;
+}
+
+/* --- the touch movement stick ---------------------------------------------------------
+   Shown whenever a touchscreen exists at all (`any-pointer`), not only when touch is the
+   primary input — an iPad with a keyboard case reports `pointer: fine` from its trackpad but
+   is still very much a device you poke with a thumb. */
+#move-stick {
+  display: none;
+  position: absolute;
+  left: 1.75rem;
+  bottom: 5.5rem;
+  width: 8.5rem;
+  height: 8.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(12, 14, 18, 0.5);
+  touch-action: none;
+  align-items: center;
+  justify-content: center;
+}
+
+#move-knob {
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 50%;
+  background: rgba(110, 168, 254, 0.35);
+  border: 1px solid var(--accent);
+  /* Driven by fpv-controls; no transition, or the knob lags the thumb. */
+  pointer-events: none;
+}
+
+.coarse-only {
+  display: none;
+}
+
+@media (any-pointer: coarse) {
+  /* No pointer lock to key off, so the crosshair is simply always there. */
+  #crosshair {
+    opacity: 1;
+  }
+
+  #move-stick {
+    display: flex;
+  }
+}
+
+/* The hint text follows the *primary* pointer, so a laptop with a touchscreen still gets
+   told about the mouse. */
+@media (pointer: coarse) {
+  .fine-only {
+    display: none;
+  }
+
+  .coarse-only {
+    display: inline;
+  }
+}
+
+/* The control pill both planet scenes sit their sliders and hint text in. */
+.hud {
+  position: absolute;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(12, 14, 18, 0.65);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
+}
+
+.hud-note {
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--border);
+}
+
+.planet-credit {
+  position: absolute;
+  left: 1.25rem;
+  bottom: 1rem;
+  margin: 0;
+  max-width: 22rem;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+}
+
+.planet-credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+}
+
+.planet-credit a:hover {
+  color: var(--accent);
+}
+
+/* --- looking at things ---------------------------------------------------------------------
+   "Look at the monitor and press E" has no referent without a mark to look *with*, so the
+   crosshair is not decoration. It shows while the pointer is locked, and always on a
+   touchscreen, where there is no lock to take. */
+#crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: rgba(232, 230, 225, 0.65);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+body.pointer-locked #crosshair {
+  opacity: 1;
+}
+
+/* A real <button>, so the touch path is a tap on the prompt itself — there is no E key on an
+   iPad. It sits above the canvas, and `fpv-controls` binds its pointer handlers to the canvas,
+   so a tap here never also starts a look-drag. */
+#interact-prompt {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, 1.75rem);
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(12, 14, 18, 0.72);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+#interact-prompt[hidden] {
+  display: none;
+}
+
+#interact-prompt kbd {
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  font: inherit;
+  font-size: 0.7rem;
+}
+
+/* While the pointer is locked the player is "in" the scene — get the UI out of the way.
+   The controls are unreachable anyway with the pointer captured; Esc brings them back. */
+body.pointer-locked #planet-controls,
+body.pointer-locked .planet-credit {
+  opacity: 0;
+}
+
+body.pointer-locked #settings {
+  opacity: 0.2;
+}

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Asset Viewer</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="asset-view">
+        <aside id="gallery">
+          <h1>Assets</h1>
+          <ul id="gallery-list"></ul>
+          <p id="credits">
+            Models generated with
+            <a href="https://www.meshy.ai/" target="_blank" rel="noopener">Meshy</a>
+            and
+            <a href="https://www.tripo3d.ai/" target="_blank" rel="noopener">Tripo3D</a>.
+          </p>
+          <a id="homepage-link" href="https://oskar-westmeijer.com/" target="_blank" rel="noopener">
+            oskar-westmeijer.com ↗
+          </a>
+        </aside>
+        <main id="viewport-wrap">
+          <canvas id="viewport"></canvas>
+          <div id="model-name"></div>
+          <div id="empty-state" hidden>No .glb files found in ai-assets/.</div>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,9 +1,9 @@
 {
-  "name": "earth-defender",
+  "name": "planet-inspector",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "An aeroplane defending Earth from alien bombers, on a Three.js globe.",
+  "description": "The Earth from outside, on orbit controls, with a sun slider.",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -14,7 +14,6 @@
   },
   "devDependencies": {
     "@types/three": "^0.169.0",
-    "playwright": "^1.62.1",
     "typescript": "^5.6.2",
     "vite": "^5.4.8"
   }

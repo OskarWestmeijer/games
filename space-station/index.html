@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Space Station</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!--
+      The only control that is not on the navigation console. Altitude, attitude, orbit mode
+      and the clock are keys you walk to — see `station/console.ts`. This one is a download
+      rather than something the station does, which is the whole reason it is still up here.
+    -->
+    <div id="settings">
+      <select id="texture-quality" title="Resolution of the planet's surface maps">
+        <option value="4k">Surface 4K · 1.2 MB</option>
+        <option value="8k" selected>Surface 8K · 2.9 MB</option>
+      </select>
+    </div>
+    <div id="app">
+      <div id="planet-view">
+        <canvas id="planet-canvas"></canvas>
+        <div id="crosshair" aria-hidden="true"></div>
+        <button id="interact-prompt" hidden>
+          <span class="fine-only">Press <kbd>E</kbd> to <span data-interact-label></span></span>
+          <span class="coarse-only">Tap to <span data-interact-label></span></span>
+        </button>
+        <div id="planet-controls" class="hud">
+          <span class="hud-note fine-only">Click or press W to look around · WASD to move · Esc to release</span>
+          <span class="hud-note coarse-only">Drag to look · stick to move</span>
+        </div>
+        <div id="move-stick" aria-hidden="true"><div id="move-knob"></div></div>
+        <p class="planet-credit">
+          Surface maps from
+          <a href="https://visibleearth.nasa.gov/" target="_blank" rel="noopener">NASA Visible Earth</a>
+          (public domain), downscaled.
+        </p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

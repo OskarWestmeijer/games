@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Planet Inspector</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="settings">
+      <select id="texture-quality" title="Resolution of the planet's surface maps">
+        <option value="4k">Surface 4K · 1.2 MB</option>
+        <option value="8k" selected>Surface 8K · 2.9 MB</option>
+      </select>
+    </div>
+    <div id="app">
+      <div id="inspect-view">
+        <canvas id="inspect-canvas"></canvas>
+        <div id="inspect-controls" class="hud">
+          <label for="sun-azimuth">Sun</label>
+          <input id="sun-azimuth" type="range" min="0" max="360" step="1" />
+          <span class="hud-note fine-only">Drag to orbit · scroll to zoom</span>
+          <span class="hud-note coarse-only">Drag to orbit · pinch to zoom</span>
+        </div>
+        <p class="planet-credit">
+          Surface maps from
+          <a href="https://visibleearth.nasa.gov/" target="_blank" rel="noopener">NASA Visible Earth</a>
+          (public domain), downscaled.
+        </p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

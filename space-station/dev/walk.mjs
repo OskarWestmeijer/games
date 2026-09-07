@@ -77,9 +77,9 @@ const browser = await chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--use-gl=angle']
 });
 const page = await browser.newPage({ viewport: { width: 640, height: 400 } });
-// `#planet` explicitly, not the bare hash: the site's landing view is Precision Parking
-// now, and this harness would sit waiting for a `window.__station` that never arrives.
-await page.goto(`${server.url}/#planet`, { waitUntil: 'load' });
+// The bare URL: this project is the station and nothing else now, so there is no hash to
+// name. `window.__station` still arrives a frame or two late — see the wait below.
+await page.goto(server.url, { waitUntil: 'load' });
 await page.waitForFunction(() => !!window.__station, null, { timeout: 60000 });
 
 const report = await page.evaluate(async (route) => {
