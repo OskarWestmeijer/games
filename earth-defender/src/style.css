@@ -41,38 +41,6 @@ body {
   height: 100dvh;
 }
 
-/* The settings bar, top right. One control now the views are separate projects — the surface
-   map resolution, which is a download and so cannot live on anything diegetic. */
-#settings {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 10;
-  display: flex;
-  gap: 0.5rem;
-}
-
-#settings select {
-  padding: 0.4rem 0.6rem;
-  font-size: 0.8rem;
-  font-family: inherit;
-  color: var(--text);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-#settings select:hover {
-  border-color: var(--accent);
-}
-
-/* Held disabled while a map set downloads, so the switch can't be raced. */
-#settings select:disabled {
-  opacity: 0.5;
-  cursor: progress;
-}
-
 #fly-view {
   position: relative;
   width: 100%;
@@ -750,53 +718,6 @@ body {
    fact counted. */
 .hud-value.lost {
   color: #ff5a4a;
-}
-
-/* --- the notes ------------------------------------------------------------------------------
-   The design notes, standing above the readout pill in the same centred column and always on
-   screen: they are what this view is being built out of, and a note you have to open is a note
-   nobody reads.
-
-   Small and dim like the control legend, and left-aligned as a list — the pill below is centred
-   numbers, and the two should not read as the same thing. **It carries its own ground**, unlike
-   the legend, and that is not decoration: the legend is five words in a corner the planet rarely
-   fills, where this is nine lines across the middle of the screen, and over the sunlit limb a
-   text shadow alone left half of them unreadable. It is *darker* than the instrument pill and has
-   no border: nine lines of small dim text need a real ground where a strip of bright numbers does
-   not, and dropping the border is what keeps it a note on the glass rather than a second panel. */
-#fly-notes {
-  position: absolute;
-  left: 50%;
-  bottom: 4rem;
-  transform: translateX(-50%);
-  z-index: 1;
-  margin: 0;
-  padding: 0.5rem 0.85rem;
-  max-width: min(38rem, 74vw);
-  list-style: none;
-  font-size: 0.68rem;
-  line-height: 1.65;
-  color: var(--text-dim);
-  text-align: left;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-  background: rgba(12, 14, 18, 0.82);
-  border-radius: 8px;
-  pointer-events: none;
-}
-
-/* The dash is the list marker, drawn rather than bulleted so it sits on the text's own baseline
-   and inherits the dimming. */
-#fly-notes li::before {
-  content: '— ';
-  opacity: 0.6;
-}
-
-/* Short viewports put the notes through the aeroplane, and there the flight wins: the pill and
-   the legend are instruments, these are reading. */
-@media (max-height: 620px), (pointer: coarse) {
-  #fly-notes {
-    display: none;
-  }
 }
 
 .planet-credit {

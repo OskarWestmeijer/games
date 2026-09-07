@@ -69,7 +69,7 @@ Two things to know before adding one:
 
 - **It only works because of `base: './'`** (see the house rules). Check a new game's build for
   root-absolute paths first — they fail on the deployed site and nowhere else.
-- **Weight.** The site is ~4.4 MB, nearly all of it earth-defender's surface maps. `space-station/`
+- **Weight.** The site is ~3.7 MB, nearly all of it earth-defender's surface maps. `space-station/`
   would add ~29 MB on top, nearly all of it music, which is the real reason to think about that one.
 
 `npm run build` is what CI runs per game — `tsc && vite build`, so the type-check is included.

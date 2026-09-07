@@ -7,14 +7,6 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <!-- The one setting left after the split: the resolution of the planet's surface maps,
-         which is a download and so cannot live on anything in the world. -->
-    <div id="settings">
-      <select id="texture-quality" title="Resolution of the planet's surface maps">
-        <option value="4k">Surface 4K · 1.2 MB</option>
-        <option value="8k" selected>Surface 8K · 2.9 MB</option>
-      </select>
-    </div>
     <div id="app">
       <div id="fly-view">
         <canvas id="fly-canvas"></canvas>
@@ -53,25 +45,6 @@
              same means as the bombers' bars (updatePlaneHealthBar() in fly-view.ts). Only
              one of these ever exists, so it is markup rather than something built in JS. -->
         <div id="fly-plane-health" aria-hidden="true"><div id="fly-plane-health-fill"></div></div>
-        <!--
-          The notes: the design decisions this view is being built out of, kept on screen where
-          the thing they describe is. Directly above the readout pill and in the same centred
-          column, because it is the same kind of panel — about the flight rather than part of the
-          world — and it is **always visible**: a note behind a toggle is a note nobody reads.
-
-          It is markup and nothing else. No script, no storage, nothing in the scene reads it, and
-          it takes no clicks: adding a note is adding an <li> here, which is the whole point of
-          having it in the file the view is built from rather than in a document somewhere else.
-
-          Dim and small on purpose — the alert bar is the thing on this screen that is allowed to
-          shout, and these are notes, not instruments.
-        -->
-        <ul id="fly-notes" aria-label="Design notes">
-          <li>Landers are bombers now: level runs, nose forward.</li>
-          <li>Rockets on R: four of them, guided, two to a bomber.</li>
-          <li>Ammunition is finite — rearm by flying through the command post.</li>
-          <li>Default speed, always: S slows while held, releasing returns to cruise.</li>
-        </ul>
         <!-- The pill is the instruments — what the aircraft is doing. The stick lives in the
              corner legend below, which is why the two are not the same element. -->
         <div id="fly-controls" class="hud">

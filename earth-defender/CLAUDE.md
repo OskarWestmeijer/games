@@ -26,7 +26,7 @@
 
 **A small aeroplane defending the Earth from alien bombers**, flown from a chase camera around a
 Three.js globe: arrows climb and bank, `A`/`D` rudder, `W`/`S` throttle, `Space` the laser, `R` a
-rocket, speed, altitude and what is left in the guns in a centre pill, a notepad above it and a key
+rocket, speed, altitude and what is left in the guns in a centre pill, and a key
 legend over a minimap bottom-right. **It flies in a lane** — a fixed cruise altitude that is also
 its floor, with a ceiling Arrow Up climbs to and glides back down from (`fly/lane.ts`) — and the
 bombers, the boost rings and the saucer are all in that same band, which is what makes them things
@@ -50,15 +50,15 @@ Keyboard only.
 ## Architecture
 
 ```
-index.html            #settings (the surface-resolution select, and nothing else), #fly-view
+index.html            #fly-view, and nothing outside it — no settings bar, no notes
                       (#fly-canvas, #fly-reticle, #fly-bomber-health + .capital-health,
-                      #fly-notes, #fly-plane-health, #fly-alerts, #fly-message, #fly-controls,
+                      #fly-plane-health, #fly-alerts, #fly-message, #fly-controls,
                       #fly-corner = #fly-keys over #minimap with #minimap-plane / #minimap-ufo /
                       #minimap-post / #minimap-paths). Loads /src/main.ts
 vite.config.ts        `base: './'` and nothing else — no publicDir, no plugins. The manifest
                       plugin that scans AI assets went to `asset-viewer/` with them
 src/
-  main.ts             bootstrap: find the elements, pick a map resolution, build the view, start
+  main.ts             bootstrap: find the elements, build the view, start
                       it. The only file that touches DOM ids
   fly-view.ts         createFlyView() — aeroplane, four-key flight model, chase camera, trigger,
                       reticle, own health/defeat, updateMinimap(). Its header carries the
@@ -81,7 +81,7 @@ src/
   fly/bolts.ts        a pool of bolts, cadence, swept hit test. Parametrised, so it is the
                       player's laser, the bombers' return fire and the bombs, from one module
   space.ts            planet, two atmosphere shells, moon, starfield, nebula; the noise GLSL, the
-                      planet shader, MAP_SETS and the map cache, the orbital plane (SUN_BETA /
+                      planet shader, the one map set and its load, the orbital plane (SUN_BETA /
                       ORBIT_NORMAL / ORBIT_NOON / ORBIT_DAWN), surfaceUv() and worldFromLatLon().
                       **A private copy** — `space-station/` and `planet-inspector/` have their own
   textures/, style.css
@@ -189,12 +189,36 @@ notes are in `git show ed3f592:CLAUDE.md`. **This is the one place in the repo w
   aircraft to full**: a pack is 60 and a ring a quarter of the tank because both are picked up *in*
   the fight, and this is the one thing you have to leave the fight for. Empty says so once
   (`DRY_MESSAGE`), and the pill's number goes red rather than blinking.
-- **The magazine is on the aeroplane, not only in the pill** (`buildPlane()`): a bar across the
-  spine that drains and reddens with the rounds, and four pips under the port wing that go out
-  with the rockets. **Across the fuselage, not along it** — the chase camera sits directly astern,
-  so a fore-and-aft bar is foreshortened into a dot, which is exactly what the first pass was. The
-  fill scales from its port end (the geometry is translated so the box's origin is that end) and
-  never quite reaches zero: a bar of no length reads as "no gauge", not as "nothing left".
+- **The magazine is on the aeroplane, not only in the pill** (`buildPlane()`): a bar in the dorsal
+  saddle that drains and reddens with the rounds, and four rockets under the wings that go out as
+  they are fired. The fill scales from its port end (the geometry is translated so the box's origin
+  is that end) and never quite reaches zero: a bar of no length reads as "no gauge", not as
+  "nothing left". **Four things about it were wrong and are worth not rediscovering**, all of them
+  the same mistake — designing an instrument for a camera that is not the one looking at it:
+  - **Across the fuselage, not along it.** The chase camera sits directly astern, so a
+    fore-and-aft bar is foreshortened into a dot, which is what the first pass was.
+  - **Only just over the bloom threshold.** At 3.2 a face three units wide is not a light but a
+    smear, and the aeroplane's own instrument was the brightest thing in the view. A nav light
+    gets away with 2.6 because it is a sphere the size of a full stop. The halo also makes the
+    bar *over-read*: at 70% it measured 89% on screen.
+  - **It needs a housing and a visible empty half.** Laid straight on a fuselage nine tenths of a
+    unit wide it was a glowing plank stuck to the back of the aeroplane. It sits in a saddle the
+    width of the wing glove now, over a **track** that shows the rounds that are gone — without
+    one, a half-full magazine is just a shorter bar with nothing to read it against.
+  - **The gauge's three surfaces are `MeshBasicMaterial`, and that is load-bearing.** Everything
+    around them is lit, so it goes from near black to near white across the terminator; a
+    surround that changes value that much has no fixed contrast. Unlit, the bezel, the track and
+    the fill hold the same three values in any light. The failure only showed on the day side.
+- **The aeroplane is shaped for the one view it is ever seen from** — `CHASE_OFFSET`, fifteen
+  units astern and 3.4 above. Drawn as if from the side (one centre fin, one square exhaust) it
+  collapsed into a grey cross from back there, so it has **two fins, two nacelles and two
+  exhausts**: a silhouette that says which way up it is, and symmetrical hot points for the bloom.
+  The rockets are four rockets on four pylons rather than four pips, hung **well outboard and aft
+  of the trailing edge** — inboard they vanish against the centre section, and level with the
+  wing box the camera's downward angle hides the lot behind the wing itself. The pylons stay when
+  the rockets go, so an empty rack still reads as a rack; the outer pair is spent first, which is
+  what keeps four, two and none symmetrical. **Span, wing height and leading edge are not free**:
+  `MUZZLE` fires from the wingtips and `TIP` in `fly/trail.ts` hangs the wake off them.
 - **The station carries a resupply package on a tether**, `PACKAGE_DROP` under the hub, and
   `REARM_RANGE` is measured **from the package** — the thing you aim at and the thing that counts
   have to be the same, or a 50-unit station has an invisible sweet spot in it. It hangs at ~102 of
@@ -214,16 +238,12 @@ notes are in `git show ed3f592:CLAUDE.md`. **This is the one place in the repo w
   S are things you *hold*, and letting go walks it back. Left as a setting, the aeroplane's usual
   state was whatever the last fight left it on — most often 12, because slowing down is what you
   do in one.
-- **`#fly-notes` is the design notes on screen, and it is markup and nothing else** — a `<ul>` in
-  `index.html`, always visible above the pill, no script, no storage, no clicks, read by nothing.
-  Adding a note is adding an `<li>`, which is the point of keeping it in the file the view is
-  built from. Small and dim like the control legend, but **on its own dark ground and darker than
-  the pill**, which the legend does not need: nine lines across the middle of the screen sit over
-  the sunlit limb, and a text shadow alone left half of them unreadable. `fly-view.ts` keeps
-  `isTyping()` even though nothing there takes a caret today — every key
-  here is a control with no modifier, so the first text field ever put over this HUD would fly the
-  aeroplane as it was typed in. `keyup` stays ungated: a key released over a field may have been
-  pressed over the scene, and a stuck control is worse.
+- **There is no notes panel and no settings bar.** Both were removed: the `<ul>` of design notes
+  that stood above the pill, and the surface-resolution `<select>` in the top right. The screen is
+  the flight and nothing else. `fly-view.ts` keeps `isTyping()` even though nothing here takes a
+  caret — every key is a control with no modifier, so the first text field ever put over this HUD
+  would fly the aeroplane as it was typed in. `keyup` stays ungated: a key released over a field
+  may have been pressed over the scene, and a stuck control is worse.
 - **Landing is not animated; being shot is** — nothing you did caused a landing. A burst **outlives
   the ship that made it**, so it is ticked *outside* the active check.
 - **Health bars float over their target**, placed **after the render**. The aircraft's own is anchored
@@ -293,8 +313,9 @@ plane everything in this view is placed against. **A private copy**: `space-stat
   Apparent size is the only lever on transit length. **Craters must stay sparse, shallow and
   unpainted** — a hash gate leaving ~2 cells in 3 empty, a squared radius term, a shallow profile,
   and relief *shaded* only, never multiplied into the albedo, or the moon reads as an infection.
-- **Two map sets, one cache** — a module-level `mapCache`, never disposed, shared by every scene in the project that holds it, so
-  switching is instant; a switch made mid-download wins and the stale promise drops its result.
+- **One map set, loaded once** — a module-level promise, never disposed, shared by every scene in
+  the project that holds it. It was a cache keyed by a quality setting, back when a select in the
+  corner of the page could switch sets mid-flight; there is one set now and nothing to switch.
 
 
 ## Touch, and iPad in particular
@@ -310,40 +331,52 @@ rules, and they are not optional:
 
 ## Checking a change
 
-There is no committed harness for this view. `dev/.fly-shots.tmp.mjs` is the scratch one the
-flight model was tuned against — it starts a Vite dev server, drives the aeroplane through a
-scripted sequence of held keys with a headless Chromium, and writes a PNG per moment:
+Nothing runs in CI but `tsc`. What there is instead is two scratch harnesses in `dev/`, each of
+which starts a Vite dev server, drives the aeroplane with a headless Chromium and writes a PNG per
+moment. They cover different things and neither substitutes for the other:
 
 ```sh
-node dev/.fly-shots.tmp.mjs dev/shots
+node dev/.fly-shots.tmp.mjs   dev/shots/fly     # the flight model: bank, climb, throttle, floor
+node dev/.plane-shots.tmp.mjs dev/shots/plane   # the aeroplane itself: silhouette and gauges
 ```
 
-It reads `window.__fly` (installed by `fly-view.ts` under `import.meta.env.DEV`) for the speed and
-altitude it prints beside each shot, and it waits on `window.__fly.mapsReady` — until the surface
-maps resolve the shader draws its procedural fallback and every screenshot is of the wrong planet.
-**Don't edit source while it runs**: Vite hot-reloads mid-shot and the screenshot times out.
+`.plane-shots` renders at 2560 and **crops**, because cropping a big render is the only zoom
+available and a bar three units long cannot be judged at the chase camera's distance. It takes
+about three minutes: the magazine is 120 rounds at roughly two a second, and there is no way to
+set the count from outside — adding one to the view for a harness's sake is not worth it. Its
+`readings.txt` is what makes the frames legible; a picture of a gauge means nothing without the
+number it was showing.
+
+Both read `window.__fly` (installed by `fly-view.ts` under `import.meta.env.DEV`) and wait on
+`window.__fly.mapsReady` — until the surface maps resolve the shader draws its procedural fallback
+and every screenshot is of the wrong planet. **Don't edit source while one runs**: Vite hot-reloads
+mid-shot and the screenshot times out.
 
 *Actually look at the output.* The numbers say nothing about whether the reticle is over the
-target, whether the wake reads as a wake, or whether the alert bar has walked into the notes.
+target, whether the wake reads as a wake, or whether the alert bar has walked into the pill. And
+**look at both sides of the terminator** — the aeroplane's gauges failed in sunlight and nowhere
+else, which is the sort of thing one lucky frame will tell you is fine.
 
 ## Planet textures — provenance and licence
 
-Everything in `src/textures/` derives from **NASA Visible Earth**. Two sets (`MAP_SETS` in
-`space.ts`, driven by `#texture-quality`), named after the day map's width:
+Everything in `src/textures/` derives from **NASA Visible Earth**. **One set**, loaded in
+`space.ts` and not selectable:
 
-| file | set | source |
-| --- | --- | --- |
-| `planet-day-4k.webp` (719 KB) | 4k | [Blue Marble Next Generation, Dec 2004](https://visibleearth.nasa.gov/images/73909) |
-| `planet-day-8k.webp` (2.2 MB) | 8k | same record, from the 21600x10800 original |
-| `planet-night-2k.webp` (101 KB) | 4k | [Night Lights 2012](https://visibleearth.nasa.gov/images/79765) |
-| `planet-night-4k.webp` (291 KB) | 8k | same record |
-| `planet-clouds-2k.webp` (430 KB) | both | [Blue Marble clouds](https://visibleearth.nasa.gov/images/57747) |
-| `planet-minimap-1024.webp` (59 KB) | — | downscaled from `planet-day-8k.webp` |
+| file | source |
+| --- | --- |
+| `planet-day-8k.webp` (2.2 MB) | [Blue Marble Next Generation, Dec 2004](https://visibleearth.nasa.gov/images/73909), from the 21600x10800 original |
+| `planet-night-4k.webp` (291 KB) | [Night Lights 2012](https://visibleearth.nasa.gov/images/79765) |
+| `planet-clouds-2k.webp` (430 KB) | [Blue Marble clouds](https://visibleearth.nasa.gov/images/57747) |
+| `planet-minimap-1024.webp` (59 KB) | downscaled from `planet-day-8k.webp` |
 
-4k set 1.2 MB, 8k set 2.9 MB. **Clouds have no larger version** — NASA publishes that composite at
-2048 only, fine for a soft mask. The minimap file is in no set: it is flight view's flat world map
-and the one texture reached from **CSS** (`url()` in `#minimap::before`), which Vite content-hashes
-exactly as it does a TS import. Deliberately independent of the 4K/8K switch.
+2.9 MB for the three the planet uses. **There was a 4K set and a `<select>` to switch to it**, with
+a cache keyed by quality and a `setQuality()` down the whole chain — `planet-day-4k.webp` and
+`planet-night-2k.webp` are gone from the folder and the machinery with them. Bring it back only for
+a reason better than choice: 8K is ~180 MB of texture per renderer, which is the real argument, and
+it was already the default on everything but a coarse-pointer or data-saving device.
+**Clouds have no larger version** — NASA publishes that composite at 2048 only, fine for a soft
+mask. The minimap file is the planet's own map flattened, and the one texture reached from **CSS**
+(`url()` in `#minimap::before`), which Vite content-hashes exactly as it does a TS import.
 
 Re-encoded with ImageMagick, e.g.
 
@@ -355,9 +388,8 @@ magick -define jpeg:size=10800x5400 world.topo.bathy.200412.3x21600x10800.jpg \
 The `jpeg:size` hint makes libjpeg decode at half scale — ~350 MB of buffer instead of over a
 gigabyte. Otherwise the maps are used exactly as they come.
 
-**Adding a set** is `MAP_SETS` plus two imports plus an `<option>`. Mind the GPU cost, which is not
-in the file sizes: an 8192x4096 map with mipmaps is ~180 MB of texture **per renderer**. 8k is the
-default; the choice is not persisted.
+**Replacing a map** is one import in `space.ts`. Mind the GPU cost, which is not in the file sizes:
+an 8192x4096 map with mipmaps is ~180 MB of texture **per renderer**.
 
 **Why NASA specifically.** This repo is public and these files are committed, so the licence must
 permit redistribution with no strings. NASA content "generally are not subject to copyright in the
@@ -370,9 +402,10 @@ They live in `src/textures/` and are **imported from TS**, which is why this pro
 `publicDir` at all: Vite emits an imported asset to `dist/assets/` with a content hash and rewrites
 the path against `base: './'`, so nothing has to be copied by hand or resolved at runtime.
 
-`space-station/` and `planet-inspector/` carry their own copies of these same files, minus the
-minimap, which is flight view's alone. **Re-encoding one means re-encoding all three** — or
-deciding, deliberately, that they are different worlds now.
+`space-station/` and `planet-inspector/` carry their own copies, minus the minimap, which is flight
+view's alone — and they **still have the 4K set and the quality switch this folder dropped**.
+**Re-encoding a map means re-encoding all three** — or deciding, deliberately, that they are
+different worlds now.
 
 
 ## Deploy — GitHub Pages
@@ -392,9 +425,8 @@ knows or cares which folder it is served from. A root-absolute path added anywhe
 a hand-written `href="/…"` — works in `npm run dev`, works in `npm run preview`, and 404s only once
 deployed. That is the one deployment trap in this project.
 
-Worth knowing: this game is ~4.3 MB of the site, nearly all of it the 8K and 4K surface maps. That
-is fine, and it is also most of why the 4K set is chosen automatically on a coarse-pointer or
-data-saving device — see `main.ts`.
+Worth knowing: this game is ~3.6 MB of the site, nearly all of it the 8K surface maps. It was ~4.3
+MB while the 4K set shipped alongside them for a `<select>` that is gone.
 
 ## Where this is going
 

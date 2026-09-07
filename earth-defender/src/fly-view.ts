@@ -4,7 +4,6 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ATMOSPHERE_RADIUS, PLANET_RADIUS, SUN_DIR, buildSpace } from './space';
-import type { TextureQuality } from './space';
 import { CEILING_ALTITUDE, CRUISE_ALTITUDE, CRUISE_RADIUS } from './fly/lane';
 import { createUfo } from './fly/ufo';
 import { createBolts } from './fly/bolts';
@@ -264,14 +263,20 @@ const LOCK_RANGE = 260;
 const LASER_AMMO = 120;
 const ROCKET_AMMO = 4;
 /**
- * The magazine bar on the aeroplane's own spine, full and empty. Warm amber at full — the laser's
- * own colour, because that is what it is a bar of — running to the same red the fallen capitals
- * are marked in. Authored over 1.0 at both ends so the bloom keeps it a light rather than a
- * painted stripe; the red is *brighter* than the amber on purpose, because the one moment this
- * has to be impossible to miss is the moment it is nearly out.
+ * The magazine bar in the aeroplane's dorsal saddle, full and empty. Warm amber at full — the
+ * laser's own colour, because that is what it is a bar of — running to the same red the fallen
+ * capitals are marked in.
+ *
+ * **Only just over 1.0, and that is the whole tuning.** Both ends used to be at 3.2 and 3.6, and
+ * a face three units wide at that value is not a light but a smear: the bloom took a 145-pixel
+ * bar and blew it across the wing roots until the brightest thing in the view was the aeroplane's
+ * own instrument rather than anything in the sky. A nav light gets away with 2.6 because it is a
+ * sphere the size of a full stop. Just over the threshold is enough to make this read as lit at
+ * night and from fifteen units back, which is all it was ever for. The red is still *brighter*
+ * than the amber, because the one moment this has to be impossible to miss is when it is out.
  */
-const AMMO_FULL = new THREE.Color(3.2, 1.5, 0.45);
-const AMMO_EMPTY = new THREE.Color(3.6, 0.5, 0.3);
+const AMMO_FULL = new THREE.Color(1.5, 0.8, 0.26);
+const AMMO_EMPTY = new THREE.Color(2.1, 0.32, 0.22);
 
 /** What the command post says when you pass through it with something to refill. */
 const REARM_MESSAGE = 'Rearmed and repaired. Good hunting.';
@@ -394,33 +399,62 @@ const START_RADIUS = CRUISE_RADIUS;
 const START_DIRECTION = new THREE.Vector3(0.35, 0.3, 0.89).normalize();
 
 /**
- * A box aeroplane: fuselage, wings, tailplane, fin, a dark canopy and the two navigation
- * lights. Built nose-down -Z at the origin, so the caller only has to place it.
+ * The aeroplane: a box model, and the two things on it that are *readouts* rather than shape.
+ * Built nose-down -Z at the origin, so the caller only has to place it.
  *
- * The nav lights and the exhaust are authored over 1.0 on purpose — that is the side of the
- * bloom threshold that turns a small bright face into an actual light, the same trick the
- * station's LED strips use.
+ * **It is shaped for the one view it is ever seen from.** The chase camera sits at
+ * `CHASE_OFFSET` — fifteen units directly astern and a little above — for the whole flight, and
+ * the first version of this model was drawn as if from the side: a single centre fin, one square
+ * exhaust, a canopy that is behind the fuselage from back here. From astern all of that
+ * collapsed into a grey cross with a light on it. What this one puts in the tail view instead is
+ * **two fins, two nacelles and two exhausts** — a silhouette that says which way up it is at a
+ * glance, and two hot points either side of the spine that give the bloom something symmetrical
+ * to do. The span, the wing height and the leading edge are *not* free: `MUZZLE` fires from the
+ * wingtips and `TIP` in `fly/trail.ts` hangs the wake off them, so the plank stays 8.4 across at
+ * y = 0.05 whatever else changes around it.
+ *
+ * **The magazine is on the aircraft, not only in the corner pill.** The aeroplane is the one
+ * surface guaranteed to be in your eyeline, where a number in a corner is something you have to
+ * remember to read — and running dry is the one state that changes what you should be doing. So
+ * the spine carries a bar that drains and reddens with the rounds (`AMMO_FULL` → `AMMO_EMPTY`),
+ * and the four rockets hang under the wings as four rockets.
+ *
+ * Three things about the bar were wrong in the first pass and are worth not rediscovering:
+ *
+ * - **Across the aeroplane, not along it.** The obvious place is the spine fore-and-aft, and it
+ *   is useless there: with the camera dead astern a bar running away from you is foreshortened
+ *   into a dot.
+ * - **It needs a housing, or it is a plank.** Laid straight on a fuselage nine tenths of a unit
+ *   wide, a three-unit bar is a glowing crossbar stuck to the back of the aeroplane with nothing
+ *   holding it. It sits in a **dorsal saddle** now, the same width as the wing glove directly
+ *   under it, so the middle of the aircraft is a wide centre section with a slot let into the top
+ *   of it — which is where an instrument on a real airframe would have to live.
+ * - **The empty half has to be visible.** Under the fill is a near-black **track** the full width
+ *   of the saddle. Without it a half-full magazine is just a shorter glowing bar sitting off to
+ *   one side, and there is nothing to read it against; with it, the bar is plainly a bar in a
+ *   slot that is half empty.
+ *
+ * The fill drains from the port end because its geometry is translated so the box's origin *is*
+ * that end — scaled about its middle it would shrink towards the centre, which reads as a thing
+ * getting smaller rather than as a magazine emptying.
+ *
+ * The rockets are **four rockets on four pylons**, two under each wing, and not the four abstract
+ * pips they used to be — a row of studs under the port wing alone read as detail on the model
+ * rather than as a count of anything. The pylons stay when the rockets go, so what is left is
+ * visibly an empty rack. They are spent from the outside in (see the order they are built in), so
+ * a full rack and a half-empty one are both symmetrical.
  */
-/**
- * The aeroplane, and the two things on it that are *readouts* rather than shape.
- *
- * **The magazine is on the aircraft, not only in the corner pill.** The chase camera keeps the
- * aeroplane in the middle of the screen for the whole flight, so the one surface guaranteed to be
- * in your eyeline is the aeroplane itself — a number in a corner is something you have to
- * remember to read, and running dry is the one state that changes what you should be doing. So
- * the fuselage carries a bar that drains and reddens with the rounds (`AMMO_FULL` → `AMMO_EMPTY`),
- * and the four rockets are four pips under the port wing that go out as they are spent.
- *
- * Both are `MeshBasicMaterial` over 1.0, like the nav lights: they have to read at night and from
- * fifteen units back, and the bloom is what makes a half-unit box a light rather than a speck.
- */
-function buildPlane(): { plane: THREE.Group; ammoFill: THREE.Mesh; rocketPips: THREE.Mesh[] } {
+function buildPlane(): { plane: THREE.Group; ammoFill: THREE.Mesh; rocketPips: THREE.Object3D[] } {
   const plane = new THREE.Group();
 
   // Mid grey rather than white. At white the aeroplane saturated over the day side and blew
   // straight through the bloom threshold, so the subject of the scene was a glowing smear.
   const body = new THREE.MeshStandardMaterial({ color: 0x9aa1a9, roughness: 0.42, metalness: 0.5 });
   const trim = new THREE.MeshStandardMaterial({ color: 0x39404a, roughness: 0.6, metalness: 0.35 });
+  // A third, darker still: the panels that are meant to read as *not* the airframe — the wing
+  // glove, the saddle the magazine is let into, the nacelles. Two greys were not enough to keep
+  // the middle of the aeroplane from reading as one undifferentiated block from astern.
+  const panel = new THREE.MeshStandardMaterial({ color: 0x252a32, roughness: 0.72, metalness: 0.3 });
   const glass = new THREE.MeshStandardMaterial({ color: 0x111820, roughness: 0.12, metalness: 0.85 });
 
   const part = (
@@ -436,62 +470,141 @@ function buildPlane(): { plane: THREE.Group; ammoFill: THREE.Mesh; rocketPips: T
     return mesh;
   };
 
-  part(new THREE.BoxGeometry(0.95, 0.95, 6.4), body, 0, 0, 0);
-  // A shorter, thinner box in front of the fuselage is the whole of the nose taper.
-  part(new THREE.BoxGeometry(0.55, 0.55, 1.5), trim, 0, 0, -3.7);
+  // --- the airframe ---------------------------------------------------------------------
+
+  part(new THREE.BoxGeometry(0.92, 0.86, 5.4), body, 0, 0, 0.4);
+  // Two shorter, thinner boxes in front of the fuselage are the whole of the nose taper. Two
+  // rather than one: a single stub reads as a blunt aeroplane, and the second step is what makes
+  // it a point without a cone.
+  part(new THREE.BoxGeometry(0.62, 0.6, 1.5), trim, 0, -0.02, -3.05);
+  part(new THREE.BoxGeometry(0.32, 0.32, 1.0), trim, 0, -0.02, -4.05);
+  // The wing plank. Span, height and chord are load-bearing — see the header.
   part(new THREE.BoxGeometry(8.4, 0.18, 1.7), body, 0, 0.05, 0.3);
-  part(new THREE.BoxGeometry(3.2, 0.16, 0.9), body, 0, 0.05, 2.7);
-  part(new THREE.BoxGeometry(0.16, 1.5, 1.1), body, 0, 0.85, 2.8);
-  part(new THREE.BoxGeometry(0.72, 0.42, 1.3), glass, 0, 0.6, -0.9);
+  // The glove: the thick centre section the wing comes out of, and the thing that stops the
+  // saddle above it from floating.
+  part(new THREE.BoxGeometry(3.4, 0.36, 2.7), panel, 0, 0, 0.55);
+  part(new THREE.BoxGeometry(0.7, 0.44, 1.5), glass, 0, 0.5, -1.4);
+  // The canopy's rear fairing, running back into the saddle: the join is what makes the two
+  // read as one spine rather than as two lumps.
+  part(new THREE.BoxGeometry(0.62, 0.34, 1.1), trim, 0, 0.44, -0.35);
+
+  // The tail: a stabiliser spanning both booms, and a fin standing on each of them.
+  part(new THREE.BoxGeometry(3.5, 0.16, 0.95), body, 0, 0.14, 2.75);
+  for (const side of [-1, 1]) {
+    const fin = part(new THREE.BoxGeometry(0.14, 1.3, 1.05), body, side * 1.15, 0.85, 2.8);
+    // Canted outwards, which is the cheapest way to stop two vertical slabs reading as one
+    // wide fin when the aeroplane is level and dead ahead of the camera.
+    fin.rotation.z = side * 0.17;
+  }
+
+  // The nacelles, and the exhaust in the back of each. Round, because the exhaust is the one
+  // part of this model that is a *light* rather than a lit surface, and a disc of it either
+  // side of the spine is what the chase view sees most of.
+  const exhaustGeometry = new THREE.CylinderGeometry(0.24, 0.24, 0.14, 14);
+  exhaustGeometry.rotateX(Math.PI / 2);
+  // Kept close to the threshold for the same reason the magazine is: a disc this size at 1.5
+  // blooms out to a white plate, and two white plates on the back of the aeroplane are brighter
+  // than anything they are supposed to be flying past.
+  const exhaustMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.28, 0.62, 0.26) });
+  for (const side of [-1, 1]) {
+    part(new THREE.BoxGeometry(0.62, 0.62, 2.7), panel, side * 1.15, -0.06, 1.45);
+    part(exhaustGeometry, exhaustMaterial, side * 1.15, -0.06, 2.84);
+  }
 
   // Port red, starboard green — the one aviation convention worth spending two spheres on.
   const tip = new THREE.SphereGeometry(0.17, 10, 8);
   part(tip, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 0.25, 0.3) }), -4.2, 0.05, 0.3);
   part(tip, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 2.6, 0.5) }), 4.2, 0.05, 0.3);
-  part(
-    new THREE.BoxGeometry(0.5, 0.5, 0.12),
-    new THREE.MeshBasicMaterial({ color: new THREE.Color(1.35, 0.8, 0.4) }),
-    0,
-    0,
-    3.25
-  );
 
-  // The magazine: a dark track across the spine behind the canopy, and a fill inside it that is
-  // scaled and recoloured every time a round is spent.
+  // --- the magazine ---------------------------------------------------------------------
+
+  const trackWidth = 2.9;
+  // The saddle: same width as the glove under it, and the housing the rest of this sits in.
+  part(new THREE.BoxGeometry(3.4, 0.34, 1.05), panel, 0, 0.4, 1.2);
+
+  // **All three of the gauge's own surfaces are `MeshBasicMaterial`, and that is the point.**
+  // The saddle under them is a lit material, so it is dark grey over the night side and near
+  // white in the sun — and a gauge whose surround changes value by that much has no fixed
+  // contrast to be read against. Over the day side the fill and the sunlit saddle were the same
+  // cream, and the bar vanished into the aeroplane exactly when the sky behind it was brightest.
+  // Unlit, these three keep the same three values in any light: a black bezel, an ember track,
+  // an amber fill.
   //
-  // **Across the aeroplane, not along it.** The obvious place is the spine, fore and aft, and it
-  // is useless there: the chase camera sits directly astern, so a bar running away from you is
-  // foreshortened into a dot, and the first pass had a gauge you could not read at all. Laid
-  // across the fuselage it is broadside to the camera for the whole flight.
-  //
-  // It drains from the port end because the geometry is translated so the box's origin *is* that
-  // end — scaled about its middle it would shrink towards the centre, which reads as a thing
-  // getting smaller rather than as a magazine emptying.
-  const trackWidth = 3;
+  //   bezel — the constant dark field the other two sit in
   part(
-    new THREE.BoxGeometry(trackWidth, 0.1, 0.26),
-    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.05, 0.06, 0.08) }),
+    new THREE.BoxGeometry(3.2, 0.12, 0.6),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.02, 0.022, 0.028) }),
     0,
     0.52,
-    1.25
+    1.2
   );
-  const fillGeometry = new THREE.BoxGeometry(trackWidth, 0.16, 0.32);
+  //   track — the *unlit segment*, and the reason a half-full magazine reads as half full
+  //   rather than as a shorter bar. An ember rather than black: black-on-black inside the bezel
+  //   would put us back to a bar with nothing to measure it against.
+  part(
+    new THREE.BoxGeometry(trackWidth, 0.1, 0.42),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.11, 0.06, 0.022) }),
+    0,
+    0.58,
+    1.2
+  );
+  //   fill — the rounds themselves
+  const fillGeometry = new THREE.BoxGeometry(trackWidth, 0.14, 0.46);
   fillGeometry.translate(trackWidth / 2, 0, 0);
-  const ammoFill = part(fillGeometry, new THREE.MeshBasicMaterial({ color: AMMO_FULL.clone() }), -trackWidth / 2, 0.52, 1.25);
+  const ammoFill = part(
+    fillGeometry,
+    new THREE.MeshBasicMaterial({ color: AMMO_FULL.clone() }),
+    -trackWidth / 2,
+    0.6,
+    1.2
+  );
 
-  // …and the rockets, as four pips under the port wing, in the order they are fired: what a rack
-  // of four actually looks like from behind, which is the whole reason they are pips and not a
-  // second bar.
-  const pipGeometry = new THREE.BoxGeometry(0.22, 0.22, 0.5);
-  const pipMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.2, 0.35) });
-  const rocketPips = [0, 1, 2, 3].map((i) => part(pipGeometry, pipMaterial, -1.5 - i * 0.55, -0.16, 0.3));
+  // --- the rockets ----------------------------------------------------------------------
+
+  // Inner pair first, outer pair last, because `update()` hides them from the *end* of this
+  // array — so the outer pair is spent first, and a rack of four, of two and of none is
+  // symmetrical. Only the odd counts are lopsided, which is what an aeroplane that has fired an
+  // odd number of rockets looks like.
+  const pylonGeometry = new THREE.BoxGeometry(0.1, 0.22, 0.5);
+  const rocketGeometry = new THREE.BoxGeometry(0.2, 0.2, 1.15);
+  // A disc, like the engine exhausts and for the same reason: it is the lit end of something,
+  // and a square of light on the back of a box aeroplane reads as another box.
+  const motorGeometry = new THREE.CylinderGeometry(0.11, 0.11, 0.1, 10);
+  motorGeometry.rotateX(Math.PI / 2);
+  const rocketMaterial = new THREE.MeshStandardMaterial({ color: 0x767d86, roughness: 0.5, metalness: 0.45 });
+  const motorMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.9, 0.75, 0.28) });
+
+  const rocketPips = [1, -1, 1, -1].map((side, i) => {
+    // **Well outboard, and far enough aft to clear the trailing edge.** Both of those are the
+    // chase camera again. Hung close in, the inboard pair disappears against the centre
+    // section, which is the widest, darkest part of the aeroplane from behind; hung level with
+    // the wing box, the whole rack sits inside the wing's own outline and the camera — which
+    // looks *down* on the aeroplane from 3.4 units above — sees none of it. Out here they are
+    // four objects against open sky.
+    const x = side * (i < 2 ? 2.2 : 3.1);
+    // The pylon is not part of the group that gets hidden: a rack you have emptied should still
+    // be a rack, or four rockets that vanish leave a wing that never carried any.
+    part(pylonGeometry, trim, x, -0.12, 0.75);
+    const rocket = new THREE.Group();
+    rocket.position.set(x, -0.34, 0.95);
+    const shaft = new THREE.Mesh(rocketGeometry, rocketMaterial);
+    rocket.add(shaft);
+    // A lit motor apiece, on the **aft** end. At night the grey bodies disappear entirely, and
+    // four warm points under the wings is the thing you can actually count from the chase
+    // camera — but only if they are pointed at it. Lighting the nose instead, which is what the
+    // first pass did, puts all four behind their own bodies from the one angle this is ever
+    // seen from, and the rack goes back to being invisible.
+    const motor = new THREE.Mesh(motorGeometry, motorMaterial);
+    motor.position.z = 0.62;
+    rocket.add(motor);
+    plane.add(rocket);
+    return rocket;
+  });
 
   return { plane, ammoFill, rocketPips };
 }
 
 export interface FlyViewOptions {
-  /** Which surface map set to open on. See `TextureQuality` in `space.ts`. */
-  quality?: TextureQuality;
   /** Live readouts in the HUD pill. Injected, never queried for. */
   speedLabel?: HTMLElement | null;
   altitudeLabel?: HTMLElement | null;
@@ -579,7 +692,7 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
   // a plain depth buffer precise across that without a logarithmic one.
   const camera = new THREE.PerspectiveCamera(58, 1, 0.5, 20000);
 
-  const space = buildSpace(renderer, { quality: options.quality });
+  const space = buildSpace(renderer);
   scene.add(space.group);
 
   // The planet lights itself from `SUN_DIR` inside its own shader; these are for the
@@ -1814,10 +1927,5 @@ export function createFlyView(canvas: HTMLCanvasElement, options: FlyViewOptions
     };
   }
 
-  return {
-    start,
-    stop,
-    reset,
-    setTextureQuality: (quality: TextureQuality) => space.setQuality(quality)
-  };
+  return { start, stop, reset };
 }

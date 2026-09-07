@@ -5,7 +5,7 @@ import { createFlyView } from './fly-view';
  * One view, one page. This was a mode dropdown over four scenes sharing a renderer budget;
  * the station, the inspector and the asset gallery are their own projects now (see the repo
  * root), so there is nothing to switch to, nothing to hide and no hash to read. What is left
- * is: find the elements, pick a map resolution, build the view, start it.
+ * is: find the elements, build the view, start it.
  *
  * Everything is imported statically for the same reason it used to be dynamic — three.js is
  * half a megabyte, and the argument for deferring it was that you might never ask for a scene
@@ -30,26 +30,8 @@ const flySpaceLabel = document.querySelector<HTMLSpanElement>('#fly-space-label'
 const flyPlaneHealthFill = document.querySelector<HTMLDivElement>('#fly-plane-health-fill')!;
 const flyMessage = document.querySelector<HTMLDivElement>('#fly-message')!;
 const flyMessageText = document.querySelector<HTMLSpanElement>('#fly-message .message-text')!;
-const qualitySelect = document.querySelector<HTMLSelectElement>('#texture-quality')!;
-
-/**
- * Surface map resolution. The 8K set is 2.9 MB and ~180 MB of texture on the GPU — a fair
- * price when you came to look at the planet, and not one to charge on a coarse-pointer or
- * data-saving device, which opens on 4K instead. `NetworkInformation` is not in `lib.dom`,
- * hence the local shape. Not persisted.
- */
-const connection = (navigator as { connection?: { saveData?: boolean; effectiveType?: string } })
-  .connection;
-const SLOW_CONNECTION =
-  !!connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType ?? '');
-if (SLOW_CONNECTION || window.matchMedia('(any-pointer: coarse)').matches) {
-  qualitySelect.value = '4k';
-}
-
-const quality = () => qualitySelect.value as '4k' | '8k';
 
 const fly = createFlyView(flyCanvas, {
-  quality: quality(),
   speedLabel: flySpeed,
   altitudeLabel: flyAltitude,
   downedLabel: flyDowned,
@@ -68,17 +50,6 @@ const fly = createFlyView(flyCanvas, {
   spaceLabel: flySpaceLabel,
   messagePanel: flyMessage,
   messageText: flyMessageText
-});
-
-qualitySelect.addEventListener('change', async () => {
-  // A couple of megabytes; disabling the select is both the progress indication and what
-  // stops a second change being fired mid-download.
-  qualitySelect.disabled = true;
-  try {
-    await fly.setTextureQuality(quality());
-  } finally {
-    qualitySelect.disabled = false;
-  }
 });
 
 /**

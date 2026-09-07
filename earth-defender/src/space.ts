@@ -1,9 +1,7 @@
 import * as THREE from 'three';
-import day4kUrl from './textures/planet-day-4k.webp';
-import day8kUrl from './textures/planet-day-8k.webp';
-import night2kUrl from './textures/planet-night-2k.webp';
-import night4kUrl from './textures/planet-night-4k.webp';
-import cloud2kUrl from './textures/planet-clouds-2k.webp';
+import dayUrl from './textures/planet-day-8k.webp';
+import nightUrl from './textures/planet-night-4k.webp';
+import cloudUrl from './textures/planet-clouds-2k.webp';
 
 /**
  * Everything outside the pod's window: the planet, its atmosphere, the starfield and a
@@ -633,28 +631,13 @@ function placeholderTexture(): THREE.DataTexture {
 }
 
 /**
- * Which set of surface maps to fly under. The name is the day map's width — that is the one
- * that carries every bit of visible surface detail, and the one the choice is really about.
- *
- * `8k` is the default: 2.9 MB for the three files, and it is what flying low over the terrain
- * is worth doing on. It costs GPU memory as well as download (an 8192x4096 map with mipmaps
- * is ~180 MB of texture per renderer, and the two planet scenes each have their own
- * renderer), so `4k` stays as the 1.2 MB fallback for a slow line or a thin GPU — at this
- * orbit it is already sharp enough that the limb is the thing that gives it away.
+ * The surface maps: the 8K day map, the 4K night map and NASA's 2048 cloud composite, which
+ * is the only size that record is published at and is a soft mask over everything else
+ * anyway. There used to be a 4K set behind a select in the corner of the page and there is
+ * not any more — one set, always, so nothing in the scene has a resolution to be told about.
+ * It costs GPU memory as well as download: an 8192x4096 map with mipmaps is ~180 MB of
+ * texture per renderer.
  */
-export type TextureQuality = '4k' | '8k';
-
-/**
- * The two sets. Clouds are 2048 in both: NASA publishes that composite at one size only,
- * and it is a soft mask over everything else rather than something you read detail from.
- * The night map follows the day map up, since city lights are the other thing you look
- * closely at.
- */
-const MAP_SETS: Record<TextureQuality, { day: string; night: string; clouds: string }> = {
-  '4k': { day: day4kUrl, night: night2kUrl, clouds: cloud2kUrl },
-  '8k': { day: day8kUrl, night: night4kUrl, clouds: cloud2kUrl }
-};
-
 interface PlanetMaps {
   day: THREE.Texture;
   night: THREE.Texture;
@@ -662,26 +645,22 @@ interface PlanetMaps {
 }
 
 /**
- * Loaded map sets, shared by every `Space` in the page and never disposed — there are at
- * most two of them, and holding on to both is what makes switching quality back and forth
- * instant instead of a re-download. Keyed by quality rather than by URL, so the 2048 cloud
- * file is fetched once per set; the second one is a browser cache hit.
+ * The one load, kept for the life of the page and never disposed, so a second `Space` in the
+ * same page costs no second download.
  *
  * `anisotropy` is taken from whichever renderer asks first. Both planet scenes run on the
  * same GPU, so they report the same maximum.
  */
-const mapCache = new Map<TextureQuality, Promise<PlanetMaps>>();
+let mapsPromise: Promise<PlanetMaps> | null = null;
 
-function loadMaps(quality: TextureQuality, maxAnisotropy: number): Promise<PlanetMaps> {
-  const cached = mapCache.get(quality);
-  if (cached) return cached;
+function loadMaps(maxAnisotropy: number): Promise<PlanetMaps> {
+  if (mapsPromise) return mapsPromise;
 
-  const urls = MAP_SETS[quality];
   const loader = new THREE.TextureLoader();
   const pending = Promise.all([
-    loader.loadAsync(urls.day),
-    loader.loadAsync(urls.night),
-    loader.loadAsync(urls.clouds)
+    loader.loadAsync(dayUrl),
+    loader.loadAsync(nightUrl),
+    loader.loadAsync(cloudUrl)
   ])
     .then(([day, night, clouds]) => {
       for (const texture of [day, night, clouds]) {
@@ -697,13 +676,13 @@ function loadMaps(quality: TextureQuality, maxAnisotropy: number): Promise<Plane
       return { day, night, clouds };
     })
     .catch((error) => {
-      // Drop the failed attempt so a later switch back can retry rather than re-serving
-      // the rejection for the rest of the session.
-      mapCache.delete(quality);
+      // Drop the failed attempt so a later space can retry rather than re-serving the
+      // rejection for the rest of the session.
+      mapsPromise = null;
       throw error;
     });
 
-  mapCache.set(quality, pending);
+  mapsPromise = pending;
   return pending;
 }
 
@@ -722,8 +701,6 @@ export interface SpaceOptions {
    * the sun instead.
    */
   spinRate?: number;
-  /** Which map set to start on. Defaults to `8k`; changed later with `setQuality()`. */
-  quality?: TextureQuality;
 }
 
 export interface Space {
@@ -749,8 +726,6 @@ export interface Space {
   update(elapsed: number, dt: number): void;
   /** Re-aims this space's sun. The vector is normalised for you. */
   setSunDirection(dir: THREE.Vector3): void;
-  /** Swaps in another map set. Resolves once it is on screen. */
-  setQuality(quality: TextureQuality): Promise<void>;
   /**
    * Where a point in space sits on the surface maps: the same `uv` the planet's own shader
    * samples them with. `u` runs 0..1 west to east from the left edge of the map — 180° W, the
@@ -784,14 +759,12 @@ export interface Space {
 
 export interface EarthMaterial {
   material: THREE.ShaderMaterial;
-  /** Resolves once the opening map set is on the uniforms, or has failed. Never rejects. */
+  /** Resolves once the maps are on the uniforms, or have failed. Never rejects. */
   ready: Promise<void>;
-  setQuality(quality: TextureQuality): Promise<void>;
   update(elapsed: number, dt: number): void;
 }
 
 export interface EarthMaterialOptions {
-  quality?: TextureQuality;
   /** Defaults to the planet's own. Pass one built on `EARTH_SHADER_PRELUDE`. */
   fragmentShader?: string;
   /** Merged in after the shared set, for whatever the caller's own `main()` needs. */
@@ -817,7 +790,7 @@ export function createEarthMaterial(
   sunDir: THREE.Vector3,
   options: EarthMaterialOptions = {}
 ): EarthMaterial {
-  const { quality: initialQuality = '8k', fragmentShader = PLANET_FRAG } = options;
+  const { fragmentShader = PLANET_FRAG } = options;
 
   const material = new THREE.ShaderMaterial({
     uniforms: {
@@ -839,34 +812,24 @@ export function createEarthMaterial(
   let mapsTarget = 0;
 
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-  let quality = initialQuality;
 
-  function applyMaps(requested: TextureQuality): Promise<void> {
-    return loadMaps(requested, maxAnisotropy)
+  function applyMaps(): Promise<void> {
+    return loadMaps(maxAnisotropy)
       .then((maps) => {
-        // A switch made while this one was still downloading wins; whatever is on the
-        // uniforms now is newer than what this promise is holding.
-        if (quality !== requested) return;
         material.uniforms.uDayMap.value = maps.day;
         material.uniforms.uNightMap.value = maps.night;
         material.uniforms.uCloudMap.value = maps.clouds;
         mapsTarget = 1;
       })
       .catch((error) => {
-        // Not fatal: the shader keeps rendering whatever it has — the previous set, or the
-        // procedural fallback if this was the first load.
+        // Not fatal: the shader keeps rendering the procedural fallback.
         console.error('Planet textures failed to load', error);
       });
   }
 
   return {
     material,
-    ready: applyMaps(quality),
-    setQuality(next: TextureQuality) {
-      if (next === quality) return Promise.resolve();
-      quality = next;
-      return applyMaps(next);
-    },
+    ready: applyMaps(),
     update(elapsed: number, dt: number) {
       material.uniforms.uTime.value = elapsed;
       const has = material.uniforms.uHasMaps;
@@ -876,14 +839,14 @@ export function createEarthMaterial(
 }
 
 export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions = {}): Space {
-  const { spinRate = PLANET_SPIN_RATE, quality: initialQuality = '8k' } = options;
+  const { spinRate = PLANET_SPIN_RATE } = options;
   const group = new THREE.Group();
 
   // One vector per space instance, referenced by the planet's uniform and both shells', so
   // a single copy() re-lights all three — and two spaces in the same page don't share a sun.
   const sunDir = SUN_DIR.clone();
 
-  const surface = createEarthMaterial(renderer, sunDir, { quality: initialQuality });
+  const surface = createEarthMaterial(renderer, sunDir);
 
   const planet = new THREE.Mesh(new THREE.SphereGeometry(PLANET_RADIUS, 160, 120), surface.material);
   group.add(planet);
@@ -949,9 +912,6 @@ export function buildSpace(renderer: THREE.WebGLRenderer, options: SpaceOptions 
     },
     setSunDirection(dir: THREE.Vector3) {
       sunDir.copy(dir).normalize();
-    },
-    setQuality(next: TextureQuality) {
-      return surface.setQuality(next);
     },
     surfaceUv(point: THREE.Vector3, target: THREE.Vector2) {
       // `update()` above spins the planet, so "where is this on the map" is a question about
