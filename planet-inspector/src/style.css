@@ -41,37 +41,9 @@ body {
   height: 100dvh;
 }
 
-/* The settings bar, top right. One control now the views are separate projects — the surface
-   map resolution, which is a download and so cannot live on anything diegetic. */
-#settings {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 10;
-  display: flex;
-  gap: 0.5rem;
-}
-
-#settings select {
-  padding: 0.4rem 0.6rem;
-  font-size: 0.8rem;
-  font-family: inherit;
-  color: var(--text);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-#settings select:hover {
-  border-color: var(--accent);
-}
-
-/* Held disabled while a map set downloads, so the switch can't be raced. */
-#settings select:disabled {
-  opacity: 0.5;
-  cursor: progress;
-}
+/* There is no settings bar. The surface-map resolution was the one control here and there is
+   one set now — see `PLANET_MAPS` in space.ts. The only chrome left is the sun slider, which
+   is not a download and belongs over the scene. */
 
 #inspect-view {
   position: relative;

@@ -11,7 +11,7 @@ in it.
 | [`parking-game/`](parking-game/CLAUDE.md) | **Precision Parking** — a one-tap parking game on a 2D canvas. Vite + TypeScript, no framework, no renderer, under 20 kB of JS. | **yes** — `/games/parking-game/` |
 | [`earth-defender/`](earth-defender/CLAUDE.md) | An aeroplane defending Earth from alien bombers: a lane, boost rings, a finite magazine, capitals that can be lost. The one project here with any game in it. | **yes** — `/games/earth-defender/` |
 | [`space-station/`](space-station/CLAUDE.md) | A space station in orbit, walked in first person. A place to be, not something to do. Two `dev/` harnesses. | no |
-| [`planet-inspector/`](planet-inspector/CLAUDE.md) | The planet alone on `OrbitControls`, with a sun slider. The smallest project here, and the lens the shader is judged through. | no |
+| [`planet-inspector/`](planet-inspector/CLAUDE.md) | The planet alone on `OrbitControls`, with a sun slider. The smallest project here, and the lens the shader is judged through — so it is the one folder that ships **only** the 8K maps. | **yes** — `/games/planet-inspector/` |
 | [`asset-viewer/`](asset-viewer/CLAUDE.md) | A gallery for AI-generated `.glb` models. Owns `ai-assets/`. A utility. | no |
 
 `site/` is the sixth top-level directory and is **not** a project: one static `index.html`, no
@@ -31,6 +31,11 @@ because it assembles several games into one tree. See "Deploy".
   folder and not the other two.** Say which you changed. `space-station/dev/shots.mjs` is the only
   harness that renders that shader, so it is the closest thing to a regression test any of them
   have.
+- **The three copies are no longer identical below the shader.** `planet-inspector/src/space.ts`
+  has had `TextureQuality`, `MAP_SETS` and `setQuality()` taken out of it: that project ships the
+  8K maps and nothing else, on every device. The shader itself, the noise, the orbital plane and
+  the moon are still line-for-line the same in all three, and that is the part worth keeping in
+  step — **diff the GLSL, not the file.**
 - **Work inside one folder at a time.** `cd` into it before `npm install`, `npm run dev`,
   `npm run build` or any `dev/` harness; none of them work from the root, and there is nothing at
   the root to run.
@@ -52,13 +57,18 @@ them into one GitHub Pages site on every push to `main`:
 https://oskarwestmeijer.github.io/games/                    site/index.html — the menu
 https://oskarwestmeijer.github.io/games/parking-game/       parking-game/dist/
 https://oskarwestmeijer.github.io/games/earth-defender/     earth-defender/dist/
+https://oskarwestmeijer.github.io/games/planet-inspector/   planet-inspector/dist/
 ```
 
 **GitHub Pages serves one site per repo, but a site has directories.** That used to be written up
 here as a zero-sum choice — which single game owns the URL — and it is not one: a game gets a folder
 in the site, and the root is a static menu that belongs to no game. **Adding a project to the site
-is one word in `GAMES` plus an `<li>` in `site/index.html`.** The three Three.js folders that are
-not listed are left out by choice.
+is one word in `GAMES` plus an `<li>` in `site/index.html`.** The two Three.js folders that are
+not listed — `space-station/` and `asset-viewer/` — are left out by choice, on weight.
+
+**The menu is a shelf of two games plus a strip.** `planet-inspector/` is on the site but it is not
+a game: it spans the row under the other two rather than taking a third seat beside them, because
+there is nothing in it to win. If a fourth project is ever added, that is the distinction to keep.
 
 **`./site/preview.sh` serves the assembled site locally**, under a real `/games/` prefix, and reads
 `GAMES` out of the workflow so it cannot drift from what ships. Use it after touching
@@ -69,7 +79,8 @@ Two things to know before adding one:
 
 - **It only works because of `base: './'`** (see the house rules). Check a new game's build for
   root-absolute paths first — they fail on the deployed site and nowhere else.
-- **Weight.** The site is ~3.7 MB, nearly all of it earth-defender's surface maps. `space-station/`
+- **Weight.** The site is ~7 MB, nearly all of it surface maps — earth-defender's and
+  planet-inspector's, two copies of the same NASA files under two content hashes. `space-station/`
   would add ~29 MB on top, nearly all of it music, which is the real reason to think about that one.
 
 `npm run build` is what CI runs per game — `tsc && vite build`, so the type-check is included.

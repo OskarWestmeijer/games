@@ -5,18 +5,20 @@
 # independent builds can share it. Each game lands in a folder named after it, under a static menu
 # copied from `site/`:
 #
-#   /games/                  site/index.html
-#   /games/parking-game/     parking-game/dist/
-#   /games/earth-defender/   earth-defender/dist/
+#   /games/                    site/index.html
+#   /games/parking-game/       parking-game/dist/
+#   /games/earth-defender/     earth-defender/dist/
+#   /games/planet-inspector/   planet-inspector/dist/
 #
 # This works only because every game sets `base: './'` in its Vite config, so its emitted asset
 # paths are relative and it does not need to know what sub-path it is served from. A game that
 # hardcodes a root-absolute path will 404 here and nowhere else — check that before adding one.
 #
 # **Adding a game is one word in GAMES below**, plus a <li> in site/index.html. The Three.js
-# folders that are not listed (space-station, planet-inspector, asset-viewer) are left out by
-# choice, not by architecture. Note that space-station/dist is ~29 MB, nearly all music,
-# and asset-viewer/dist is ~71 MB of models.
+# folders that are not listed (space-station, asset-viewer) are left out by choice, not by
+# architecture. Note that space-station/dist is ~29 MB, nearly all music, and asset-viewer/dist
+# is ~71 MB of models. planet-inspector is in, and is ~3.5 MB of it — nearly all the 8K surface
+# maps, which are now the only set it ships.
 name: Deploy to GitHub Pages
 
 on:
@@ -37,7 +39,7 @@ concurrency:
 
 env:
   # Space-separated, and the only place a game is added to or removed from the site.
-  GAMES: parking-game earth-defender
+  GAMES: parking-game earth-defender planet-inspector
 
 jobs:
   build:

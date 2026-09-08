@@ -11,41 +11,23 @@ import { createPlanetInspect, DEFAULT_SUN_AZIMUTH } from './planet-inspect';
  */
 const inspectCanvas = document.querySelector<HTMLCanvasElement>('#inspect-canvas')!;
 const sunSlider = document.querySelector<HTMLInputElement>('#sun-azimuth')!;
-const qualitySelect = document.querySelector<HTMLSelectElement>('#texture-quality')!;
 
 /**
- * Surface map resolution. The 8K set is 2.9 MB and ~180 MB of texture on the GPU — a fair
- * price when you came to look at the planet, and not one to charge on a coarse-pointer or
- * data-saving device, which opens on 4K instead. `NetworkInformation` is not in `lib.dom`,
- * hence the local shape. Not persisted.
+ * There is no surface-resolution control any more, and no device that gets a smaller map.
+ * The 8K set — 2.9 MB, and ~180 MB of texture on the GPU — is the only one `space.ts` has,
+ * because this project is a lens on the planet and quietly handing a thumb-held device the
+ * blurrier planet is the one thing a lens must not do. The select, the `saveData` sniff and
+ * the `any-pointer: coarse` downgrade that used to live here all went with it.
+ *
+ * What survives of that caution is the pixel-ratio cap in `planet-inspect.ts`, which costs
+ * nothing to look at.
  */
-const connection = (navigator as { connection?: { saveData?: boolean; effectiveType?: string } })
-  .connection;
-const SLOW_CONNECTION =
-  !!connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType ?? '');
-if (SLOW_CONNECTION || window.matchMedia('(any-pointer: coarse)').matches) {
-  qualitySelect.value = '4k';
-}
-
-const quality = () => qualitySelect.value as '4k' | '8k';
-
 sunSlider.value = String(Math.round(DEFAULT_SUN_AZIMUTH));
 
-const inspect = createPlanetInspect(inspectCanvas, { quality: quality() });
+const inspect = createPlanetInspect(inspectCanvas);
 inspect.setSunAzimuth(Number(sunSlider.value));
 
 sunSlider.addEventListener('input', () => inspect.setSunAzimuth(Number(sunSlider.value)));
-
-qualitySelect.addEventListener('change', async () => {
-  // A couple of megabytes; disabling the select is both the progress indication and what
-  // stops a second change being fired mid-download.
-  qualitySelect.disabled = true;
-  try {
-    await inspect.setTextureQuality(quality());
-  } finally {
-    qualitySelect.disabled = false;
-  }
-});
 
 /**
  * A lost context takes the whole scene with it and three.js will not silently rebuild it.

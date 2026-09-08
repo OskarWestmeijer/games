@@ -2,7 +2,8 @@
 
 > **This is one of several independent games in this repo.** It has its own `package.json`,
 > `vite.config.ts`, `tsconfig.json` and `node_modules`; nothing here imports from a sibling folder
-> and nothing in a sibling folder imports from here. **It is not deployed** — see "Deploy" below.
+> and nothing in a sibling folder imports from here. **It is deployed**, at
+> `/games/planet-inspector/` — see "Deploy" below.
 >
 > **This was `#inspect`, one of four views behind a dropdown in `earth-defender/`** — alongside the
 > flight game, a walkable space station and an AI-asset gallery, all sharing one `src/`, one page
@@ -29,17 +30,17 @@ there is nobody in this scene to walk anywhere.
 ## Architecture
 
 ```
-index.html            #settings (the surface-resolution select), #inspect-view (#inspect-canvas,
-                      #inspect-controls with #sun-azimuth). Loads /src/main.ts
+index.html            #inspect-view (#inspect-canvas, #inspect-controls with #sun-azimuth) and
+                      nothing else — there is no #settings bar any more. Loads /src/main.ts
 vite.config.ts        `base: './'` and nothing else — no publicDir, no plugins
 src/
-  main.ts             bootstrap: find the elements, pick a map resolution, seed the sun slider
-                      from DEFAULT_SUN_AZIMUTH, build the view, start it. The only file that
+  main.ts             bootstrap: find the two elements, seed the sun slider from
+                      DEFAULT_SUN_AZIMUTH, build the view, start it. The only file that
                       touches DOM ids
   planet-inspect.ts   createPlanetInspect() — the space, OrbitControls outside it, the sun slider,
                       the bloom composer
   space.ts            planet, two atmosphere shells, moon, starfield, nebula; the noise GLSL, the
-                      planet shader, MAP_SETS and the map cache, the orbital plane (SUN_BETA /
+                      planet shader, PLANET_MAPS and the map promise, the orbital plane (SUN_BETA /
                       ORBIT_NORMAL / ORBIT_NOON / ORBIT_DAWN), surfaceUv() and worldFromLatLon().
                       **A private copy** — `earth-defender/` and `space-station/` have their own
   textures/, style.css
@@ -63,6 +64,14 @@ Compressed hard — the reasoning behind each of these is in `git show ed3f592:C
   `distance / (distance - PLANET_RADIUS)` times the angular rate, 16x at closest approach.
 - **The planet doesn't spin here** (`spinRate: 0`); the sun slider moves the terminator on demand.
   **The sun is per-space, not global**, so the slider relights this scene without touching the pod's.
+- **There is one map set and no way to ask for another.** The 4K set, the `#texture-quality`
+  select, the `saveData`/`effectiveType` sniff and the `any-pointer: coarse` downgrade are all
+  gone, along with `setQuality()` down the whole stack. A lens that quietly hands you the blurrier
+  planet on the device you happen to be holding is answering a question nobody asked it. **The
+  price is real and is paid everywhere**: 2.9 MB down the wire and ~180 MB of texture on the GPU,
+  on a phone as much as on a desktop. If that ever has to be walked back, the honest form of it is
+  a control the reader operates, not a sniff — the same argument as the sun slider being on screen
+  here.
 
 ## The world under it — `space.ts`
 
@@ -98,8 +107,10 @@ Compressed hard — the reasoning behind each of these is in `git show ed3f592:C
   Apparent size is the only lever on transit length. **Craters must stay sparse, shallow and
   unpainted** — a hash gate leaving ~2 cells in 3 empty, a squared radius term, a shallow profile,
   and relief *shaded* only, never multiplied into the albedo, or the moon reads as an infection.
-- **Two map sets, one cache** — a module-level `mapCache`, never disposed, shared by every scene in the project that holds it, so
-  switching is instant; a switch made mid-download wins and the stale promise drops its result.
+- **One map set, one promise** — a module-level `mapsPromise`, never disposed, shared by every
+  scene in this project that holds it, so a second `Space` costs no second download and no second
+  180 MB on the GPU. It was a `Map` keyed by quality, with a stale-switch guard, back when there
+  was something to switch to. A failed load nulls it so a later `Space` retries.
 
 ## Touch, and iPad in particular
 
@@ -124,23 +135,27 @@ If a change touches `space.ts` rather than `planet-inspect.ts`, remember it is a
 `space-station/dev/shots.mjs` is the harness that renders the same shader from inside a hull, and
 running it over there is the closest thing to a regression test the planet has.
 
-## Deploy — not yet, but it is a one-word change
+## Deploy
 
-**This project is not deployed**, and there is no CI check on it either, so it is on whoever
-changes it to run `npm run build` before believing it still works.
+**This is published**, at `https://oskarwestmeijer.github.io/games/planet-inspector/`. It is named
+in the `GAMES` variable in `.github/workflows/deploy.yml`, which builds every folder it names into
+a directory of one Pages site, and it has an `<li>` in `site/index.html` — a full-width strip under
+the two games rather than a third card beside them, because it is not a game.
 
-Publishing it is **adding `planet-inspector` to the `GAMES` variable in
-`.github/workflows/deploy.yml`, plus an `<li>` in `site/index.html`.** That workflow builds every
-folder it names and gives each one a directory in a single Pages site, so this is no longer a
-decision about who owns the root URL — it used to be, and the older notes in this repo may still
-say so. It would land at `https://oskarwestmeijer.github.io/games/planet-inspector/`.
+That makes `npm run build` a CI check at last: `tsc && vite build` runs on every push to `main`,
+and a failure here now fails the whole deploy and publishes nothing, parking-game and
+earth-defender included. Nothing else about the project runs in CI, so the scene itself is still
+only ever checked by opening it.
 
-The build is ready for it: `base: './'` keeps every emitted asset path relative, which is the one
-requirement for being served from a sub-path.
+**`./site/preview.sh` from the repo root** is the one check that serves this under a real
+`/games/planet-inspector/` prefix. Run it after anything that could turn an asset path absolute.
+`base: './'` is what makes the sub-path work — including the surface maps, which Vite emits as
+`new URL("planet-day-8k-<hash>.webp", import.meta.url)`, relative and hash-named.
 
-At ~4.2 MB of build, nearly all of it surface maps for a scene with nothing in it, this is the cheapest of the three to
-add and the least obviously worth adding: it is a study tool, and the same planet is already
-deployed inside `earth-defender/`.
+The build is ~3.5 MB, nearly all of it the 8K surface maps for a scene with nothing in it. It was
+~4.2 MB with the 4K set still in the folder. The same planet is already deployed inside
+`earth-defender/`, at both resolutions and behind a game — this is that planet with the game taken
+away, which is the argument for publishing it and the argument against, depending on the day.
 
 ## Where this is going
 
@@ -153,19 +168,19 @@ in this file that has been broken and reverted more than once.
 
 ## Planet textures — provenance and licence
 
-Everything in `src/textures/` derives from **NASA Visible Earth**. Two sets (`MAP_SETS` in
-`space.ts`, driven by `#texture-quality`), named after the day map's width:
+Everything in `src/textures/` derives from **NASA Visible Earth**. One set, `PLANET_MAPS` in
+`space.ts` — the largest of each map there is:
 
-| file | set | source |
-| --- | --- | --- |
-| `planet-day-4k.webp` (719 KB) | 4k | [Blue Marble Next Generation, Dec 2004](https://visibleearth.nasa.gov/images/73909) |
-| `planet-day-8k.webp` (2.2 MB) | 8k | same record, from the 21600x10800 original |
-| `planet-night-2k.webp` (101 KB) | 4k | [Night Lights 2012](https://visibleearth.nasa.gov/images/79765) |
-| `planet-night-4k.webp` (291 KB) | 8k | same record |
-| `planet-clouds-2k.webp` (430 KB) | both | [Blue Marble clouds](https://visibleearth.nasa.gov/images/57747) |
+| file | source |
+| --- | --- |
+| `planet-day-8k.webp` (2.2 MB) | [Blue Marble Next Generation, Dec 2004](https://visibleearth.nasa.gov/images/73909), from the 21600x10800 original |
+| `planet-night-4k.webp` (291 KB) | [Night Lights 2012](https://visibleearth.nasa.gov/images/79765) |
+| `planet-clouds-2k.webp` (430 KB) | [Blue Marble clouds](https://visibleearth.nasa.gov/images/57747) |
 
-4k set 1.2 MB, 8k set 2.9 MB. **Clouds have no larger version** — NASA publishes that composite at
-2048 only, fine for a soft mask. There was a sixth file here, `planet-minimap-1024.webp` — flight
+2.9 MB in total, and it is the only set: `planet-day-4k.webp` (719 KB) and `planet-night-2k.webp`
+(101 KB) were deleted with the quality select — they are in git history, and in `earth-defender/`
+and `space-station/`, if either is ever wanted back. **Clouds have no larger version** — NASA
+publishes that composite at 2048 only, fine for a soft mask. There was a sixth file here, `planet-minimap-1024.webp` — flight
 view's flat world map, reached from CSS rather than from TS. It went to `earth-defender/` with the
 minimap and nothing here wants it back.
 
@@ -179,9 +194,10 @@ magick -define jpeg:size=10800x5400 world.topo.bathy.200412.3x21600x10800.jpg \
 The `jpeg:size` hint makes libjpeg decode at half scale — ~350 MB of buffer instead of over a
 gigabyte. Otherwise the maps are used exactly as they come.
 
-**Adding a set** is `MAP_SETS` plus two imports plus an `<option>`. Mind the GPU cost, which is not
-in the file sizes: an 8192x4096 map with mipmaps is ~180 MB of texture **per renderer**. 8k is the
-default; the choice is not persisted.
+**Going bigger** is `PLANET_MAPS` plus the imports; there is no `<option>` to add any more, and
+adding one back means re-reading "there is one map set and no way to ask for another" above. Mind
+the GPU cost, which is not in the file sizes: an 8192x4096 map with mipmaps is ~180 MB of texture
+**per renderer**, and it is now paid on every device that opens the page.
 
 **Why NASA specifically.** This repo is public and these files are committed, so the licence must
 permit redistribution with no strings. NASA content "generally are not subject to copyright in the

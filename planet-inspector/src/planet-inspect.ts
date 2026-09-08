@@ -12,7 +12,6 @@ import {
   PLANET_RADIUS,
   SUN_DIR
 } from './space';
-import type { TextureQuality } from './space';
 
 /**
  * "Planet inspector": the same world as the planet view with the pod taken away and the
@@ -66,12 +65,7 @@ const SUN_ELEVATION = Math.asin(SUN_DIR.y);
 export const DEFAULT_SUN_AZIMUTH =
   (THREE.MathUtils.radToDeg(Math.atan2(SUN_DIR.z, SUN_DIR.x)) + 360) % 360;
 
-export interface PlanetInspectOptions {
-  /** Which surface map set to open on. See `TextureQuality` in `space.ts`. */
-  quality?: TextureQuality;
-}
-
-export function createPlanetInspect(canvas: HTMLCanvasElement, options: PlanetInspectOptions = {}) {
+export function createPlanetInspect(canvas: HTMLCanvasElement) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   // See the note in `planet-view.ts`: retina tablets pay four times over for a scene that is
   // almost entirely full-screen shader.
@@ -102,7 +96,7 @@ export function createPlanetInspect(canvas: HTMLCanvasElement, options: PlanetIn
 
   // No spin: a planet you are inspecting should hold still, and the sun slider covers what
   // the rotation was there to provide.
-  const space = buildSpace(renderer, { spinRate: 0, quality: options.quality });
+  const space = buildSpace(renderer, { spinRate: 0 });
   scene.add(space.group);
 
   // Same reasoning as planet view: the atmosphere is authored over 1.0 so bloom turns it
@@ -178,10 +172,5 @@ export function createPlanetInspect(canvas: HTMLCanvasElement, options: PlanetIn
     clock.stop();
   }
 
-  return {
-    start,
-    stop,
-    setSunAzimuth,
-    setTextureQuality: (quality: TextureQuality) => space.setQuality(quality)
-  };
+  return { start, stop, setSunAzimuth };
 }
